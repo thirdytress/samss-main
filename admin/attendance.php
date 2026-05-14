@@ -1,0 +1,1538 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../config/bootstrap.php';
+
+$currentUser = sams_authenticated_user();
+if (!$currentUser || (($currentUser['role'] ?? null) !== 'admin')) {
+    header('Location: ../login.php');
+    exit;
+}
+
+$pdo = sams_pdo();
+
+$applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
+
+$currentDay = date('l');
+$activeTermId = (int) ($pdo->query("SELECT COALESCE(MAX(term_id), 0) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE()")->fetchColumn() ?: 0);
+
+function sams_admin_attendance_display_name(array $row): string
+{
+    $fullName = trim((string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? ''));
+    return $fullName !== '' ? $fullName : 'Unassigned Student';
+}
+
+function sams_admin_attendance_dot(string $status): string
+{
+    $status = strtolower($status);
+    return match ($status) {
+        'completed', 'present' => 'green',
+        'active', 'late' => 'blue',
+        default => 'grey',
+    };
+}
+
+function sams_admin_attendance_duration_label(?string $timeIn, ?string $timeOut): string
+{
+    if (empty($timeIn)) {
+        return '-';
+    }
+
+    $start = strtotime($timeIn);
+    $end = !empty($timeOut) ? strtotime($timeOut) : false;
+    if ($start && $end && $end > $start) {
+        return number_format(($end - $start) / 3600, 1) . 'h';
+    }
+
+    return '-';
+}
+
+$todayRowsStmt = $pdo->query(
+        "SELECT u.first_name, u.last_name, s.student_id AS student_code, a.preferred_office AS office_name,
+                        al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time
+         FROM duty_schedules ds
+         INNER JOIN applications a ON a.application_id = ds.application_id
+         LEFT JOIN students s ON s.student_id = a.student_id
+         LEFT JOIN users u ON u.user_id = s.user_id
+         LEFT JOIN attendance_logs al ON al.log_id = (
+                 SELECT al2.log_id
+                 FROM attendance_logs al2
+                 WHERE al2.application_id = ds.application_id AND al2.duty_id = ds.duty_id
+                 ORDER BY al2.log_id DESC
+                 LIMIT 1
+         )
+         WHERE ds.day_of_week = " . $pdo->quote($currentDay) . "
+             AND ds.status = 'accepted'
+             AND ds.term_id = " . $activeTermId . "
+         ORDER BY ds.start_time ASC, al.log_id DESC"
+);
+$attendance_rows = [];
+foreach ($todayRowsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+    $status = sams_attendance_display_status((string) ($row['status'] ?? ''));
+    if ($status === '') {
+        $status = 'absent';
+    }
+    $timeIn = sams_attendance_clocking_enabled() ? ($row['time_in'] ?? null) : null;
+    $timeOut = sams_attendance_clocking_enabled() ? ($row['time_out'] ?? null) : null;
+    $attendance_rows[] = [
+        'dot' => sams_admin_attendance_dot($status),
+        'name' => sams_admin_attendance_display_name($row),
+        'office' => (string) ($row['office_name'] ?? '-'),
+        'time_in' => $timeIn ? date('g:i A', strtotime((string) $timeIn)) : '-',
+        'time_out' => $timeOut ? date('g:i A', strtotime((string) $timeOut)) : ($timeIn ? 'In Progress' : '-'),
+        'duration' => sams_admin_attendance_duration_label($timeIn, $timeOut),
+        'method' => !empty($timeIn) ? 'Live DB' : '-',
+        'status' => match ($status) {
+            'present', 'completed' => 'Present',
+            'late' => 'Late',
+            default => 'Absent',
+        },
+    ];
+}
+
+$activeNowStmt = $pdo->query(
+    "SELECT COUNT(*) FROM attendance_logs WHERE 1 = 0"
+);
+$activeNow = (int) $activeNowStmt->fetchColumn();
+
+$completedTodayStmt = $pdo->query(
+    "SELECT COUNT(*) FROM attendance_logs WHERE 1 = 0"
+);
+$completedToday = (int) $completedTodayStmt->fetchColumn();
+
+$totalSchedulesStmt = $pdo->query(
+    "SELECT COUNT(DISTINCT ds.duty_id) FROM duty_schedules ds 
+     WHERE ds.status = 'assigned' AND ds.term_id = (SELECT MAX(term_id) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1)"
+);
+$totalSchedules = (int) $totalSchedulesStmt->fetchColumn();
+
+$officeStmt = $pdo->query(
+    "SELECT COALESCE(a.preferred_office, 'Unassigned') AS office_name,
+            COUNT(DISTINCT al.log_id) AS total,
+            SUM(CASE WHEN al.clock_out_time IS NULL THEN 1 ELSE 0 END) AS active
+     FROM attendance_logs al
+     LEFT JOIN applications a ON a.application_id = al.application_id
+     WHERE DATE(al.created_at) = CURDATE()
+     GROUP BY COALESCE(a.preferred_office, 'Unassigned')
+     ORDER BY total DESC"
+);
+$offices = [];
+foreach ($officeStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $office) {
+    $name = (string) ($office['office_name'] ?? 'Unassigned');
+    $count = (int) ($office['total'] ?? 0);
+    $active = (int) ($office['active'] ?? 0);
+    $pct = $totalSchedules > 0 ? (int) round(($count / $totalSchedules) * 100) : 0;
+
+    $color = 'grey';
+    $lower = strtolower($name);
+    if (str_contains($lower, 'sdao')) {
+        $color = 'blue';
+    } elseif (str_contains($lower, 'library')) {
+        $color = 'green';
+    } elseif (str_contains($lower, 'computer')) {
+        $color = 'purple';
+    } elseif (str_contains($lower, 'registrar')) {
+        $color = 'orange';
+    }
+
+    $offices[] = [
+        'name' => $name,
+        'count' => $count,
+        'pct' => $pct,
+        'color' => $color,
+        'active' => $active,
+    ];
+}
+
+$verifiedStmt = $pdo->query("SELECT COUNT(*) FROM attendance_logs WHERE 1 = 0");
+$verifiedCount = (int) $verifiedStmt->fetchColumn();
+
+$currentDateLabel = date('l, F j, Y');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Monitoring | NU SA System</title>
+    <style>
+        /* ============================================================
+           CSS VARIABLES — Design System
+        ============================================================ */
+        :root {
+            --clr-white:          #FFFFFF;
+            --clr-bg:             #F9FAFB;
+            --clr-border:         #E5E7EB;
+            --clr-border-input:   #D1D5DC;
+            --clr-border-track:   #E5E7EB;
+
+            --clr-text-primary:   #101828;
+            --clr-text-body:      #364153;
+            --clr-text-muted:     #4A5565;
+            --clr-text-placeholder: rgba(10,10,10,0.5);
+            --clr-text-dark:      #0A0A0A;
+
+            /* Brand / Blue */
+            --clr-blue:           #155DFC;
+            --clr-blue-dark:      #1447E6;
+            --clr-blue-bg:        #DBEAFE;
+
+            /* Green */
+            --clr-green:          #008236;
+            --clr-green-bright:   #00A63E;
+            --clr-green-vivid:    #00C950;
+            --clr-green-bg:       #DCFCE7;
+            --clr-green-light:    #DCFCE7;
+
+            /* Purple / Orange / Grey */
+            --clr-purple:         #9810FA;
+            --clr-purple-bg:      #F3E8FF;
+            --clr-orange:         #F54900;
+            --clr-orange-bg:      #FFEDD4;
+            --clr-grey-dot:       #99A1AF;
+            --clr-grey-bg:        #F3F4F6;
+            --clr-blue-dot:       #2B7FFF;
+
+            /* Gradients */
+            --grad-brand:         linear-gradient(135deg, #155DFC 0%, #9810FA 100%);
+            --grad-green-panel:   linear-gradient(155.38deg, #00A63E 0%, #008236 100%);
+
+            /* Status badge colors */
+            --clr-status-completed-bg:   #DCFCE7;
+            --clr-status-completed-text: #008236;
+            --clr-status-active-bg:      #DBEAFE;
+            --clr-status-active-text:    #1447E6;
+            --clr-status-scheduled-bg:   #F3F4F6;
+            --clr-status-scheduled-text: #364153;
+
+            /* Sidebar */
+            --sidebar-width:      256px;
+
+            /* Typography */
+            --fs-xs:   12px;
+            --fs-sm:   14px;
+            --fs-base: 16px;
+            --fs-md:   18px;
+            --fs-lg:   24px;
+
+            /* Spacing */
+            --sp-4:   4px;
+            --sp-8:   8px;
+            --sp-12:  12px;
+            --sp-16:  16px;
+            --sp-24:  24px;
+            --sp-32:  32px;
+
+            /* Radius */
+            --radius-xs:   4px;
+            --radius-sm:   10px;
+            --radius-md:   16.4px;
+            --radius-pill: 9999px;
+        }
+
+        /* ============================================================
+           RESET & BASE
+        ============================================================ */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { font-size: 16px; }
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--clr-bg);
+            color: var(--clr-text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        a { text-decoration: none; color: inherit; }
+        button { cursor: pointer; font-family: inherit; border: none; background: none; }
+        img { display: block; max-width: 100%; }
+        ul { list-style: none; }
+
+        /* ============================================================
+           APP LAYOUT
+        ============================================================ */
+        .app {
+            display: flex;
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        /* ============================================================
+           SIDEBAR
+        ============================================================ */
+        .sidebar {
+            width: var(--sidebar-width);
+            min-height: 100vh;
+            background: var(--clr-white);
+            border-right: 1px solid var(--clr-border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar__header {
+            height: 89px;
+            border-bottom: 1px solid var(--clr-border);
+            padding: var(--sp-24) var(--sp-24) 0;
+            flex-shrink: 0;
+        }
+
+        .sidebar__brand {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-12);
+            height: 40px;
+        }
+
+        .sidebar__logo {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            background: var(--grad-brand);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .sidebar__logo-text {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--clr-white);
+            line-height: 28px;
+        }
+
+        .sidebar__brand-info { display: flex; flex-direction: column; }
+
+        .sidebar__app-name {
+            font-size: var(--fs-base);
+            font-weight: bold;
+            color: var(--clr-text-primary);
+            line-height: 24px;
+        }
+
+        .sidebar__app-sub {
+            font-size: var(--fs-xs);
+            color: var(--clr-text-muted);
+            line-height: 16px;
+        }
+
+        .sidebar__nav {
+            flex: 1;
+            padding: var(--sp-16) var(--sp-16) 0;
+        }
+
+        .nav__list { display: flex; flex-direction: column; gap: var(--sp-4); }
+        .nav__item { display: block; }
+
+        .nav__link {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-12);
+            height: 48px;
+            padding: 0 var(--sp-16);
+            border-radius: var(--radius-sm);
+            transition: background 0.15s;
+        }
+
+        .nav__link:hover { background: var(--clr-bg); }
+        .nav__link--active { background: var(--clr-blue); }
+        .nav__link--active .nav__label { color: var(--clr-white); }
+
+        .nav__icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+        .nav__icon svg { width: 100%; height: 100%; }
+
+        .nav__label {
+            font-size: var(--fs-base);
+            color: var(--clr-text-body);
+            line-height: 24px;
+            flex: 1;
+            white-space: nowrap;
+        }
+
+        .nav__badge {
+            background: var(--clr-blue-bg);
+            color: var(--clr-blue);
+            font-size: var(--fs-xs);
+            font-weight: bold;
+            line-height: 16px;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            height: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar__footer {
+            border-top: 1px solid var(--clr-border);
+            padding: 17px var(--sp-16) var(--sp-16);
+            flex-shrink: 0;
+        }
+
+        /* ============================================================
+           MAIN
+        ============================================================ */
+        .main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ============================================================
+           TOP BAR
+        ============================================================ */
+        .topbar {
+            background: var(--clr-white);
+            border-bottom: 1px solid var(--clr-border);
+            height: 89px;
+            padding: 0 var(--sp-32);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .topbar__left { display: flex; align-items: center; gap: var(--sp-12); }
+
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            width: 36px;
+            height: 36px;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            transition: background 0.15s;
+            flex-shrink: 0;
+        }
+        .hamburger:hover { background: var(--clr-bg); }
+        .hamburger__bar {
+            width: 20px;
+            height: 2px;
+            background: var(--clr-text-muted);
+            border-radius: 2px;
+            transition: transform 0.25s, opacity 0.25s;
+        }
+        .hamburger[aria-expanded="true"] .hamburger__bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+        .hamburger[aria-expanded="true"] .hamburger__bar:nth-child(2) { opacity: 0; }
+        .hamburger[aria-expanded="true"] .hamburger__bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+        .topbar__heading { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+        .topbar__title {
+            font-size: var(--fs-lg);
+            font-weight: bold;
+            color: var(--clr-text-primary);
+            line-height: 32px;
+        }
+
+        .topbar__subtitle {
+            font-size: var(--fs-sm);
+            color: var(--clr-text-muted);
+            line-height: 20px;
+        }
+
+        .topbar__right { display: flex; align-items: center; gap: var(--sp-12); }
+
+        .topbar__notif {
+            position: relative;
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-pill);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+        .topbar__notif:hover { background: var(--clr-bg); }
+        .topbar__notif svg { width: 20px; height: 20px; }
+        .topbar__notif-dot {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            background: #FB2C36;
+            border-radius: 50%;
+        }
+
+        .topbar__user { display: flex; align-items: center; gap: var(--sp-12); }
+
+        .topbar__user-info { text-align: right; display: flex; flex-direction: column; }
+        .topbar__user-name { font-size: var(--fs-sm); color: var(--clr-text-primary); line-height: 20px; }
+        .topbar__user-role { font-size: var(--fs-xs); color: var(--clr-text-muted); line-height: 16px; }
+
+        .topbar__avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-pill);
+            background: var(--grad-brand);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .topbar__avatar svg { width: 20px; height: 20px; }
+
+        /* ============================================================
+           PAGE CONTENT
+        ============================================================ */
+        .page-content {
+            flex: 1;
+            padding: var(--sp-32);
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-24);
+            overflow-x: hidden;
+        }
+
+        /* ============================================================
+           CONTROLS ROW (Search + Filter + Export)
+        ============================================================ */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--sp-12);
+            flex-wrap: wrap;
+            min-height: 42px;
+        }
+
+        .controls-row__left {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-16);
+            flex-wrap: wrap;
+        }
+
+        /* Search Input */
+        .search-wrap {
+            position: relative;
+            width: 320px;
+        }
+
+        .search-wrap__icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+        }
+        .search-wrap__icon svg { width: 100%; height: 100%; }
+
+        .search-wrap__input {
+            width: 100%;
+            height: 42px;
+            border: 1px solid var(--clr-border-input);
+            border-radius: var(--radius-sm);
+            padding: 8px 16px 8px 40px;
+            font-family: Arial, sans-serif;
+            font-size: var(--fs-base);
+            color: var(--clr-text-primary);
+            background: var(--clr-white);
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .search-wrap__input::placeholder { color: var(--clr-text-placeholder); }
+        .search-wrap__input:focus { border-color: var(--clr-blue); }
+
+        /* Filter Dropdown */
+        .filter-select {
+            height: 42px;
+            width: 134px;
+            border: 1px solid var(--clr-border-input);
+            border-radius: var(--radius-sm);
+            padding: 0 var(--sp-12);
+            font-family: Arial, sans-serif;
+            font-size: var(--fs-base);
+            color: var(--clr-text-dark);
+            background: var(--clr-white);
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .filter-select:focus { border-color: var(--clr-blue); }
+
+        /* Export Button */
+        .btn-export {
+            height: 40px;
+            padding: 0 var(--sp-16);
+            background: var(--clr-blue);
+            color: var(--clr-white);
+            border-radius: var(--radius-sm);
+            font-size: var(--fs-base);
+            line-height: 24px;
+            display: flex;
+            align-items: center;
+            gap: var(--sp-8);
+            white-space: nowrap;
+            transition: opacity 0.15s;
+        }
+        .btn-export:hover { opacity: .88; }
+        .btn-export svg { width: 16px; height: 16px; }
+
+        /* ============================================================
+           STAT CARDS
+        ============================================================ */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--sp-16);
+        }
+
+        .stat-card {
+            background: var(--clr-white);
+            border: 1px solid var(--clr-border);
+            border-radius: var(--radius-md);
+            padding: 17px;
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-12);
+            min-height: 142px;
+        }
+
+        .stat-card__top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        .stat-card__icon-wrap {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .stat-card__icon-wrap svg { width: 20px; height: 20px; }
+
+        .stat-card__icon-wrap--green  { background: var(--clr-green-light); }
+        .stat-card__icon-wrap--blue   { background: var(--clr-blue-bg); }
+        .stat-card__icon-wrap--purple { background: var(--clr-purple-bg); }
+        .stat-card__icon-wrap--orange { background: var(--clr-orange-bg); }
+
+        .stat-card__pct {
+            font-size: var(--fs-sm);
+            color: var(--clr-green-bright);
+            line-height: 20px;
+        }
+
+        .stat-card__value {
+            font-size: var(--fs-lg);
+            font-weight: bold;
+            color: var(--clr-text-primary);
+            line-height: 32px;
+        }
+
+        .stat-card__label {
+            font-size: var(--fs-sm);
+            color: var(--clr-text-muted);
+            line-height: 20px;
+        }
+
+        /* ============================================================
+           ATTENDANCE TABLE CARD
+        ============================================================ */
+        .table-card {
+            background: var(--clr-white);
+            border: 1px solid var(--clr-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .table-card__header {
+            border-bottom: 1px solid var(--clr-border);
+            padding: var(--sp-24);
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-4);
+            min-height: 101px;
+        }
+
+        .table-card__title {
+            font-size: var(--fs-md);
+            font-weight: bold;
+            color: var(--clr-text-primary);
+            line-height: 28px;
+        }
+
+        .table-card__date {
+            font-size: var(--fs-sm);
+            color: var(--clr-text-muted);
+            line-height: 20px;
+        }
+
+        /* Table */
+        .att-table-wrap { overflow-x: auto; }
+
+        .att-table {
+            width: 100%;
+            min-width: 900px;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .att-table col.col-sa       { width: 19%; }
+        .att-table col.col-office   { width: 15%; }
+        .att-table col.col-timein   { width: 18%; }
+        .att-table col.col-timeout  { width: 13%; }
+        .att-table col.col-duration { width: 11%; }
+        .att-table col.col-method   { width: 12%; }
+        .att-table col.col-status   { width: 12%; }
+
+        .att-table thead th {
+            background: var(--clr-bg);
+            border-bottom: 1px solid var(--clr-border);
+            padding: 16px var(--sp-24);
+            text-align: left;
+            font-size: var(--fs-sm);
+            font-weight: bold;
+            color: var(--clr-text-primary);
+            height: 52.5px;
+        }
+
+        .att-table tbody tr {
+            border-bottom: 1px solid var(--clr-border);
+        }
+        .att-table tbody tr:last-child { border-bottom: none; }
+
+        .att-table tbody td {
+            padding: 0 var(--sp-24);
+            height: 57px;
+            vertical-align: middle;
+            font-size: var(--fs-base);
+            color: var(--clr-text-primary);
+            line-height: 24px;
+        }
+
+        /* Name cell with dot */
+        .att-name {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-12);
+        }
+
+        .att-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .att-dot--green  { background: var(--clr-green-vivid); }
+        .att-dot--blue   { background: var(--clr-blue-dot); }
+        .att-dot--grey   { background: var(--clr-grey-dot); }
+
+        /* Duration bold */
+        .att-duration { font-weight: bold; }
+
+        /* Method badge */
+        .att-method {
+            display: inline-flex;
+            align-items: center;
+            height: 24px;
+            padding: 4px 8px;
+            background: var(--clr-grey-bg);
+            border-radius: var(--radius-xs);
+            font-size: var(--fs-xs);
+            color: var(--clr-text-body);
+            white-space: nowrap;
+        }
+
+        /* Status badge */
+        .att-status {
+            display: inline-flex;
+            align-items: center;
+            height: 24px;
+            padding: 4px 12px;
+            border-radius: var(--radius-pill);
+            font-size: var(--fs-xs);
+            white-space: nowrap;
+        }
+        .att-status--completed { background: var(--clr-status-completed-bg); color: var(--clr-status-completed-text); }
+        .att-status--active    { background: var(--clr-status-active-bg);    color: var(--clr-status-active-text); }
+        .att-status--scheduled { background: var(--clr-status-scheduled-bg); color: var(--clr-status-scheduled-text); }
+
+        /* ============================================================
+           BOTTOM PANELS ROW
+        ============================================================ */
+        .bottom-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--sp-24);
+        }
+
+        /* ---- Green Security Panel ---- */
+        .security-panel {
+            background: var(--grad-green-panel);
+            border-radius: var(--radius-md);
+            padding: var(--sp-24);
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-16);
+            min-height: 302px;
+        }
+
+        .security-panel__title {
+            font-size: var(--fs-md);
+            font-weight: bold;
+            color: var(--clr-white);
+            line-height: 28px;
+        }
+
+        .security-panel__desc {
+            font-size: var(--fs-sm);
+            color: var(--clr-green-light);
+            line-height: 20px;
+        }
+
+        .security-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--sp-16);
+        }
+
+        .security-stat {
+            background: rgba(255,255,255,.10);
+            border-radius: var(--radius-sm);
+            padding: var(--sp-12);
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .security-stat__value {
+            font-size: var(--fs-lg);
+            font-weight: bold;
+            color: var(--clr-white);
+            line-height: 32px;
+        }
+
+        .security-stat__label {
+            font-size: var(--fs-sm);
+            color: var(--clr-green-light);
+            line-height: 20px;
+        }
+
+        /* ---- Office Distribution Panel ---- */
+        .dist-panel {
+            background: var(--clr-white);
+            border: 1px solid var(--clr-border);
+            border-radius: var(--radius-md);
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-16);
+            min-height: 302px;
+        }
+
+        .dist-panel__title {
+            font-size: var(--fs-md);
+            font-weight: bold;
+            color: var(--clr-text-primary);
+            line-height: 28px;
+        }
+
+        .office-bars {
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-12);
+        }
+
+        .office-bar { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+        .office-bar__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 20px;
+        }
+
+        .office-bar__name {
+            font-size: var(--fs-sm);
+            color: var(--clr-text-primary);
+            line-height: 20px;
+        }
+
+        .office-bar__count {
+            font-size: var(--fs-sm);
+            color: var(--clr-text-muted);
+            line-height: 20px;
+        }
+
+        .office-bar__track {
+            height: 8px;
+            background: var(--clr-border-track);
+            border-radius: var(--radius-pill);
+            overflow: hidden;
+        }
+
+        .office-bar__fill {
+            height: 100%;
+            border-radius: var(--radius-pill);
+        }
+
+        .office-bar__fill--blue   { background: var(--clr-blue); }
+        .office-bar__fill--green  { background: var(--clr-green-bright); }
+        .office-bar__fill--purple { background: var(--clr-purple); }
+        .office-bar__fill--orange { background: var(--clr-orange); }
+        .office-bar__fill--grey   { background: var(--clr-text-muted); }
+
+        /* ============================================================
+           SIDEBAR OVERLAY
+        ============================================================ */
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.4);
+            z-index: 99;
+        }
+        .sidebar-overlay--hidden  { display: none; }
+        .sidebar-overlay--visible { display: block; }
+
+        /* ============================================================
+           RESPONSIVE — TABLET (≤1024px)
+        ============================================================ */
+        @media (max-width: 1024px) {
+            .sidebar {
+                position: fixed;
+                left: -100%;
+                top: 0;
+                height: 100vh;
+                transition: left 0.28s ease;
+                z-index: 200;
+            }
+            .sidebar--open { left: 0; }
+            .hamburger { display: flex; }
+            .topbar { padding: 0 var(--sp-16); }
+            .page-content { padding: var(--sp-16); }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .bottom-row { grid-template-columns: 1fr; }
+            .controls-row { flex-direction: column; align-items: flex-start; }
+            .topbar__user-info { display: none; }
+        }
+
+        /* ============================================================
+           RESPONSIVE — MOBILE (≤768px)
+        ============================================================ */
+        @media (max-width: 768px) {
+            .topbar__title { font-size: 18px; }
+            .topbar__subtitle { font-size: var(--fs-xs); }
+            .page-content { padding: var(--sp-12); gap: var(--sp-16); }
+            .stats-row { grid-template-columns: 1fr 1fr; gap: var(--sp-12); }
+            .stat-card { min-height: auto; }
+            .search-wrap { width: 100%; }
+            .filter-select { width: 120px; }
+            .btn-export { font-size: var(--fs-sm); height: 38px; }
+            .security-stats { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+    <link rel="stylesheet" href="../assets/css/sams-shell.css" />
+</head>
+<body>
+
+<div class="sidebar-overlay sidebar-overlay--hidden" id="sidebarOverlay"></div>
+
+<div class="app">
+
+    <!-- ================================================================
+         SIDEBAR
+    ================================================================ -->
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Admin navigation">
+
+        <div class="sidebar__header">
+            <div class="sidebar__brand">
+                <div class="sidebar__logo" aria-hidden="true">
+                    <span class="sidebar__logo-text">NU</span>
+                </div>
+                <div class="sidebar__brand-info">
+                    <span class="sidebar__app-name">SA System</span>
+                    <span class="sidebar__app-sub">Admin Panel</span>
+                </div>
+            </div>
+        </div>
+
+        <nav class="sidebar__nav" aria-label="Main menu">
+            <ul class="nav__list">
+                <li class="nav__item">
+                    <a href="dashboard.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
+                                <rect x="11" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
+                                <rect x="2" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
+                                <rect x="11" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="applications.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M6 2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="#364153" stroke-width="1.5"/>
+                                <path d="M7 7h6M7 10h6M7 13h4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Applications</span>
+                        <?php if ($applicationBadgeCount > 0): ?><span class="nav__badge" aria-label="<?= $applicationBadgeCount ?> pending"><?= (int) $applicationBadgeCount ?></span><?php endif; ?>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="scheduling.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2" y="4" width="16" height="14" rx="2" stroke="#364153" stroke-width="1.5"/>
+                                <path d="M6 2v4M14 2v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M2 9h16" stroke="#364153" stroke-width="1.2"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Scheduling</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="attendance.php" class="nav__link nav__link--active" aria-current="page">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="10" cy="10" r="8" stroke="white" stroke-width="1.5"/>
+                                <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Attendance</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="evaluation.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M10 2l2.09 4.26L17 7.27l-3.5 3.41.83 4.82L10 13.27l-4.33 2.23.83-4.82L3 7.27l4.91-.71L10 2z" stroke="#364153" stroke-width="1.5" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Evaluation</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="reports.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="3" y="12" width="3" height="6" rx="1" fill="#364153"/>
+                                <rect x="8.5" y="8" width="3" height="10" rx="1" fill="#364153"/>
+                                <rect x="14" y="4" width="3" height="14" rx="1" fill="#364153"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Reports</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="announcements.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Announcements</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="students.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="10" cy="6.5" r="3" stroke="#364153" stroke-width="1.5"/>
+                                <path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Students</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+            </ul>
+        </nav>
+
+        <div class="sidebar__footer">
+            <ul class="nav__list">
+                <li class="nav__item">
+                    <a href="settings.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8.325 2.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z" stroke="#364153" stroke-width="1.3"/>
+                                <circle cx="10" cy="10" r="3" stroke="#364153" stroke-width="1.3"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Settings</span>
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="logout.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M7 3H4a1 1 0 00-1 1v12a1 1 0 001 1h3" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M13 14l3-4-3-4M16 10H7" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Sign Out</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- ================================================================
+         MAIN
+    ================================================================ -->
+    <main class="main">
+
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar__left">
+                <button class="hamburger" id="hamburgerBtn" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Toggle navigation">
+                    <span class="hamburger__bar"></span>
+                    <span class="hamburger__bar"></span>
+                    <span class="hamburger__bar"></span>
+                </button>
+                <div class="topbar__heading">
+                    <h1 class="topbar__title">Attendance Monitoring</h1>
+                    <p class="topbar__subtitle">NU Lipa - Student Development and Activities Office</p>
+                </div>
+            </div>
+            <div class="topbar__right">
+                <a href="#" class="topbar__notif" aria-label="Notifications">
+                    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#4A5565"/>
+                    </svg>
+                    <span class="topbar__notif-dot" aria-label="New notifications"></span>
+                </a>
+                <div class="topbar__user">
+                    <div class="topbar__user-info">
+                        <span class="topbar__user-name">Zaira Joy S. Enayo</span>
+                        <span class="topbar__user-role">SDAO Head</span>
+                    </div>
+                    <div class="topbar__avatar" aria-hidden="true">
+                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="10" cy="7" r="4" fill="white" opacity=".9"/>
+                            <path d="M2 17c0-3.314 3.582-6 8-6s8 2.686 8 6" fill="white" opacity=".9"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <section class="page-content" aria-label="Attendance Monitoring content">
+
+            <!-- Controls Row -->
+            <div class="controls-row">
+                <div class="controls-row__left">
+                    <!-- Search -->
+                    <div class="search-wrap">
+                        <span class="search-wrap__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="9" cy="9" r="6" stroke="#99A1AF" stroke-width="1.5"/>
+                                <path d="M13.5 13.5L17 17" stroke="#99A1AF" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <input
+                            class="search-wrap__input"
+                            type="search"
+                            placeholder="Search student assistant..."
+                            aria-label="Search student assistant"
+                            id="searchInput"
+                        >
+                    </div>
+                    <!-- Filter -->
+                    <select class="filter-select" aria-label="Filter by period" id="filterSelect">
+                        <option value="today">Today</option>
+                        <option value="yesterday">Yesterday</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                    </select>
+                </div>
+                <!-- Export -->
+                <button class="btn-export" type="button">
+                    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8 2v8M8 10L5 7M8 10l3-3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    Export Report
+                </button>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="stats-row">
+                <!-- On Time Today -->
+                <div class="stat-card">
+                    <div class="stat-card__top">
+                        <div class="stat-card__icon-wrap stat-card__icon-wrap--green" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="10" cy="10" r="8" stroke="#00A63E" stroke-width="1.5"/>
+                                <path d="M10 6v4l2.5 2.5" stroke="#00A63E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <span class="stat-card__pct">90%</span>
+                    </div>
+                    <div class="stat-card__value" id="metric-on-time">38/42</div>
+                    <div class="stat-card__label">On Time Today</div>
+                </div>
+                <!-- Avg Hours/Day -->
+                <div class="stat-card">
+                    <div class="stat-card__top">
+                        <div class="stat-card__icon-wrap stat-card__icon-wrap--blue" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 17l4-8 4 5 3-3 3 2" stroke="#155DFC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <span class="stat-card__pct">+5%</span>
+                    </div>
+                    <div class="stat-card__value" id="metric-avg-hours">3.2h</div>
+                    <div class="stat-card__label">Avg. Hours/Day</div>
+                </div>
+                <!-- Active Now -->
+                <div class="stat-card">
+                    <div class="stat-card__top">
+                        <div class="stat-card__icon-wrap stat-card__icon-wrap--purple" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="10" cy="7" r="4" stroke="#9810FA" stroke-width="1.5"/>
+                                <path d="M2 17c0-3.314 3.582-6 8-6s8 2.686 8 6" stroke="#9810FA" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <span class="stat-card__pct">57%</span>
+                    </div>
+                    <div class="stat-card__value" id="metric-active-now">24</div>
+                    <div class="stat-card__label">Active Now</div>
+                </div>
+                <!-- This Month -->
+                <div class="stat-card">
+                    <div class="stat-card__top">
+                        <div class="stat-card__icon-wrap stat-card__icon-wrap--orange" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2" y="4" width="16" height="14" rx="2" stroke="#F54900" stroke-width="1.5"/>
+                                <path d="M6 2v4M14 2v4" stroke="#F54900" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M2 9h16" stroke="#F54900" stroke-width="1.2"/>
+                            </svg>
+                        </div>
+                        <span class="stat-card__pct">+12%</span>
+                    </div>
+                    <div class="stat-card__value" id="metric-month-hours">1,842h</div>
+                    <div class="stat-card__label">This Month</div>
+                </div>
+            </div>
+
+            <!-- Attendance Table -->
+            <div class="table-card">
+                <div class="table-card__header">
+                    <h2 class="table-card__title">Today's Attendance Log</h2>
+                    <p class="table-card__date"><?php echo htmlspecialchars($currentDateLabel, ENT_QUOTES, 'UTF-8'); ?></p>
+                </div>
+                <div class="att-table-wrap">
+                    <table class="att-table" aria-label="Today's attendance log">
+                        <colgroup>
+                            <col class="col-sa">
+                            <col class="col-office">
+                            <col class="col-timein">
+                            <col class="col-timeout">
+                            <col class="col-duration">
+                            <col class="col-method">
+                            <col class="col-status">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th scope="col">Student Assistant</th>
+                                <th scope="col">Office</th>
+                                <th scope="col">Time In</th>
+                                <th scope="col">Time Out</th>
+                                <th scope="col">Duration</th>
+                                <th scope="col">Method</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceTableBody">
+                            <?php foreach ($attendance_rows as $row): ?>
+                            <tr>
+                                <td>
+                                    <div class="att-name">
+                                        <span class="att-dot att-dot--<?= htmlspecialchars($row['dot']) ?>" aria-hidden="true"></span>
+                                        <?= htmlspecialchars($row['name']) ?>
+                                    </div>
+                                </td>
+                                <td><?= htmlspecialchars($row['office']) ?></td>
+                                <td><?= htmlspecialchars($row['time_in']) ?></td>
+                                <td><?= htmlspecialchars($row['time_out']) ?></td>
+                                <td><span class="att-duration"><?= htmlspecialchars($row['duration']) ?></span></td>
+                                <td><span class="att-method"><?= htmlspecialchars($row['method']) ?></span></td>
+                                <td>
+                                    <?php
+                                    $st = strtolower($row['status']);
+                                    $cls = 'att-status--scheduled';
+                                    if ($st === 'completed') $cls = 'att-status--completed';
+                                    elseif ($st === 'active') $cls = 'att-status--active';
+                                    ?>
+                                    <span class="att-status <?= $cls ?>"><?= htmlspecialchars($row['status']) ?></span>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Security Panel + Office Distribution -->
+            <div class="bottom-row">
+
+                <!-- Dual-Layer Security Panel -->
+                <div class="security-panel" role="region" aria-label="Dual-Layer Security">
+                    <h2 class="security-panel__title">🔒 Dual-Layer Security</h2>
+                    <p class="security-panel__desc">All attendance logs verified with QR Code + PIN/OTP validation</p>
+                    <div class="security-stats">
+                        <div class="security-stat">
+                            <span class="security-stat__value" id="security-verified">156</span>
+                            <span class="security-stat__label">Verified Logs</span>
+                        </div>
+                        <div class="security-stat">
+                            <span class="security-stat__value" id="security-accuracy">100%</span>
+                            <span class="security-stat__label">Accuracy</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Office Distribution Panel -->
+                <div class="dist-panel" role="region" aria-label="Office Distribution">
+                    <h2 class="dist-panel__title">Office Distribution</h2>
+                            <div class="office-bars" id="officeBars">
+                                <?php foreach ($offices as $office): ?>
+                                <div class="office-bar">
+                                    <div class="office-bar__header">
+                                        <span class="office-bar__name"><?= htmlspecialchars($office['name']) ?></span>
+                                        <span class="office-bar__count"><?= (int)$office['count'] ?> SAs</span>
+                                    </div>
+                                    <div class="office-bar__track" role="progressbar" aria-valuenow="<?= (int)$office['pct'] ?>" aria-valuemin="0" aria-valuemax="100" aria-label="<?= htmlspecialchars($office['name']) ?> distribution">
+                                        <div class="office-bar__fill office-bar__fill--<?= htmlspecialchars($office['color']) ?>" style="width:<?= (int)$office['pct'] ?>%"></div>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                </div>
+
+            </div>
+
+        </section>
+    </main>
+</div><!-- /app -->
+
+<script>
+(function () {
+    'use strict';
+
+    /* ---- Hamburger / Sidebar ---- */
+    var hamburger = document.getElementById('hamburgerBtn');
+    var sidebar   = document.getElementById('sidebar');
+    var overlay   = document.getElementById('sidebarOverlay');
+
+    function openSidebar() {
+        sidebar.classList.add('sidebar--open');
+        overlay.classList.remove('sidebar-overlay--hidden');
+        overlay.classList.add('sidebar-overlay--visible');
+        hamburger.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeSidebar() {
+        sidebar.classList.remove('sidebar--open');
+        overlay.classList.add('sidebar-overlay--hidden');
+        overlay.classList.remove('sidebar-overlay--visible');
+        hamburger.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+    }
+
+    if (hamburger) hamburger.addEventListener('click', function () {
+        sidebar.classList.contains('sidebar--open') ? closeSidebar() : openSidebar();
+    });
+    if (overlay) overlay.addEventListener('click', closeSidebar);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && sidebar.classList.contains('sidebar--open')) {
+            closeSidebar();
+            hamburger && hamburger.focus();
+        }
+    });
+
+    /* ---- Live search filter ---- */
+    var searchInput = document.getElementById('searchInput');
+    var tableBody   = document.getElementById('attendanceTableBody');
+
+    if (searchInput && tableBody) {
+        searchInput.addEventListener('input', function () {
+            var q = this.value.trim().toLowerCase();
+            var rows = tableBody.querySelectorAll('tr');
+            rows.forEach(function (row) {
+                var name = row.querySelector('.att-name');
+                var text = name ? name.textContent.toLowerCase() : '';
+                row.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+            });
+        });
+    }
+
+})();
+</script>
+
+<script>
+// Poll attendance_data.php every 5 seconds and update UI
+(function () {
+    'use strict';
+
+    var endpoint = 'attendance_data.php';
+    var tableBody = document.getElementById('attendanceTableBody');
+    var metricOnTime = document.getElementById('metric-on-time');
+    var metricActive = document.getElementById('metric-active-now');
+    var officeBars = document.getElementById('officeBars');
+    var securityVerified = document.getElementById('security-verified');
+    var securityAccuracy = document.getElementById('security-accuracy');
+
+    function dotClassForStatus(st) {
+        st = (st || '').toLowerCase();
+        if (st === 'completed' || st === 'present') return 'att-dot--green';
+        if (st === 'active' || st === 'late') return 'att-dot--blue';
+        return 'att-dot--grey';
+    }
+
+    function renderRow(r) {
+        var name = (r.first_name || '') + ' ' + (r.last_name || '');
+        var office = r.office_name || '-';
+        var timeIn = r.time_in || '-';
+        var timeOut = r.time_out || (r.time_in ? 'In Progress' : '-');
+        var status = r.status || 'Scheduled';
+        var dotCls = dotClassForStatus(status);
+
+        var statusCls = 'att-status--scheduled';
+        if ((status || '').toLowerCase() === 'completed') statusCls = 'att-status--completed';
+        else if ((status || '').toLowerCase() === 'active' || (status || '').toLowerCase() === 'late') statusCls = 'att-status--active';
+
+        var html = '<tr>' +
+            '<td><div class="att-name"><span class="att-dot ' + dotCls + '" aria-hidden="true"></span>' + escapeHtml(name) + '</div></td>' +
+            '<td>' + escapeHtml(office) + '</td>' +
+            '<td>' + escapeHtml(timeIn) + '</td>' +
+            '<td>' + escapeHtml(timeOut) + '</td>' +
+            '<td><span class="att-duration">-</span></td>' +
+            '<td><span class="att-method">-</span></td>' +
+            '<td><span class="att-status ' + statusCls + '">' + escapeHtml(status) + '</span></td>' +
+            '</tr>';
+        return html;
+    }
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function updateOfficeBars(offices) {
+        if (!officeBars) return;
+        officeBars.innerHTML = '';
+        offices.forEach(function (o) {
+            var name = o.office_name || o.name || '-';
+            var total = o.total || o.count || 0;
+            var pct = parseInt(o.total ? (o.total ? Math.round((o.total / (o.total || 1)) * 100) : 0) : (o.pct || 0), 10) || (o.pct || 0);
+            var fillColor = 'office-bar__fill--blue';
+            var color = (o.color || '').toLowerCase();
+            if (color === 'green') fillColor = 'office-bar__fill--green';
+            else if (color === 'purple') fillColor = 'office-bar__fill--purple';
+            else if (color === 'orange') fillColor = 'office-bar__fill--orange';
+            else if (color === 'grey') fillColor = 'office-bar__fill--grey';
+
+            var node = document.createElement('div');
+            node.className = 'office-bar';
+            node.innerHTML = '<div class="office-bar__header"><span class="office-bar__name">' + escapeHtml(name) + '</span><span class="office-bar__count">' + (total) + ' SAs</span></div>' +
+                '<div class="office-bar__track" role="progressbar" aria-valuenow="' + (pct) + '" aria-valuemin="0" aria-valuemax="100" aria-label="' + escapeHtml(name) + ' distribution">' +
+                '<div class="office-bar__fill ' + fillColor + '" style="width:' + (pct) + '%"></div></div>';
+            officeBars.appendChild(node);
+        });
+    }
+
+    function poll() {
+        var url = endpoint + '?t=' + Date.now();
+        fetch(url, { credentials: 'same-origin' }).then(function (r) {
+            if (!r.ok) throw new Error('Network response not ok');
+            return r.json();
+        }).then(function (data) {
+            if (!data || !data.success) return;
+
+            // Update metrics
+            try {
+                var metrics = data.metrics || {};
+                var active_now = metrics.active_now || 0;
+                var completed_today = metrics.completed_today || 0;
+                var total_schedules = metrics.total_schedules || 0;
+
+                if (metricActive) metricActive.textContent = String(active_now);
+                if (metricOnTime) metricOnTime.textContent = (completed_today + '/' + total_schedules);
+
+                // Table rows
+                if (tableBody && Array.isArray(data.today_rows)) {
+                    var rowsHtml = data.today_rows.map(renderRow).join('');
+                    tableBody.innerHTML = rowsHtml || '<tr><td colspan="7">No attendance records for today.</td></tr>';
+                }
+
+                // Offices
+                if (Array.isArray(data.offices)) updateOfficeBars(data.offices);
+
+                // Security
+                if (securityVerified && data.security) securityVerified.textContent = String(data.security.verified || '0');
+                if (securityAccuracy && data.security) securityAccuracy.textContent = String((data.security.accuracy || 100) + '%');
+            } catch (err) {
+                console.error('Update error', err);
+            }
+        }).catch(function (err) {
+            console.warn('Attendance poll failed', err);
+        });
+    }
+
+    // Start polling
+    // Start polling
+    poll();
+    setInterval(poll, 5000);
+
+    // SSE stream: prefer push updates for Live UI
+    if (window.EventSource) {
+        try {
+            var adminES = new EventSource('../api/attendance_stream.php');
+            adminES.addEventListener('attendance', function (e) {
+                try {
+                    var payload = JSON.parse(e.data);
+                    if (!payload || !payload.success) return;
+                    // update metrics/table/offices from payload when present
+                    if (payload.metrics) {
+                        if (metricActive) metricActive.textContent = String(payload.metrics.active_now || 0);
+                        if (metricOnTime) metricOnTime.textContent = String((payload.metrics.completed_today || 0) + '/' + (payload.metrics.total_schedules || 0));
+                    }
+                    if (payload.today_rows && tableBody) {
+                        var rowsHtml = (payload.today_rows || []).map(renderRow).join('');
+                        tableBody.innerHTML = rowsHtml || '<tr><td colspan="7">No attendance records for today.</td></tr>';
+                    }
+                    if (payload.offices && Array.isArray(payload.offices)) updateOfficeBars(payload.offices);
+                } catch (err) {
+                    console.error('SSE admin parse error', err);
+                }
+            });
+            adminES.addEventListener('error', function () { try { adminES.close(); } catch (e) {} });
+        } catch (ex) {
+            console.error('Admin SSE setup failed:', ex);
+        }
+    }
+
+})();
+</script>
+
+</body>
+</html>

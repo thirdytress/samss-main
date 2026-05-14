@@ -1,0 +1,38 @@
+.env
+.env.*
+!.env.example
+
+# Dependencies
+vendor/
+
+# User uploads and runtime files
+uploads/
+storage/
+cache/
+tmp/
+logs/
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Databases / dumps / backups
+*.sql
+*.sqlite
+*.sqlite3
+*.bak
+*.backup
+
+# Build / coverage
+node_modules/
+dist/
+build/
+coverage/
+
+# Misc local scripts output
+*.pid
+*.seed
