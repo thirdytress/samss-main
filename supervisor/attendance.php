@@ -139,6 +139,7 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../assets/css/sams-shell.css" />
     <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
+    <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
     <style>
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--color-bg-app);color:var(--color-heading);min-height:100vh;display:flex}
@@ -161,7 +162,6 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
         .topbar{background:var(--color-white);border-bottom:1px solid var(--color-border);height:var(--topbar-height);padding:0 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
         .topbar__title{font-size:var(--font-lg);font-weight:700;color:var(--color-heading)}
         .topbar__sub{font-size:var(--font-sm);color:var(--color-body)}
-        .topbar__right{display:flex;align-items:center;gap:10px}
         .button{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border-radius:8px;font-weight:600;font-size:var(--font-sm);border:0;cursor:pointer;transition:all .2s ease}
         .button--primary{background:var(--color-primary);color:#fff}
         .button--primary:hover{background:var(--color-primary-dark)}
@@ -247,6 +247,10 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
                 <div class="topbar__sub"><?php echo htmlspecialchars($supervisorOffice !== '' ? $supervisorOffice : 'Assigned Office'); ?> · <?php echo htmlspecialchars($termLabel); ?></div>
             </div>
             <div class="topbar__right">
+                <div class="topbar__notif-btn" role="button" aria-label="Notifications" tabindex="0">
+                    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#4A5565"/></svg>
+                    <span class="topbar__notif-dot" aria-hidden="true" style="display:none"></span>
+                </div>
                 <form method="get" class="inline-form">
                     <select class="select" name="refresh" aria-label="Auto refresh">
                         <option value="0">Manual</option>
@@ -362,5 +366,6 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
     }
 })();
 </script>
+<script src="../assets/js/admin-notifications.js"></script>
 </body>
 </html>

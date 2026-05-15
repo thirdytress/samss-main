@@ -20,8 +20,24 @@ require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/attendance.php';
+require_once __DIR__ . '/admin_meetings.php';
 
 function sams_attendance_late_threshold(): int
 {
     return 10;
+}
+
+function sams_office_options(): array
+{
+    return [
+        'ITSO',
+        'SDAO',
+        'Registrar',
+        'Guidance Office',
+        'Library',
+        'Accounting Office',
+        'Admissions Office',
+        'Clinic',
+        'Cashier',
+    ];
 }

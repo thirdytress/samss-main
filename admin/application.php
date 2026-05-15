@@ -1471,6 +1471,15 @@ $statusFilterOptions = [
         </span>
         <span class="nav-item__label">Announcements</span>
       </a>
+      <a class="nav-item" href="meetings.php">
+        <span class="nav-item__icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
+            <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-item__label">Meetings</span>
+      </a>
       <a class="nav-item" href="students.php">
         <span class="nav-item__icon" aria-hidden="true">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2250,6 +2259,8 @@ $statusFilterOptions = [
 
   }());
 </script>
+
+<script src="../assets/js/admin-notifications.js"></script>
 
 </body>
 </html>

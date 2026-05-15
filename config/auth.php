@@ -112,10 +112,12 @@ function sams_authenticate(string $identifier, string $password): array
                 u.is_active,
                 u.{$passwordColumn} AS password_stored,
                 {$mustChangePasswordSelect},
+                COALESCE(sp.office_name, '') AS office_name,
                 s.student_id,
                 s.student_id_number
             FROM users u
             LEFT JOIN students s ON u.{$userIdColumn} = s.user_id
+            LEFT JOIN supervisors sp ON u.{$userIdColumn} = sp.user_id
             WHERE u.email = :identifier_email
                 OR s.student_id_number = :identifier_student
             LIMIT 1"
@@ -146,6 +148,7 @@ function sams_authenticate(string $identifier, string $password): array
         'last_name' => $user['last_name'],
         'student_id' => $user['student_id'] ?? null,
         'student_id_number' => $user['student_id_number'] ?? null,
+        'office_name' => $user['office_name'] ?? null,
         'must_change_password' => (int) ($user['must_change_password'] ?? 0),
     ];
 }

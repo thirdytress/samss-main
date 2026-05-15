@@ -1029,15 +1029,9 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
 
 <option value="">Select office...</option>
 
-<option value="ITSO">ITSO</option>
-<option value="SDAO">SDAO</option>
-<option value="Registrar">Registrar</option>
-<option value="Guidance Office">Guidance Office</option>
-<option value="Library">Library</option>
-<option value="Accounting Office">Accounting Office</option>
-<option value="Admissions Office">Admissions Office</option>
-<option value="Clinic">Clinic</option>
-<option value="Cashier">Cashier</option>
+<?php foreach (sams_office_options() as $officeOption): ?>
+<option value="<?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?></option>
+<?php endforeach; ?>
 
 </select>
                         <?php if (!empty($errors['work_location'])): ?>

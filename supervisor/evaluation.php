@@ -157,8 +157,11 @@ if ($activeTerm && $officeName !== '') {
   <title>Supervisor Evaluation – SAMS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />  <link rel="stylesheet" href="../assets/css/sams-shell.css" />
-  <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />  <style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/sams-shell.css" />
+  <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
+  <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
+  <style>
     /* Reuse admin design system for consistent shell */
       *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body { font-family: 'Inter', sans-serif; background: var(--color-bg-app); color: var(--color-heading); min-height: 100vh; display: flex; }
@@ -181,7 +184,6 @@ if ($activeTerm && $officeName !== '') {
     .topbar__heading{display:flex;flex-direction:column;gap:2px}
     .topbar__title{font-size:18px;font-weight:700;color:var(--color-heading)}
     .topbar__subtitle{font-size:14px;color:var(--color-body)}
-    .topbar__right{display:flex;align-items:center}
     .logout-btn{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 14px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:700;text-decoration:none}
     .logout-btn:hover{background:#fecaca}
     .page{flex:1; padding:32px;}
@@ -276,6 +278,10 @@ if ($activeTerm && $officeName !== '') {
         <div class="topbar__subtitle">Submit end-of-term evaluations</div>
       </div>
       <div class="topbar__right">
+        <div class="topbar__notif" aria-label="Notifications">
+          <svg class="topbar__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#364153"/></svg>
+          <span class="topbar__notif-dot" aria-label="New notifications" style="display:none"></span>
+        </div>
         <a href="logout.php" class="logout-btn">Logout</a>
       </div>
     </header>
@@ -374,5 +380,6 @@ if ($activeTerm && $officeName !== '') {
         </main>
     </div>
 </div>
+    <script src="../assets/js/admin-notifications.js"></script>
 </body>
 </html>

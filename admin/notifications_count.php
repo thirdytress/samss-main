@@ -14,8 +14,25 @@ if (!$user || (($user['role'] ?? null) !== 'admin')) {
 
 $pdo = sams_pdo();
 try {
+    $adminUserId = (int) ($user['user_id'] ?? 0);
+
+    if ($adminUserId > 0) {
+        sams_admin_meetings_generate_notifications($pdo, $adminUserId);
+    }
+
     $stmt = $pdo->query("SELECT COUNT(*) FROM student_reports WHERE status = 'open' AND is_new = 1");
-    $count = (int) $stmt->fetchColumn();
+    $reportCount = (int) $stmt->fetchColumn();
+
+    $meetingCount = 0;
+    if ($adminUserId > 0) {
+        $meetingStmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM admin_meeting_notifications WHERE admin_user_id = :admin_user_id AND is_read = 0'
+        );
+        $meetingStmt->execute(['admin_user_id' => $adminUserId]);
+        $meetingCount = (int) $meetingStmt->fetchColumn();
+    }
+
+    $count = $reportCount + $meetingCount;
     echo json_encode(['success' => true, 'count' => $count]);
 } catch (Throwable $e) {
     echo json_encode(['success' => false, 'message' => 'db error']);

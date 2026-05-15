@@ -31,6 +31,7 @@ $office_name = (string) ($supervisorRow['office_name'] ?? ($user['office_name'] 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../assets/css/sams-shell.css" />
     <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
+    <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
     <style>
         /* Reuse admin design system for consistent shell */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -138,8 +139,14 @@ $office_name = (string) ($supervisorRow['office_name'] ?? ($user['office_name'] 
     </aside>
     <div class="main">
         <header class="topbar">
-            <div></div>
+          <div></div>
+          <div class="topbar__right">
+            <div class="topbar__notif-btn" role="button" aria-label="Notifications" tabindex="0">
+              <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#4A5565"/></svg>
+              <span class="topbar__notif-dot" aria-hidden="true" style="display:none"></span>
+            </div>
             <div><a href="logout.php" class="logout-warning">Logout</a></div>
+          </div>
         </header>
         <main class="page">
     <section class="card">
@@ -212,5 +219,6 @@ $office_name = (string) ($supervisorRow['office_name'] ?? ($user['office_name'] 
       fetchMetrics();
     })();
   </script>
+  <script src="../assets/js/admin-notifications.js"></script>
 </body>
 </html>

@@ -16,6 +16,9 @@ try {
     $pdo = sams_pdo();
     $pdo->query('SELECT 1');
 
+    $adminUserId = (int) ($user['user_id'] ?? 0);
+    sams_admin_meetings_generate_notifications($pdo, $adminUserId);
+
     $activeStudents = (int) $pdo->query('SELECT COUNT(*) FROM students WHERE is_enrolled = 1')->fetchColumn();
 
     $pendingApplicationsStmt = $pdo->prepare('SELECT COUNT(*) FROM applications WHERE status = :status');
@@ -71,6 +74,8 @@ try {
     );
     $todayAttendance = $todayAttendanceStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+    $upcomingMeetings = sams_admin_meetings_fetch_upcoming($pdo, $adminUserId, 4);
+
     $recentApplications = $recentApplicationsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
     echo json_encode([
@@ -85,6 +90,7 @@ try {
         ],
         'recent_applications' => $recentApplications,
         'today_attendance' => $todayAttendance,
+        'upcoming_meetings' => $upcomingMeetings,
     ]);
 } catch (Throwable $e) {
     http_response_code(500);

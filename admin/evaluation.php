@@ -410,6 +410,7 @@ function sams_eval_badge_class(float $score): string
           <li class="nav__item"><a href="evaluation.php" class="nav__link nav__link--active" aria-current="page"><span class="nav__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2l2.09 4.26L17 7.27l-3.5 3.41.83 4.82L10 13.27l-4.33 2.23.83-4.82L3 7.27l4.91-.71L10 2z" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></span><span class="nav__label">Evaluation</span></a></li>
           <li class="nav__item"><a href="reports.php" class="nav__link"><span class="nav__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="12" width="3" height="6" rx="1" fill="#364153"/><rect x="8.5" y="8" width="3" height="10" rx="1" fill="#364153"/><rect x="14" y="4" width="3" height="14" rx="1" fill="#364153"/></svg></span><span class="nav__label">Reports</span></a></li>
           <li class="nav__item"><a href="announcements.php" class="nav__link"><span class="nav__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nav__label">Announcements</span></a></li>
+          <li class="nav__item"><a href="meetings.php" class="nav__link"><span class="nav__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/><path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg></span><span class="nav__label">Meetings</span></a></li>
           <li class="nav__item"><a href="students.php" class="nav__link"><span class="nav__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="6.5" r="3" stroke="#364153" stroke-width="1.5"/><path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg></span><span class="nav__label">Students</span></a></li>
         </ul>
       </nav>
@@ -549,5 +550,6 @@ function sams_eval_badge_class(float $score): string
       </section>
     </main>
   </div>
+  <script src="../assets/js/admin-notifications.js"></script>
 </body>
 </html>

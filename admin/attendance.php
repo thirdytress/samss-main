@@ -1050,6 +1050,17 @@ $currentDateLabel = date('l, F j, Y');
                     </a>
                 </li>
                 <li class="nav__item">
+                    <a href="meetings.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
+                                <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Meetings</span>
+                    </a>
+                </li>
+                <li class="nav__item">
                     <a href="students.php" class="nav__link">
                         <span class="nav__icon" aria-hidden="true">
                             <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1060,7 +1071,6 @@ $currentDateLabel = date('l, F j, Y');
                         <span class="nav__label">Students</span>
                     </a>
                 </li>
-                <li class="nav__item">
             </ul>
         </nav>
 
@@ -1533,6 +1543,8 @@ $currentDateLabel = date('l, F j, Y');
 
 })();
 </script>
+
+<script src="../assets/js/admin-notifications.js"></script>
 
 </body>
 </html>

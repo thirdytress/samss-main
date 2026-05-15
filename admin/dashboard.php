@@ -70,6 +70,10 @@ $todayAttendanceStmt = $pdo->query(
 );
 $todayAttendance = $todayAttendanceStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+$adminUserId = (int) ($currentUser['user_id'] ?? 0);
+sams_admin_meetings_generate_notifications($pdo, $adminUserId);
+$upcomingMeetings = sams_admin_meetings_fetch_upcoming($pdo, $adminUserId, 4);
+
 $alerts = [];
 if ($pendingApplications > 0) {
     $alerts[] = [
@@ -468,6 +472,26 @@ function sams_admin_dashboard_attendance_dot(string $status): string
         .qa-btn:hover { background: var(--color-border); }
         .qa-btn__emoji { font-size: 24px; line-height: 1; flex-shrink: 0; width: 33px; }
 
+        .meeting-list { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+        .meeting-item {
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-nav);
+            padding: 10px 12px;
+            background: #f8fafc;
+        }
+        .meeting-item__title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--color-heading);
+            line-height: 20px;
+        }
+        .meeting-item__meta {
+            font-size: 12px;
+            color: var(--color-body);
+            line-height: 16px;
+            margin-top: 4px;
+        }
+
         /* =============================================
            BOTTOM ROW
         ============================================= */
@@ -620,6 +644,21 @@ function sams_admin_dashboard_attendance_dot(string $status): string
                 Announcements
             </a>
 
+            <a href="supervisors.php" class="sidebar__nav-link">
+                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M10 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM3 18a7 7 0 0 1 14 0" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Supervisors
+            </a>
+
+            <a href="meetings.php" class="sidebar__nav-link">
+                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
+                    <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Meetings
+            </a>
+
             <a href="students.php" class="sidebar__nav-link">
                 <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
@@ -672,41 +711,6 @@ function sams_admin_dashboard_attendance_dot(string $status): string
                     </svg>
                     <span class="topbar__notif-dot" aria-hidden="true"></span>
                 </div>
-                <script>
-                (function(){
-                    function updateBell(count){
-                        var dot = document.querySelector('.topbar__notif-dot');
-                        if(!dot) return;
-                        if(count && count>0){ dot.style.display=''; dot.textContent = count>99? '99+' : String(count);} else { dot.style.display='none'; dot.textContent=''; }
-                    }
-                    function poll(){ fetch('notifications_count.php', { credentials:'same-origin' }).then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(d){ if(d && d.success) updateBell(d.count); }).catch(function(){}); }
-                    poll(); setInterval(poll,10000);
-                })();
-                </script>
-                <script>
-                (function(){
-                    var bell = document.querySelector('.topbar__notif') || document.querySelector('.topbar__notif-btn');
-                    if(!bell) return;
-                    var dropdown = null;
-                    function show(items){
-                        if(!dropdown){
-                            dropdown = document.createElement('div');
-                            dropdown.style.position='absolute'; dropdown.style.right='24px'; dropdown.style.top='84px'; dropdown.style.width='360px';
-                            dropdown.style.background='#fff'; dropdown.style.border='1px solid #e6eef7'; dropdown.style.borderRadius='8px'; dropdown.style.boxShadow='0 8px 24px rgba(3,7,18,.08)'; dropdown.style.zIndex=9999; dropdown.style.overflow='hidden';
-                            document.body.appendChild(dropdown);
-                        }
-                        if(!items||items.length===0){ dropdown.innerHTML='<div style="padding:12px;color:#6b7280">No recent reports</div>'; return; }
-                        var html='<div style="max-height:360px;overflow:auto">';
-                        items.forEach(function(it){ html += '<a href="report_detail.php?report_id='+encodeURIComponent(it.report_id)+'" style="display:block;padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0b0b0b;text-decoration:none">' +
-                            '<div style="font-weight:600">'+(it.student_code||'Student')+' <span style="float:right;color:#6b7280;font-weight:400">'+it.created_at+'</span></div>' +
-                            '<div style="color:#6b7280;font-size:13px;margin-top:6px">'+(it.snippet||'')+'</div>' +
-                            '</a>'; });
-                        html += '</div>'; dropdown.innerHTML = html; dropdown.style.display = '';
-                    }
-                    bell.addEventListener('click', function(e){ e.preventDefault(); fetch('notifications_list.php',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{ if(d && d.success) show(d.items); }).catch(()=>{}); });
-                    document.addEventListener('click', function(ev){ if(!dropdown) return; if(ev.target.closest && (ev.target.closest('.topbar__notif')||ev.target.closest('.topbar__notif-btn'))) return; if(ev.target.closest && ev.target.closest('a')) return; dropdown.style.display='none'; });
-                })();
-                </script>
                 <div class="topbar__user-info" aria-label="Logged in user">
                     <div class="topbar__user-name"><?= htmlspecialchars($admin_name) ?></div>
                     <div class="topbar__user-role"><?= htmlspecialchars($admin_role) ?></div>
@@ -817,8 +821,33 @@ function sams_admin_dashboard_attendance_dot(string $status): string
                     <div class="qa-list">
                         <a href="applications.php" class="qa-btn"><span class="qa-btn__emoji" aria-hidden="true">📋</span> Review Applications</a>
                         <a href="scheduling.php"   class="qa-btn"><span class="qa-btn__emoji" aria-hidden="true">📅</span> Create Schedule</a>
+                        <a href="meetings.php"     class="qa-btn"><span class="qa-btn__emoji" aria-hidden="true">🗓️</span> Manage Meetings</a>
+                        <a href="supervisors.php"  class="qa-btn"><span class="qa-btn__emoji" aria-hidden="true">👤</span> Manage Supervisors</a>
                         <a href="reports.php"      class="qa-btn"><span class="qa-btn__emoji" aria-hidden="true">📄</span> Generate Reports</a>
                         <a href="evaluation.php"   class="qa-btn"><span class="qa-btn__emoji" aria-hidden="true">✍️</span> Evaluate Students</a>
+                    </div>
+
+                    <h3 style="margin:20px 0 10px;font-size:14px;color:#4a5565;">Upcoming Meetings</h3>
+                    <div class="meeting-list" id="upcoming-meetings-list">
+                        <?php if (empty($upcomingMeetings)): ?>
+                            <div class="meeting-item">
+                                <div class="meeting-item__title">No upcoming meetings</div>
+                                <div class="meeting-item__meta">Create one in the Meetings module.</div>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($upcomingMeetings as $meeting): ?>
+                                <div class="meeting-item">
+                                    <div class="meeting-item__title"><?= htmlspecialchars((string) ($meeting['title'] ?? 'Meeting')) ?></div>
+                                    <div class="meeting-item__meta">
+                                        <?= htmlspecialchars(date('M j, Y', strtotime((string) ($meeting['meeting_date'] ?? 'now')))) ?>
+                                        at <?= htmlspecialchars(date('g:i A', strtotime((string) ($meeting['start_time'] ?? '00:00:00')))) ?>
+                                        <?php if (!empty($meeting['location'])): ?>
+                                            • <?= htmlspecialchars((string) $meeting['location']) ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </div>
                 </section>
 
@@ -1049,6 +1078,30 @@ function sams_admin_dashboard_attendance_dot(string $status): string
         }).join('');
     }
 
+    function renderUpcomingMeetings(list) {
+        var root = document.getElementById('upcoming-meetings-list');
+        if (!root) {
+            return;
+        }
+
+        if (!Array.isArray(list) || list.length === 0) {
+            root.innerHTML = '<div class="meeting-item"><div class="meeting-item__title">No upcoming meetings</div><div class="meeting-item__meta">Create one in the Meetings module.</div></div>';
+            return;
+        }
+
+        root.innerHTML = list.map(function (item) {
+            var title = esc(item.title || 'Meeting');
+            var datePart = formatDate(item.meeting_date || item.starts_at);
+            var timePart = formatTime(item.start_time || '');
+            var location = item.location ? (' • ' + esc(item.location)) : '';
+
+            return '<div class="meeting-item">'
+                + '<div class="meeting-item__title">' + title + '</div>'
+                + '<div class="meeting-item__meta">' + esc(datePart) + ' at ' + esc(timePart) + location + '</div>'
+                + '</div>';
+        }).join('');
+    }
+
     function updateMetrics(payload) {
         var metrics = payload.metrics || {};
 
@@ -1076,6 +1129,7 @@ function sams_admin_dashboard_attendance_dot(string $status): string
 
         renderRecentApplications(payload.recent_applications || []);
         renderTodayAttendance(payload.today_attendance || []);
+        renderUpcomingMeetings(payload.upcoming_meetings || []);
     }
 
     function refreshDashboard() {
@@ -1103,6 +1157,7 @@ function sams_admin_dashboard_attendance_dot(string $status): string
     window.setInterval(refreshDashboard, 20000);
 })();
 </script>
+<script src="../assets/js/admin-notifications.js"></script>
 
 </body>
 </html>

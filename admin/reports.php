@@ -1219,6 +1219,17 @@ if (!empty($attendance_data)) {
                     </a>
                 </li>
                 <li class="nav__item">
+                    <a href="meetings.php" class="nav__link">
+                        <span class="nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
+                                <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <span class="nav__label">Meetings</span>
+                    </a>
+                </li>
+                <li class="nav__item">
                     <a href="students.php" class="nav__link">
                         <span class="nav__icon" aria-hidden="true">
                             <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1711,71 +1722,7 @@ if (!empty($attendance_data)) {
 
 })();
 </script>
+<script src="../assets/js/admin-notifications.js"></script>
 
 </body>
 </html>
-<script>
-// Poll admin notification count and update bell
-(function(){
-    function updateBell(count){
-        var dot = document.querySelector('.topbar__notif-dot');
-        if(!dot) return;
-        if(count && count>0){
-            dot.style.display = '';
-            dot.textContent = count>99? '99+' : String(count);
-        } else {
-            dot.style.display = 'none';
-            dot.textContent = '';
-        }
-    }
-    function poll(){
-        fetch('./notifications_count.php', { credentials: 'same-origin' }).then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(d){ if(d && d.success) updateBell(d.count); }).catch(function(){/*ignore*/});
-    }
-    poll(); setInterval(poll, 10000);
-})();
-</script>
-<script>
-// Notifications dropdown for admin bell
-(function(){
-    var bell = document.querySelector('.topbar__notif') || document.querySelector('.topbar__notif-btn');
-    if(!bell) return;
-    var dropdown = null;
-    function makeDropdown(items){
-        if(!dropdown){
-            dropdown = document.createElement('div');
-            dropdown.style.position = 'absolute';
-            dropdown.style.right = '24px';
-            dropdown.style.top = '84px';
-            dropdown.style.width = '360px';
-            dropdown.style.background = '#fff';
-            dropdown.style.border = '1px solid #e6eef7';
-            dropdown.style.borderRadius = '8px';
-            dropdown.style.boxShadow = '0 8px 24px rgba(3,7,18,.08)';
-            dropdown.style.zIndex = 9999;
-            dropdown.style.overflow = 'hidden';
-            document.body.appendChild(dropdown);
-        }
-        if(!items || items.length === 0){ dropdown.innerHTML = '<div style="padding:12px;color:#6b7280">No recent reports</div>'; return; }
-        var html = '<div style="max-height:360px;overflow:auto">';
-        items.forEach(function(it){
-            html += '<a href="report_detail.php?report_id=' + encodeURIComponent(it.report_id) + '" style="display:block;padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0b0b0b;text-decoration:none">' +
-                    '<div style="font-weight:600">' + (it.student_code || 'Student') + ' <span style="float:right;color:#6b7280;font-weight:400">' + it.created_at + '</span></div>' +
-                    '<div style="color:#6b7280;font-size:13px;margin-top:6px">' + (it.snippet || '') + '</div>' +
-                    '</a>';
-        });
-        html += '</div>';
-        dropdown.innerHTML = html;
-        dropdown.style.display = '';
-    }
-    bell.addEventListener('click', function(ev){
-        ev.preventDefault();
-        fetch('./notifications_list.php', { credentials: 'same-origin' }).then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(d){ if(d && d.success) makeDropdown(d.items); }).catch(function(){/*ignore*/});
-    });
-    document.addEventListener('click', function(ev){
-        if(!dropdown) return;
-        if(ev.target.closest && (ev.target.closest('.topbar__notif') || ev.target.closest('.topbar__notif-btn'))) return;
-        if(ev.target.closest && ev.target.closest('a')) return;
-        dropdown.style.display = 'none';
-    });
-})();
-</script>

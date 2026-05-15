@@ -1020,6 +1020,14 @@ function sams_html(string $value): string
         Announcements
       </a>
 
+      <a href="meetings.php" class="sidebar__nav-link">
+        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
+          <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Meetings
+      </a>
+
       <a href="students.php" class="sidebar__nav-link sidebar__nav-link--active" aria-current="page">
         <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
@@ -1483,6 +1491,8 @@ function sams_html(string $value): string
   });
 
 </script>
+
+<script src="../assets/js/admin-notifications.js"></script>
 
 </body>
 </html>
