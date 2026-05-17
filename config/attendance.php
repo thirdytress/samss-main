@@ -6,13 +6,61 @@ function sams_attendance_clocking_enabled(): bool
     return false;
 }
 
+function sams_fingerprint_office(): string
+{
+    return 'Admin';
+}
+
+function sams_current_term(PDO $pdo): array
+{
+    $termStatement = $pdo->query(
+        'SELECT term_id, term_name, term_year
+         FROM terms
+         WHERE start_date <= CURDATE()
+           AND end_date >= CURDATE()
+         ORDER BY term_id DESC
+         LIMIT 1'
+    );
+    $activeTerm = $termStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!empty($activeTerm['term_id'])) {
+        return $activeTerm;
+    }
+
+    $termStatement = $pdo->query(
+        'SELECT term_id, term_name, term_year
+         FROM terms
+         WHERE is_active = 1
+         ORDER BY term_id DESC
+         LIMIT 1'
+    );
+    $activeTerm = $termStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!empty($activeTerm['term_id'])) {
+        return $activeTerm;
+    }
+
+    $termStatement = $pdo->query(
+        'SELECT term_id, term_name, term_year
+         FROM terms
+         ORDER BY term_id DESC
+         LIMIT 1'
+    );
+
+    return $termStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+}
+
 function sams_attendance_display_status(string $status): string
 {
+    $canonical = sams_attendance_canonical_status($status);
+
+    if ($canonical === 'excused') {
+        return 'excused';
+    }
+
     if (!sams_attendance_clocking_enabled()) {
         return 'absent';
     }
 
-    return sams_attendance_canonical_status($status);
+    return $canonical;
 }
 
 function sams_attendance_canonical_status(string $status): string
@@ -20,6 +68,7 @@ function sams_attendance_canonical_status(string $status): string
     return match (strtolower(trim($status))) {
         'present', 'active', 'completed' => 'present',
         'late' => 'late',
+        'excused' => 'excused',
         'absent', 'incomplete' => 'absent',
         default => strtolower(trim($status)),
     };
@@ -30,6 +79,7 @@ function sams_attendance_status_priority(string $status): int
     return match (sams_attendance_canonical_status($status)) {
         'late' => 3,
         'present' => 2,
+        'excused' => 1,
         'absent' => 1,
         default => 0,
     };
@@ -98,14 +148,15 @@ function sams_attendance_normalize_student_logs(PDO $pdo, int $applicationId, ?i
     }
 
     if ($termId !== null && $termId > 0) {
-        $scheduleStmt = $pdo->prepare(
-            'SELECT duty_id, day_of_week, start_time, end_time
-             FROM duty_schedules
-             WHERE application_id = :application_id
-               AND term_id = :term_id
-               AND status = :accepted_status
-             ORDER BY FIELD(day_of_week, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"), start_time ASC'
-        );
+                $scheduleStmt = $pdo->prepare(
+                                'SELECT ds.duty_id, ds.day_of_week, ds.start_time, ds.end_time, ds.student_response_date, ds.created_at, COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") AS office_name
+                                 FROM duty_schedules ds
+                                 INNER JOIN applications a ON a.application_id = ds.application_id
+                                 WHERE ds.application_id = :application_id
+                                     AND ds.term_id = :term_id
+                                     AND ds.status = :accepted_status
+                                 ORDER BY FIELD(ds.day_of_week, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"), ds.start_time ASC'
+                        );
         $scheduleStmt->execute([
             'application_id' => $applicationId,
             'term_id' => $termId,
@@ -154,19 +205,45 @@ function sams_attendance_normalize_student_logs(PDO $pdo, int $applicationId, ?i
                 $scheduledDate->format('Y-m-d') . ' ' . $endTime
             );
 
-            if ($scheduledEnd instanceof DateTimeImmutable && $today <= $scheduledEnd) {
+            if (!($scheduledEnd instanceof DateTimeImmutable)) {
+                continue;
+            }
+
+            // Skip derived-absent if the schedule was assigned/accepted after the scheduled end
+            $assignmentTime = '';
+            if (!empty($schedule['student_response_date'])) {
+                $assignmentTime = trim((string) $schedule['student_response_date']);
+            } elseif (!empty($schedule['created_at'])) {
+                $assignmentTime = trim((string) $schedule['created_at']);
+            }
+
+            if ($assignmentTime !== '') {
+                $assignedTs = strtotime($assignmentTime);
+                if ($assignedTs && $assignedTs > $scheduledEnd->getTimestamp()) {
+                    // Assigned after the duty ended for this week — do not count as absent
+                    continue;
+                }
+            }
+
+            // If the scheduled end is still in the future, skip (not yet absent)
+            if ($today < $scheduledEnd) {
                 continue;
             }
 
             $records[] = [
                 'log_id' => null,
                 'duty_id' => $dutyId,
+                'day_of_week' => $day,
+                'start_time' => (string) ($schedule['start_time'] ?? ''),
+                'end_time' => (string) ($schedule['end_time'] ?? ''),
+                'office_name' => (string) ($schedule['office_name'] ?? 'Unassigned'),
+                'status' => 'absent',
                 'time_in' => null,
                 'time_out' => null,
-                'status' => 'absent',
                 'late_minutes' => 0,
                 'notes' => 'No clock-in by cutoff',
                 'created_at' => $scheduledDate->format('Y-m-d') . ' 00:00:00',
+                '__derived_absent' => true,
                 '__priority' => 1,
             ];
         }

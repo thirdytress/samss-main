@@ -49,7 +49,8 @@ if ($currentUser && (($currentUser['role'] ?? null) === 'supervisor')) {
     $del->execute(['token' => $token]);
 }
 $currentDay = date('l');
-$activeTermId = (int) ($pdo->query("SELECT COALESCE(MAX(term_id), 0) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE()")->fetchColumn() ?: 0);
+$activeTerm = sams_current_term($pdo);
+$activeTermId = (int) ($activeTerm['term_id'] ?? 0);
 
 set_time_limit(0);
 ignore_user_abort(true);
@@ -65,13 +66,13 @@ $checkStmt = $pdo->prepare(
          INNER JOIN applications a ON a.application_id = ds.application_id
          LEFT JOIN attendance_logs al ON al.application_id = a.application_id AND al.duty_id = ds.duty_id
          WHERE ds.day_of_week = :day
-             AND ds.status = "assigned"
+        AND ds.status = "accepted"
              AND ds.term_id = :term
-             AND a.preferred_office = :office'
+        AND COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") = :office'
 );
 
 $fetchStmt = $pdo->prepare(
-    "SELECT u.first_name, u.last_name, s.student_id AS student_code, a.preferred_office AS office_name,
+    "SELECT u.first_name, u.last_name, s.student_id AS student_code, COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') AS office_name,
             al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time
      FROM duty_schedules ds
      INNER JOIN applications a ON a.application_id = ds.application_id
@@ -85,9 +86,9 @@ $fetchStmt = $pdo->prepare(
              LIMIT 1
      )
      WHERE ds.day_of_week = :day
-         AND ds.status = 'assigned'
+          AND ds.status = 'accepted'
          AND ds.term_id = :term
-         AND a.preferred_office = :office
+          AND COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') = :office
      ORDER BY ds.start_time ASC, al.log_id DESC"
 );
 

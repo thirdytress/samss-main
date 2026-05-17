@@ -56,6 +56,8 @@ function sams_login(array $user): void
         session_start();
     }
 
+    session_regenerate_id(true);
+
     $_SESSION['sams_user'] = [
         'user_id' => (int) $user['id'],
         'role' => $user['role'],

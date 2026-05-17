@@ -4,23 +4,22 @@ declare(strict_types=1);
 require_once __DIR__ . '/config/bootstrap.php';
 
 $submission = $_SESSION['registration_submission'] ?? [];
+$applicationId = (int) ($submission['application_id'] ?? 0);
 
 // Fallback demo values so the page still renders if opened directly.
-$student_name   = 'Juan Dela Cruz';
-$student_id     = '2021-12345';
-$course         = 'BSIT';
-$year_level     = '3rd Year';
-$date_submitted = date('F j, Y');
-$status         = 'PENDING';
+$student_name   = (string) ($submission['student_name'] ?? 'Juan Dela Cruz');
+$student_id     = (string) ($submission['student_number'] ?? '2021-12345');
+$course         = (string) ($submission['course'] ?? 'BSIT');
+$year_level     = (string) ($submission['year_level'] ?? '3rd Year');
+$date_submitted = (string) ($submission['date_submitted'] ?? date('F j, Y'));
+$status         = strtoupper((string) ($submission['status'] ?? 'PENDING'));
 $status_title   = '⏳ Application Under Review';
 $status_sub     = 'Your application is currently being reviewed by Miss Zai. This typically takes 1-3 business days.';
-$showAvailabilityCta = false;
+$showAvailabilityCta = !empty($submission['success']);
 
 if (!empty($submission['success'])) {
-    $date_submitted = date('F j, Y');
     $status_title = '✅ Application Submitted Successfully';
     $status_sub = (string) ($submission['message'] ?? 'Your application has been submitted and is now in the review queue.');
-    $showAvailabilityCta = true;
 }
 ?>
 <!DOCTYPE html>
@@ -227,35 +226,80 @@ if (!empty($submission['success'])) {
 
         /* Application details inner card */
         .details-card {
-            background: var(--color-white);
+            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+            border: 1px solid rgba(209, 213, 220, 0.85);
             border-radius: var(--radius-inner);
             padding: 24px;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
         }
         .details-card__title {
             font-size: var(--font-md);
             font-weight: 900;
             line-height: var(--lh-md);
             color: var(--color-heading);
-            margin-bottom: 16px;
+            margin: 0;
+        }
+        .details-card__header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding-bottom: 16px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid rgba(209, 213, 220, 0.7);
+        }
+        .details-card__eyebrow {
+            margin: 0 0 4px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--color-primary);
+        }
+        .details-card__sub {
+            margin: 6px 0 0;
+            font-size: var(--font-sm);
+            line-height: var(--lh-sm);
+            color: var(--color-muted);
+            max-width: 560px;
+        }
+        .details-card__meta {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #f8fafc;
+            border: 1px solid rgba(209, 213, 220, 0.85);
+            color: var(--color-body);
+            font-size: 13px;
+            font-weight: 700;
         }
         .details-card__grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            row-gap: 20px;
-            column-gap: 16px;
+            gap: 12px;
+        }
+        .detail-field {
+            padding: 14px 16px;
+            border: 1px solid #edf2f7;
+            border-radius: 14px;
+            background: #fff;
         }
         .detail-field__label {
-            font-size: var(--font-sm);
-            font-weight: 700;
-            line-height: var(--lh-sm);
-            color: var(--color-body);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--color-muted);
             display: block;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
         }
         .detail-field__value {
-            font-size: var(--font-base);
-            font-weight: 700;
-            line-height: var(--lh-base);
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1.4;
             color: var(--color-heading);
         }
         .detail-field__value--empty {
@@ -265,14 +309,16 @@ if (!empty($submission['success'])) {
 
         /* Status badge */
         .status-badge {
-            display: inline-block;
-            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            height: 30px;
             padding: 4px 12px;
             border-radius: var(--radius-badge);
             font-size: var(--font-sm);
             font-weight: 900;
             line-height: var(--lh-sm);
             white-space: nowrap;
+            letter-spacing: .02em;
         }
         .status-badge--pending  { background: var(--color-yellow-badge-bg); color: var(--color-yellow-dark); }
         .status-badge--approved { background: #dcfce7; color: #00a63e; }
@@ -303,6 +349,9 @@ if (!empty($submission['success'])) {
         }
         .btn-refresh:hover { opacity: .9; }
         .btn-refresh__icon { width: 20px; height: 20px; flex-shrink: 0; }
+        .btn--loading { opacity: .85; }
+        .btn-spinner { display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -2px; animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         /* =============================================
            WHAT HAPPENS NEXT CARD
@@ -463,7 +512,15 @@ if (!empty($submission['success'])) {
 
             .details-card__grid {
                 grid-template-columns: 1fr;
-                row-gap: 16px;
+                gap: 10px;
+            }
+            .details-card__header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .details-card__meta {
+                width: 100%;
+                justify-content: space-between;
             }
 
             .next-card { padding: 20px; }
@@ -510,39 +567,50 @@ if (!empty($submission['success'])) {
                     </svg>
                 </div>
                 <h2 class="status-card__state-title" id="status-state-title"><?= htmlspecialchars($status_title) ?></h2>
-                <p class="status-card__state-sub">
+                <p class="status-card__state-sub" id="status-state-sub">
                     <?= htmlspecialchars($status_sub) ?>
                 </p>
             </div>
 
             <!-- Application Details -->
             <div class="details-card">
-                <h3 class="details-card__title">Application Details</h3>
+                <div class="details-card__header">
+                    <div>
+                        <p class="details-card__eyebrow">Application Details</p>
+                        <h3 class="details-card__title">Submission Summary</h3>
+                        <p class="details-card__sub">A clean snapshot of the information you submitted for review.</p>
+                    </div>
+                    <div class="details-card__meta">
+                        <span>Application ID</span>
+                        <strong><?= $applicationId > 0 ? htmlspecialchars((string) $applicationId) : 'Pending' ?></strong>
+                    </div>
+                </div>
+
+                <div class="detail-field" style="margin-bottom:12px;">
+                    <span class="detail-field__label">Applicant</span>
+                    <span class="detail-field__value" id="detail-fullname"><?= htmlspecialchars($student_name) ?></span>
+                </div>
+
                 <div class="details-card__grid">
 
                     <div class="detail-field">
-                        <span class="detail-field__label">Full Name</span>
-                        <span class="detail-field__value"><?= htmlspecialchars($student_name) ?></span>
-                    </div>
-
-                    <div class="detail-field">
                         <span class="detail-field__label">Student ID</span>
-                        <span class="detail-field__value"><?= htmlspecialchars($student_id) ?></span>
+                        <span class="detail-field__value" id="detail-studentid"><?= htmlspecialchars($student_id) ?></span>
                     </div>
 
                     <div class="detail-field">
                         <span class="detail-field__label">Course</span>
-                        <span class="detail-field__value"><?= htmlspecialchars($course) ?></span>
+                        <span class="detail-field__value" id="detail-course"><?= htmlspecialchars($course) ?></span>
                     </div>
 
                     <div class="detail-field">
                         <span class="detail-field__label">Year Level</span>
-                        <span class="detail-field__value"><?= htmlspecialchars($year_level) ?></span>
+                        <span class="detail-field__value" id="detail-year"><?= htmlspecialchars($year_level) ?></span>
                     </div>
 
                     <div class="detail-field">
                         <span class="detail-field__label">Date Submitted</span>
-                        <span class="detail-field__value"><?= htmlspecialchars($date_submitted) ?></span>
+                        <span class="detail-field__value" id="detail-datesub"><?= htmlspecialchars($date_submitted) ?></span>
                     </div>
 
                     <div class="detail-field">
@@ -552,7 +620,7 @@ if (!empty($submission['success'])) {
                         if ($status === 'APPROVED') $badge_class = 'status-badge--approved';
                         if ($status === 'REJECTED') $badge_class = 'status-badge--rejected';
                         ?>
-                        <span class="status-badge <?= $badge_class ?>" role="status">
+                        <span class="status-badge <?= $badge_class ?>" role="status" id="detail-status-badge">
                             <?= htmlspecialchars($status) ?>
                         </span>
                     </div>
@@ -562,7 +630,7 @@ if (!empty($submission['success'])) {
 
             <!-- Refresh button -->
             <div class="status-card__btn-row">
-                <a href="status.php" class="btn-refresh" role="button" aria-label="Refresh application status">
+                <button id="btn-refresh" class="btn-refresh" type="button" aria-label="Refresh application status">
                     <!-- Refresh icon -->
                     <svg class="btn-refresh__icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M3.33 8.33A6.67 6.67 0 0 1 16.5 6.5" stroke="white" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
@@ -571,9 +639,9 @@ if (!empty($submission['success'])) {
                         <path d="M17 15v-4h-4" stroke="white" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                     Refresh Status
-                </a>
+                </button>
                 <?php if ($showAvailabilityCta): ?>
-                <a href="students/availability.php" class="btn-refresh" role="button" aria-label="Continue to availability">
+                <a id="btn-continue-availability" href="students/availability.php" class="btn-refresh" role="button" aria-label="Continue to availability">
                     Continue to Availability
                 </a>
                 <?php endif; ?>
@@ -700,8 +768,70 @@ if (!empty($submission['success'])) {
 <script>
 (function () {
     'use strict';
-    // No interactive behaviours required beyond the anchor-based refresh.
-    // Hamburger nav is not present in this design (standalone page, no sidebar).
+
+    var btn = document.getElementById('btn-refresh');
+    var continueBtn = document.getElementById('btn-continue-availability');
+    var titleEl = document.getElementById('status-state-title');
+    var subEl = document.getElementById('status-state-sub');
+    var fullnameEl = document.getElementById('detail-fullname');
+    var studentidEl = document.getElementById('detail-studentid');
+    var courseEl = document.getElementById('detail-course');
+    var yearEl = document.getElementById('detail-year');
+    var dateEl = document.getElementById('detail-datesub');
+    var statusBadgeEl = document.getElementById('detail-status-badge');
+
+    function safeText(el, value){ if(!el) return; el.textContent = value == null ? '' : value; }
+    function setBadge(status){ if(!statusBadgeEl) return; status = (status||'').toUpperCase(); statusBadgeEl.textContent = status || 'PENDING'; statusBadgeEl.className = 'status-badge';
+        if(status === 'APPROVED') statusBadgeEl.classList.add('status-badge--approved');
+        else if(status === 'REJECTED') statusBadgeEl.classList.add('status-badge--rejected');
+        else statusBadgeEl.classList.add('status-badge--pending');
+    }
+    function toggleContinue(visible){ if(!continueBtn) return; continueBtn.style.display = visible ? '' : 'none'; }
+
+    function fetchStatus(){
+        if(!btn) return;
+        var originalText = btn.dataset.origText || btn.textContent;
+        btn.dataset.origText = originalText;
+        btn.disabled = true;
+        btn.classList.add('btn--loading');
+        btn.setAttribute('aria-busy','true');
+        btn.textContent = 'Refreshing…';
+
+        fetch('api/application_status.php', { credentials: 'same-origin', cache: 'no-store' })
+            .then(function(resp){ if(!resp.ok) throw new Error('network'); return resp.json(); })
+            .then(function(data){
+                if(!data || !data.success) { return; }
+                var d = data.item || {};
+                safeText(titleEl, d.title || 'Application Status');
+                safeText(subEl, d.sub || '');
+                safeText(fullnameEl, d.full_name || fullnameEl && fullnameEl.textContent);
+                safeText(studentidEl, d.student_id || studentidEl && studentidEl.textContent);
+                safeText(courseEl, d.course || courseEl && courseEl.textContent);
+                safeText(yearEl, d.year_level || yearEl && yearEl.textContent);
+                safeText(dateEl, d.date_submitted || dateEl && dateEl.textContent);
+                setBadge(d.status || 'PENDING');
+                toggleContinue(!!d.show_availability);
+            })
+            .catch(function(){ /* ignore */ })
+            .finally(function(){ btn.disabled = false; btn.removeAttribute('aria-busy'); btn.classList.remove('btn--loading'); btn.textContent = btn.dataset.origText || 'Refresh Status'; });
+    }
+
+    if(btn){ btn.addEventListener('click', function(){ fetchStatus(); }); }
+
+    // Poll every 30 seconds
+    try {
+        setInterval(fetchStatus, 30000);
+    } catch (e) { /* ignore */ }
+
+    // When user clicks Continue, clear the session payload then navigate
+    if (continueBtn) {
+        continueBtn.addEventListener('click', function (ev) {
+            // Navigate to availability; keep registration_submission in session so availability has context.
+            ev.preventDefault();
+            var href = continueBtn.getAttribute('href');
+            window.location.href = href;
+        });
+    }
 })();
 </script>
 

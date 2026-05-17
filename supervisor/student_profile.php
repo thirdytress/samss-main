@@ -26,14 +26,8 @@ $supervisorStatement->execute(['user_id' => (int) ($user['user_id'] ?? 0)]);
 $supervisorRow = $supervisorStatement->fetch(PDO::FETCH_ASSOC) ?: [];
 $supervisorOffice = trim((string) ($supervisorRow['office_name'] ?? ($user['office_name'] ?? '')));
 
-$termStatement = $pdo->query(
-    'SELECT term_id
-     FROM terms
-     WHERE start_date <= CURDATE() AND end_date >= CURDATE()
-     ORDER BY term_id DESC
-     LIMIT 1'
-);
-$activeTermId = (int) ($termStatement->fetchColumn() ?: 0);
+$activeTerm = sams_current_term($pdo);
+$activeTermId = (int) ($activeTerm['term_id'] ?? 0);
 
 $studentStmt = $pdo->prepare(
     'SELECT
@@ -94,33 +88,44 @@ $schedulesStmt->execute([
 ]);
 $schedules = $schedulesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-// compute absent schedules (accepted schedules with no attendance log)
-$absentStmt = $pdo->prepare(
-    'SELECT ds.duty_id, ds.day_of_week, ds.start_time, ds.end_time, COALESCE(NULLIF(TRIM(ds.office_name), ""), a.preferred_office, "Unassigned") AS office_name
-     FROM duty_schedules ds
-     INNER JOIN applications a ON a.application_id = ds.application_id
-    LEFT JOIN (
-        SELECT application_id AS app_sub, duty_id, MAX(log_id) AS max_log_id
-        FROM attendance_logs
-        WHERE application_id = :application_id_sub
-        GROUP BY application_id, duty_id
-    ) lm ON lm.duty_id = ds.duty_id AND lm.app_sub = ds.application_id
-    WHERE ds.application_id = :application_id_outer
-       AND ds.status = "accepted"
-       AND lm.max_log_id IS NULL'
-);
-$absentStmt->execute(['application_id_sub' => $applicationId, 'application_id_outer' => $applicationId]);
-$absentSchedules = $absentStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$allowedDutyIds = [];
+$resolvedOfficeSet = [];
+foreach ($schedules as $schedule) {
+    $dutyId = (int) ($schedule['duty_id'] ?? 0);
+    if ($dutyId > 0) {
+        $allowedDutyIds[$dutyId] = true;
+    }
 
-$normalizedLogs = sams_attendance_normalize_student_logs($pdo, $applicationId, $activeTermId > 0 ? $activeTermId : null);
+    $officeName = trim((string) ($schedule['office_name'] ?? ''));
+    if ($officeName !== '') {
+        $resolvedOfficeSet[$officeName] = true;
+    }
+}
+
+$resolvedOfficeLabel = !empty($resolvedOfficeSet)
+    ? implode(', ', array_keys($resolvedOfficeSet))
+    : ($supervisorOffice !== '' ? $supervisorOffice : ((string) ($student['preferred_office'] ?? 'Unassigned')));
+
+$summary = ['present' => 0, 'late' => 0, 'excused' => 0, 'absent' => 0, 'total' => 0, 'hours' => 0.0];
+
+$normalizedLogsAll = sams_attendance_normalize_student_logs($pdo, $applicationId, $activeTermId > 0 ? $activeTermId : null);
+$normalizedLogs = array_values(array_filter(
+    $normalizedLogsAll,
+    static function (array $log) use ($allowedDutyIds): bool {
+        $dutyId = (int) ($log['duty_id'] ?? 0);
+        return $dutyId > 0 && isset($allowedDutyIds[$dutyId]);
+    }
+));
 $attendanceRows = [];
-$summary = ['present' => 0, 'late' => 0, 'absent' => 0, 'total' => 0, 'hours' => 0.0];
+$absentSchedules = [];
 foreach (array_slice($normalizedLogs, 0, 50) as $log) {
     $status = sams_attendance_display_status((string) ($log['status'] ?? 'absent'));
     if ($status === 'present' || $status === 'completed') {
         $summary['present']++;
     } elseif ($status === 'late') {
         $summary['late']++;
+    } elseif ($status === 'excused') {
+        $summary['excused']++;
     } else {
         $summary['absent']++;
     }
@@ -148,7 +153,20 @@ foreach (array_slice($normalizedLogs, 0, 50) as $log) {
         'status' => $status,
         'late_minutes' => (int) ($log['late_minutes'] ?? 0),
     ];
+
+    if (!empty($log['__derived_absent'])) {
+        $absentSchedules[] = [
+            'duty_id' => (int) ($log['duty_id'] ?? 0),
+            'day_of_week' => (string) ($log['day_of_week'] ?? ''),
+            'start_time' => (string) ($log['start_time'] ?? ''),
+            'end_time' => (string) ($log['end_time'] ?? ''),
+            'office_name' => (string) ($log['office_name'] ?? 'Unassigned'),
+        ];
+    }
 }
+
+$summary['absent'] = count($absentSchedules);
+$summary['total'] = $summary['present'] + $summary['late'] + $summary['excused'] + $summary['absent'];
 
 function h(?string $value): string
 {
@@ -175,7 +193,7 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
         .card{background:#fff;border:1px solid var(--color-border);border-radius:var(--radius);padding:18px}
         .title{font-size:28px;font-weight:800}
         .sub{margin-top:6px;color:var(--color-body)}
-        .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+        .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
         .tile{background:#fff;border:1px solid var(--color-border);border-radius:12px;padding:14px}
         .tile strong{display:block;font-size:26px;line-height:1.1}
         .tile span{display:block;font-size:13px;color:var(--color-body);margin-top:4px}
@@ -187,6 +205,7 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
         .badge{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:700}
         .badge--present{background:#dcfce7;color:#008236}
         .badge--late{background:#dbeafe;color:#1447e6}
+        .badge--excused{background:#fef3c7;color:#a16207}
         .badge--absent{background:#f3f4f6;color:#4a5565}
         .live-pill{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:9999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:700}
         @media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -199,7 +218,7 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
         <div class="flex-between flex-row">
             <div>
                 <div class="title"><?php echo h($studentName); ?></div>
-                <div class="sub">Student ID: <?php echo h((string) ($student['student_id_number'] ?? '')); ?> · Program: <?php echo h((string) ($student['program'] ?? '-')); ?> · Office: <?php echo h((string) ($student['preferred_office'] ?? $supervisorOffice)); ?></div>
+                <div class="sub">Student ID: <?php echo h((string) ($student['student_id_number'] ?? '')); ?> · Program: <?php echo h((string) ($student['program'] ?? '-')); ?> · Office: <?php echo h($resolvedOfficeLabel); ?></div>
             </div>
             <div class="flex-row">
                 <span class="live-pill">Live</span>
@@ -213,6 +232,7 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
         <div class="tile"><strong id="sum-hours"><?php echo number_format((float) $summary['hours'], 1); ?>h</strong><span>Rendered Hours</span></div>
         <div class="tile"><strong id="sum-present"><?php echo (int) $summary['present']; ?></strong><span>Present</span></div>
         <div class="tile"><strong id="sum-late"><?php echo (int) $summary['late']; ?></strong><span>Late</span></div>
+        <div class="tile"><strong id="sum-excused"><?php echo (int) $summary['excused']; ?></strong><span>Excused</span></div>
         <div class="tile"><strong id="sum-absent"><?php echo (int) $summary['absent']; ?></strong><span>Absent</span></div>
     </div>
 
@@ -293,8 +313,8 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
                     <?php foreach ($attendanceRows as $log): ?>
                         <?php
                             $status = sams_attendance_display_status((string) ($log['status'] ?? ''));
-                            $badgeClass = $status === 'late' ? 'badge--late' : (($status === 'present' || $status === 'completed') ? 'badge--present' : 'badge--absent');
-                            $statusLabel = $status === 'late' ? 'Late' : (($status === 'present' || $status === 'completed') ? 'Present' : 'Absent');
+                            $badgeClass = $status === 'late' ? 'badge--late' : (($status === 'present' || $status === 'completed') ? 'badge--present' : (($status === 'excused') ? 'badge--excused' : 'badge--absent'));
+                            $statusLabel = $status === 'late' ? 'Late' : (($status === 'present' || $status === 'completed') ? 'Present' : (($status === 'excused') ? 'Excused' : 'Absent'));
                         ?>
                         <tr>
                             <td><?php echo h((string) ($log['created_at'] ?? '')); ?></td>
@@ -319,8 +339,11 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
     var sumHours = document.getElementById('sum-hours');
     var sumPresent = document.getElementById('sum-present');
     var sumLate = document.getElementById('sum-late');
+    var sumExcused = document.getElementById('sum-excused');
     var sumAbsent = document.getElementById('sum-absent');
     var attendanceBody = document.getElementById('attendance-body');
+    var absentBody = document.getElementById('absent-body');
+    var csrfToken = <?php echo json_encode(sams_csrf_token(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
     function esc(value) {
         return String(value)
@@ -355,13 +378,16 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
         sumHours.textContent = Number(data.summary.hours || 0).toFixed(1) + 'h';
         sumPresent.textContent = data.summary.present || 0;
         sumLate.textContent = data.summary.late || 0;
+        if (sumExcused) {
+            sumExcused.textContent = data.summary.excused || 0;
+        }
         sumAbsent.textContent = data.summary.absent || 0;
         renderRows(data.attendance_rows || []);
         renderAbsent(data.absent_schedules || []);
-
+    }
 
     function renderAbsent(rows) {
-        var body = document.getElementById('absent-body');
+        var body = absentBody;
         if (!rows || rows.length === 0) {
             body.innerHTML = '<tr><td colspan="5" class="muted">No absent schedules detected.</td></tr>';
             return;
@@ -378,6 +404,51 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
         }).join('');
 
         body.innerHTML = html;
+    }
+
+    if (absentBody) {
+        absentBody.addEventListener('click', function (event) {
+            var button = event.target && event.target.closest ? event.target.closest('button[data-duty]') : null;
+            if (!button) return;
+
+            var dutyId = parseInt(button.getAttribute('data-duty') || '0', 10);
+            if (!dutyId) return;
+
+            if (!confirm('Mark this schedule as excused?')) {
+                return;
+            }
+
+            button.disabled = true;
+            fetch('mark_excused.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({
+                    application_id: appId,
+                    duty_id: dutyId,
+                    _csrf: csrfToken
+                })
+            })
+            .then(function (res) {
+                return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+            })
+            .then(function (payload) {
+                if (!payload.ok || !payload.data || !payload.data.success) {
+                    throw new Error((payload.data && payload.data.message) ? payload.data.message : 'Unable to mark excused');
+                }
+
+                poll();
+            })
+            .catch(function (error) {
+                alert(error && error.message ? error.message : 'Unable to mark excused');
+            })
+            .finally(function () {
+                button.disabled = false;
+            });
+        });
     }
     function poll() {
         fetch('student_profile_data.php?application_id=' + encodeURIComponent(appId), { credentials: 'same-origin' })

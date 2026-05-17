@@ -952,116 +952,7 @@ function sams_html(string $value): string
 <body>
 
 <div class="app">
-
-  <!-- ============================================
-       SIDEBAR
-  ============================================= -->
-  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
-
-    <div class="sidebar__brand">
-      <div class="sidebar__logo" aria-hidden="true">NU</div>
-      <div>
-        <div class="sidebar__brand-name">SA System</div>
-        <div class="sidebar__brand-sub">Admin Panel</div>
-      </div>
-    </div>
-
-    <nav class="sidebar__nav" aria-label="Site navigation">
-      <a href="dashboard.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M4 4h4v4H4V4Zm6 0h4v4h-4V4Zm0 6h4v4h-4v-4Zm-6 0h4v4H4v-4Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Dashboard
-      </a>
-
-      <a href="application.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M4 4h12v12H4V4Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M6 8h8M6 11h8" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        Applications
-        <?php if ($applicationBadgeCount > 0): ?><span class="sidebar__nav-badge"><?= (int) $applicationBadgeCount ?></span><?php endif; ?>
-      </a>
-
-      <a href="scheduling.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
-          <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        Scheduling
-      </a>
-
-      <a href="attendance.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        Attendance
-      </a>
-
-      <a href="evaluation.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 2l2 5.5H17l-4 3 1.5 5.5L10 13l-4.5 3L7 11 3 8h5L10 2Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Evaluation
-      </a>
-
-      <a href="reports.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <rect x="2.5" y="2.5" width="15" height="15" rx="2" stroke="#364153" stroke-width="1.5"/>
-          <path d="M6 14V10M10 14V7M14 14V11" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        Reports
-      </a>
-
-      <a href="announcements.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Announcements
-      </a>
-
-      <a href="meetings.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
-          <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        Meetings
-      </a>
-
-      <a href="students.php" class="sidebar__nav-link sidebar__nav-link--active" aria-current="page">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <span class="sidebar__nav-label">Students</span>
-      </a>
-    </nav>
-
-    <div class="sidebar__footer">
-      <a href="settings.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <circle cx="10" cy="10" r="2.5" stroke="#364153" stroke-width="1.5"/>
-          <path d="M17.14 12.19A7.5 7.5 0 0 0 17.5 10a7.5 7.5 0 0 0-.36-2.19l1.57-1.57-2.5-4.33-2.08.76A7.5 7.5 0 0 0 12 1.92V0H8v1.92a7.5 7.5 0 0 0-2.13.75l-2.08-.76L1.29 6.24l1.57 1.57A7.5 7.5 0 0 0 2.5 10a7.5 7.5 0 0 0 .36 2.19l-1.57 1.57 2.5 4.33 2.08-.76A7.5 7.5 0 0 0 8 18.08V20h4v-1.92a7.5 7.5 0 0 0 2.13-.75l2.08.76 2.5-4.33-1.57-1.57Z" stroke="#364153" stroke-width="1.5"/>
-        </svg>
-        Settings
-      </a>
-      <a href="logout.php" class="sidebar__nav-link">
-        <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M13 15l5-5-5-5M18 10H8" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M8 17.5H3.5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5H8" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        Sign Out
-      </a>
-    </div>
-  </aside>
-
-  <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
-
-  <button class="sidebar-toggle" id="sidebar-toggle"
-    aria-expanded="false" aria-controls="sidebar" aria-label="Toggle navigation">
-    <span class="sidebar-toggle__bar"></span>
-    <span class="sidebar-toggle__bar"></span>
-    <span class="sidebar-toggle__bar"></span>
-  </button>
+    <?php $activeAdminNav = 'students'; $pendingApplications = (int) $applicationBadgeCount; include __DIR__ . '/_sidebar.php'; ?>
 
   <!-- ============================================
        MAIN
@@ -1235,7 +1126,6 @@ function sams_html(string $value): string
 
     </main>
   </div><!-- /.main -->
-
 </div><!-- /.app -->
 
 <div id="studentModal" class="student-profile-modal" aria-hidden="true">
@@ -1247,29 +1137,6 @@ function sams_html(string $value): string
 <script>
   (function () {
     'use strict';
-
-    /* ---- Sidebar toggle (mobile/tablet) ---- */
-    var toggle  = document.getElementById('sidebar-toggle');
-    var sidebar = document.getElementById('sidebar');
-    var overlay = document.getElementById('sidebar-overlay');
-
-    function openSidebar() {
-      sidebar.classList.add('is-open');
-      overlay.classList.add('is-open');
-      overlay.setAttribute('aria-hidden', 'false');
-      toggle.setAttribute('aria-expanded', 'true');
-    }
-    function closeSidebar() {
-      sidebar.classList.remove('is-open');
-      overlay.classList.remove('is-open');
-      overlay.setAttribute('aria-hidden', 'true');
-      toggle.setAttribute('aria-expanded', 'false');
-    }
-
-    toggle.addEventListener('click', function () {
-      sidebar.classList.contains('is-open') ? closeSidebar() : openSidebar();
-    });
-    overlay.addEventListener('click', closeSidebar);
 
     /* ---- Filter buttons ---- */
     var filterBtns = document.querySelectorAll('.filter-btn');
@@ -1389,6 +1256,7 @@ function sams_html(string $value): string
     var office = escapeHtml(d.preferred_office || 'Not assigned yet');
     var totalHours = escapeHtml(d.total_hours || '0.0');
     var acceptedSchedules = escapeHtml(d.accepted_schedules || 0);
+    var pendingSchedules = escapeHtml(d.pending_schedules || 0);
     var attendanceRate = escapeHtml(d.attendance_rate || 0);
     var availability = d.available_hours_per_week != null ? escapeHtml(d.available_hours_per_week + ' hrs') : 'Not set';
     var studentStatus = escapeHtml(d.student_status_label || 'Inactive Student');
@@ -1416,7 +1284,7 @@ function sams_html(string $value): string
     html += '<div class="student-profile-modal__status-badge ' + studentStatusClass + '" role="status">' + studentStatus + '</div>';
     html += '<div class="student-profile-modal__stats">';
     html += '<div class="student-profile-modal__stat student-profile-modal__stat--blue"><span class="student-profile-modal__stat-value">' + totalHours + '</span><span class="student-profile-modal__stat-label">Total Duty Hours</span></div>';
-    html += '<div class="student-profile-modal__stat student-profile-modal__stat--gold"><span class="student-profile-modal__stat-value">' + acceptedSchedules + '</span><span class="student-profile-modal__stat-label">Accepted Duties</span></div>';
+    html += '<div class="student-profile-modal__stat student-profile-modal__stat--gold"><span class="student-profile-modal__stat-value">' + acceptedSchedules + '</span><span class="student-profile-modal__stat-label">Accepted</span></div>';
     html += '</div>';
     html += '</div>';
     html += '</div>';
@@ -1459,7 +1327,7 @@ function sams_html(string $value): string
     html += '<div class="student-profile-modal__heading"><span class="student-profile-modal__heading-icon" aria-hidden="true"><svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="14" cy="10" r="6" stroke="#FFB81C" stroke-width="1.8"/><path d="M14 4v1M14 15v1M8 10H7M21 10h-1M9.172 5.172l-.707.707M19.535 15.535l-.707.707M9.172 14.828l-.707-.707M19.535 4.465l-.707-.707" stroke="#FFB81C" stroke-width="1.5" stroke-linecap="round"/></svg></span><div class="student-profile-modal__section-title">Performance Summary</div></div>';
     html += '<div class="student-profile-modal__summary">';
     html += '<div class="student-profile-modal__summary-item"><span class="student-profile-modal__summary-label">Total Duty Hours</span><span class="student-profile-modal__summary-value">' + totalHours + ' hrs</span></div>';
-    html += '<div class="student-profile-modal__summary-item"><span class="student-profile-modal__summary-label">Assigned Duties</span><span class="student-profile-modal__summary-value">' + escapeHtml(d.total_schedules || 0) + '</span></div>';
+    html += '<div class="student-profile-modal__summary-item"><span class="student-profile-modal__summary-label">Accepted / Pending</span><span class="student-profile-modal__summary-value">' + acceptedSchedules + ' / ' + pendingSchedules + '</span></div>';
     html += '<div class="student-profile-modal__summary-item"><span class="student-profile-modal__summary-label">Attendance Rate</span><span class="student-profile-modal__summary-value">' + attendanceRate + '%</span></div>';
     html += '</div>';
     html += '<div class="student-profile-modal__achievement">';

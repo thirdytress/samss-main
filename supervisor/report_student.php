@@ -3,14 +3,26 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/bootstrap.php';
 
-header('Content-Type: application/json; charset=utf-8');
-
 $user = sams_authenticated_user();
 if (!$user || (($user['role'] ?? null) !== 'supervisor')) {
     http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => false, 'message' => 'Forbidden']);
     exit;
 }
+
+$requestMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+if ($requestMethod !== 'POST') {
+    $applicationId = isset($_GET['application_id']) ? (int) $_GET['application_id'] : 0;
+    $redirect = 'reports.php';
+    if ($applicationId > 0) {
+        $redirect .= '?application_id=' . $applicationId;
+    }
+    header('Location: ' . $redirect);
+    exit;
+}
+
+header('Content-Type: application/json; charset=utf-8');
 
 $pdo = sams_pdo();
 $supervisorStatement = $pdo->prepare(
@@ -103,7 +115,8 @@ if ($application_id > 0) {
 
 // If duty_id provided, validate it belongs to the application and active term and office
 if ($duty_id > 0) {
-    $activeTermId = (int) $pdo->query("SELECT COALESCE(MAX(term_id), 0) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE()")->fetchColumn() ?: 0;
+    $currentTerm = sams_current_term($pdo);
+    $activeTermId = (int) ($currentTerm['term_id'] ?? 0);
     $ds = $pdo->prepare('SELECT ds.application_id, ds.term_id, ds.office_name, a.preferred_office FROM duty_schedules ds JOIN applications a ON a.application_id = ds.application_id WHERE ds.duty_id = :duty_id LIMIT 1');
     $ds->execute(['duty_id' => $duty_id]);
     $dsRow = $ds->fetch(PDO::FETCH_ASSOC);

@@ -40,47 +40,124 @@ while (!connection_aborted()) {
         if ($isAdmin) {
             $sig = (int) $pdo->query('SELECT COALESCE(MAX(log_id),0) FROM attendance_logs')->fetchColumn();
             if ($sig !== $prevSig) {
-                // build admin payload (reuse admin/attendance_data shape)
-                $metrics = [
-                    'active_now' => 0,
-                    'completed_today' => 0,
-                    'total_schedules' => (int) $pdo->query("SELECT COUNT(DISTINCT ds.duty_id) FROM duty_schedules ds WHERE ds.status = 'assigned' AND ds.term_id = (SELECT MAX(term_id) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1)")->fetchColumn(),
-                ];
+                $currentDay = date('l');
+                $activeTerm = sams_current_term($pdo);
+                $activeTermId = (int) ($activeTerm['term_id'] ?? 0);
 
-                // today rows (simplified)
-                $stmt = $pdo->query(
-                    "SELECT u.first_name, u.last_name, s.student_id AS student_code, a.preferred_office AS office_name,
-                            al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time
-                     FROM duty_schedules ds
-                     INNER JOIN applications a ON a.application_id = ds.application_id
-                     LEFT JOIN students s ON s.student_id = a.student_id
-                     LEFT JOIN users u ON u.user_id = s.user_id
-                     LEFT JOIN attendance_logs al ON al.log_id = (
+                $todayRows = [];
+                if ($activeTermId > 0) {
+                    $stmt = $pdo->prepare(
+                        'SELECT u.first_name, u.last_name, s.student_id AS student_code,
+                                COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") AS office_name,
+                                al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time
+                         FROM duty_schedules ds
+                         INNER JOIN applications a ON a.application_id = ds.application_id
+                         LEFT JOIN students s ON s.student_id = a.student_id
+                         LEFT JOIN users u ON u.user_id = s.user_id
+                         LEFT JOIN attendance_logs al ON al.log_id = (
                              SELECT al2.log_id
                              FROM attendance_logs al2
-                             WHERE al2.application_id = ds.application_id AND al2.duty_id = ds.duty_id
+                             WHERE al2.application_id = ds.application_id
+                               AND al2.duty_id = ds.duty_id
                              ORDER BY al2.log_id DESC
                              LIMIT 1
-                     )
-                     WHERE ds.day_of_week = '" . date('l') . "'
-                         AND ds.status = 'accepted'
-                         AND ds.term_id = " . ((int) ($pdo->query("SELECT COALESCE(MAX(term_id),0) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE()")->fetchColumn())) . "
-                     ORDER BY ds.start_time ASC, al.log_id DESC"
-                );
-                $today_rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                         )
+                         WHERE ds.day_of_week = :day
+                           AND ds.status = "accepted"
+                           AND ds.term_id = :term_id
+                         ORDER BY ds.start_time ASC, al.log_id DESC'
+                    );
+                    $stmt->execute([
+                        'day' => $currentDay,
+                        'term_id' => $activeTermId,
+                    ]);
+                    $todayRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                }
 
-                $offices = $pdo->query(
-                    "SELECT COALESCE(a.preferred_office, 'Unassigned') AS office_name,
-                            COUNT(DISTINCT al.log_id) AS total,
-                            SUM(CASE WHEN al.clock_out_time IS NULL THEN 1 ELSE 0 END) AS active
-                     FROM attendance_logs al
-                     LEFT JOIN applications a ON a.application_id = al.application_id
-                     WHERE DATE(al.created_at) = CURDATE()
-                     GROUP BY COALESCE(a.preferred_office, 'Unassigned')
-                     ORDER BY total DESC"
-                )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                $activeNow = 0;
+                $completedToday = 0;
+                $totalSchedules = count($todayRows);
+                $officeSummary = [];
 
-                sse_send('attendance', ['success' => true, 'metrics' => $metrics, 'today_rows' => $today_rows, 'offices' => $offices]);
+                foreach ($todayRows as &$todayRow) {
+                    $status = sams_attendance_display_status((string) ($todayRow['status'] ?? ''));
+                    if ($status === '') {
+                        $status = 'absent';
+                    }
+
+                    $timeInRaw = !empty($todayRow['time_in']) ? (string) $todayRow['time_in'] : null;
+                    $timeOutRaw = !empty($todayRow['time_out']) ? (string) $todayRow['time_out'] : null;
+
+                    if (!sams_attendance_clocking_enabled()) {
+                        $timeInRaw = null;
+                        $timeOutRaw = null;
+                        $status = 'absent';
+                    }
+
+                    if ($timeInRaw !== null && $timeOutRaw === null) {
+                        $activeNow++;
+                    }
+                    if ($timeInRaw !== null && $timeOutRaw !== null) {
+                        $completedToday++;
+                    }
+
+                    $officeName = (string) ($todayRow['office_name'] ?? 'Unassigned');
+                    if (!isset($officeSummary[$officeName])) {
+                        $officeSummary[$officeName] = [
+                            'name' => $officeName,
+                            'count' => 0,
+                            'active' => 0,
+                        ];
+                    }
+                    $officeSummary[$officeName]['count']++;
+                    if ($timeInRaw !== null && $timeOutRaw === null) {
+                        $officeSummary[$officeName]['active']++;
+                    }
+
+                    $todayRow['time_in'] = $timeInRaw ? date('g:i A', strtotime($timeInRaw)) : '-';
+                    $todayRow['time_out'] = $timeOutRaw ? date('g:i A', strtotime($timeOutRaw)) : ($timeInRaw ? 'In Progress' : '-');
+                    $todayRow['status'] = match ($status) {
+                        'present', 'completed' => 'Present',
+                        'late' => 'Late',
+                        default => 'Absent',
+                    };
+                }
+                unset($todayRow);
+
+                $offices = [];
+                foreach ($officeSummary as $office) {
+                    $name = (string) ($office['name'] ?? 'Unassigned');
+                    $count = (int) ($office['count'] ?? 0);
+                    $pct = $totalSchedules > 0 ? (int) round(($count / $totalSchedules) * 100) : 0;
+
+                    $color = 'grey';
+                    $lower = strtolower($name);
+                    if (str_contains($lower, 'sdao')) {
+                        $color = 'blue';
+                    } elseif (str_contains($lower, 'library')) {
+                        $color = 'green';
+                    } elseif (str_contains($lower, 'computer')) {
+                        $color = 'purple';
+                    } elseif (str_contains($lower, 'registrar')) {
+                        $color = 'orange';
+                    }
+
+                    $offices[] = [
+                        'name' => $name,
+                        'count' => $count,
+                        'active' => (int) ($office['active'] ?? 0),
+                        'pct' => $pct,
+                        'color' => $color,
+                    ];
+                }
+
+                $metrics = [
+                    'active_now' => $activeNow,
+                    'completed_today' => $completedToday,
+                    'total_schedules' => $totalSchedules,
+                ];
+
+                sse_send('attendance', ['success' => true, 'metrics' => $metrics, 'today_rows' => $todayRows, 'offices' => $offices]);
                 $prevSig = $sig;
             }
         } else {

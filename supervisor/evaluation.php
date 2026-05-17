@@ -148,6 +148,8 @@ if ($activeTerm && $officeName !== '') {
     ]);
     $eligibleStudents = $studentStatement->fetchAll(PDO::FETCH_ASSOC);
 }
+  $eligibleCount = count($eligibleStudents);
+  $canSubmitEvaluation = $activeTerm && $eligibleCount > 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -186,19 +188,22 @@ if ($activeTerm && $officeName !== '') {
     .topbar__subtitle{font-size:14px;color:var(--color-body)}
     .logout-btn{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 14px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:700;text-decoration:none}
     .logout-btn:hover{background:#fecaca}
-    .page{flex:1; padding:32px;}
-    .card{background:var(--color-white); border:1px solid var(--color-border); border-radius:var(--radius-card); padding:24px; box-shadow:0 1px 2px rgba(16,24,40,.04)}
+    .page{flex:1; padding:36px;}
+    .card{position:relative;background:var(--color-white); border:1px solid var(--color-border); border-radius:var(--radius-card); padding:26px; box-shadow:0 1px 2px rgba(16,24,40,.04)}
+    .card::before{content:'';position:absolute;left:0;top:0;width:100%;height:4px;border-radius:16px 16px 0 0;background:linear-gradient(90deg,#155dfc,#9810fa)}
     .eyebrow{font-size:14px;color:var(--color-muted);margin-bottom:4px}
     .card h1{font-size:30px;line-height:1.1;margin-bottom:8px;color:var(--color-heading)}
     .card p{color:var(--color-body);line-height:1.5;max-width:760px}
     .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
-    .tile{border:1px solid var(--color-border);border-radius:14px;padding:16px;background:#fff;min-height:104px;display:flex;flex-direction:column;justify-content:space-between}
+    .tile{border:1px solid var(--color-border);border-radius:14px;padding:16px;background:#fff;min-height:104px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(16,24,40,.04);transition:transform .18s ease, box-shadow .18s ease}
+    .tile:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(16,24,40,.08)}
     .tile span{font-size:13px;color:var(--color-muted);display:block;margin-bottom:4px}
     .tile strong{font-size:16px;color:var(--color-heading);display:block}
     .form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
     .field{display:flex;flex-direction:column;gap:6px}
     .field label{font-weight:600;color:var(--color-label);font-size:14px}
-    .field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--color-border);border-radius:10px;background:#fff;font:inherit;color:var(--color-heading)}
+    .field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--color-border);border-radius:10px;background:#fff;font:inherit;color:var(--color-heading);transition:border-color .18s ease, box-shadow .18s ease}
+    .field select:focus,.field textarea:focus{outline:none;border-color:#9fc0ff;box-shadow:0 0 0 3px rgba(21,93,252,.12)}
     .field textarea{min-height:110px;resize:vertical}
     .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
     .btn{display:inline-flex;align-items:center;justify-content:center;height:42px;padding:0 14px;border-radius:10px;background:var(--color-primary);color:#fff;border:0;cursor:pointer;font-weight:700;text-decoration:none}
@@ -209,9 +214,16 @@ if ($activeTerm && $officeName !== '') {
     .flash--success{background:#f0fdf4;border-color:#bbf7d0;color:#166534}
     .flash--error{background:#fef2f2;border-color:#fecaca;color:#991b1b}
     .student-list{display:flex;flex-direction:column;gap:10px;margin-top:18px}
-    .student-item{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--color-border);border-radius:12px;background:#fff;align-items:center}
+    .student-item{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--color-border);border-radius:12px;background:#fff;align-items:center;transition:transform .18s ease, box-shadow .18s ease}
+    .student-item:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(16,24,40,.08)}
     .student-item__name{font-weight:700;color:var(--color-heading)}
     .student-item__meta{font-size:13px;color:var(--color-body)}
+    .guide{margin-top:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    .guide__item{padding:12px;border:1px solid var(--color-border);border-radius:12px;background:#fbfcff;box-shadow:inset 0 3px 0 rgba(21,93,252,.14)}
+    .guide__title{font-size:13px;font-weight:700;color:var(--color-heading)}
+    .guide__text{margin-top:4px;font-size:12px;color:var(--color-body)}
+    .notice{margin-top:14px;padding:12px 14px;border-radius:12px;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;font-size:13px}
+    .btn[disabled]{opacity:.55;cursor:not-allowed}
     @media (max-width: 960px){.grid,.form-grid{grid-template-columns:1fr}.page{padding:20px}.topbar{padding:0 20px}.card{padding:20px}}
   </style>
 </head>
@@ -297,8 +309,18 @@ if ($activeTerm && $officeName !== '') {
       <div class="grid">
         <div class="tile"><span>Active Term</span><strong><?php echo $activeTerm ? htmlspecialchars((string) $activeTerm['term_name'] . ' ' . (string) $activeTerm['term_year'], ENT_QUOTES, 'UTF-8') : 'No active term'; ?></strong></div>
         <div class="tile"><span>Office</span><strong><?php echo htmlspecialchars($officeName, ENT_QUOTES, 'UTF-8'); ?></strong></div>
-        <div class="tile"><span>Eligible Students</span><strong><?php echo (int) count($eligibleStudents); ?></strong></div>
+        <div class="tile"><span>Eligible Students</span><strong><?php echo (int) $eligibleCount; ?></strong></div>
       </div>
+
+      <div class="guide" aria-label="Evaluation guide">
+        <div class="guide__item"><div class="guide__title">Performance</div><div class="guide__text">Quality of work output and task completion.</div></div>
+        <div class="guide__item"><div class="guide__title">Reliability</div><div class="guide__text">Consistency, punctuality, and attendance behavior.</div></div>
+        <div class="guide__item"><div class="guide__title">Professionalism</div><div class="guide__text">Communication, attitude, and office conduct.</div></div>
+      </div>
+
+      <?php if (!$canSubmitEvaluation): ?>
+        <div class="notice">Evaluation submission is unavailable until there is an active term with at least one approved student in your office.</div>
+      <?php endif; ?>
 
       <form method="post">
         <div class="form-grid">
@@ -360,7 +382,7 @@ if ($activeTerm && $officeName !== '') {
         </div>
 
         <div class="actions">
-          <button class="btn btn--primary" type="submit">Submit Evaluation</button>
+          <button class="btn btn--primary" type="submit" <?php echo $canSubmitEvaluation ? '' : 'disabled'; ?>>Submit Evaluation</button>
           <a class="btn btn--secondary" href="dashboard.php">Back to Dashboard</a>
         </div>
       </form>

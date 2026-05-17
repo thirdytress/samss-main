@@ -125,15 +125,32 @@ try {
   }
 
   if ($action === 'out') {
-    // Find today's attendance with clock_in_time set and no clock_out_time
-          $status = ($late >= sams_attendance_late_threshold()) ? 'late' : 'present'; // Change condition to include on-time
+    // Find today's attendance (if any)
+    $att = $pdo->prepare('SELECT * FROM attendance_logs WHERE application_id = :appid AND duty_id = :dsid AND DATE(created_at) = CURDATE() LIMIT 1');
     $att->execute(['appid' => $applicationId, 'dsid' => $scheduleId]);
     $row = $att->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    // Determine late based on recorded clock_in_time when available
+    $late = 0;
+    $status = 'present';
+    if ($row && !empty($row['clock_in_time'])) {
+      try {
+        $start = new DateTimeImmutable($sched['time_start']);
+        $inTs = strtotime($row['clock_in_time']);
+        if ($inTs) {
+          $diff = (int) (($inTs - $start->getTimestamp()) / 60);
+          $late = max(0, $diff);
+        }
+      } catch (Throwable $e) {
+        $late = 0;
+      }
+      $status = ($late > sams_attendance_late_threshold()) ? 'late' : 'present';
+    }
 
     if ($row && empty($row['clock_in_time'])) {
       // No time_in but user wants to clock out -> mark incomplete
       $upd = $pdo->prepare('UPDATE attendance_logs SET clock_out_time = NOW(), status = :status WHERE log_id = :log_id');
-          $status = ($late >= sams_attendance_late_threshold()) ? 'late' : 'present'; // Change condition to include on-time
+      $upd->execute(['status' => 'incomplete', 'log_id' => (int) $row['log_id']]);
       $pdo->commit();
       echo json_encode(['success' => true, 'action' => 'out', 'attendance_id' => (int) $row['log_id'], 'status' => 'incomplete']);
       exit;

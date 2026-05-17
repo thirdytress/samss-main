@@ -35,12 +35,13 @@ if (($user['role'] ?? null) === 'supervisor') {
     }
 }
 $currentDay = date('l');
-$activeTermId = (int) ($pdo->query("SELECT COALESCE(MAX(term_id), 0) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE()")->fetchColumn() ?: 0);
+$activeTerm = sams_current_term($pdo);
+$activeTermId = (int) ($activeTerm['term_id'] ?? 0);
 
 // Fetch today's attendance rows for supervisor's office using a derived latest-log join (more efficient)
 $stmt = $pdo->query(
-        "SELECT u.first_name, u.last_name, s.student_id AS student_code, a.application_id AS application_id, ds.duty_id AS duty_id, a.preferred_office AS office_name,
-            al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time
+    "SELECT u.first_name, u.last_name, s.student_id AS student_code, a.application_id AS application_id, ds.duty_id AS duty_id, COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') AS office_name,
+            al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time, ds.end_time
      FROM duty_schedules ds
      INNER JOIN applications a ON a.application_id = ds.application_id
      LEFT JOIN students s ON s.student_id = a.student_id
@@ -54,9 +55,9 @@ $stmt = $pdo->query(
          ) lm ON lm.max_log_id = al1.log_id
      ) al ON al.application_id = a.application_id AND al.duty_id = ds.duty_id
      WHERE ds.day_of_week = '" . $currentDay . "'
-         AND ds.status = 'assigned'
+         AND ds.status = 'accepted'
          AND ds.term_id = " . $activeTermId . "
-         AND a.preferred_office = " . $pdo->quote($supervisorOffice) . "
+         AND COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') = " . $pdo->quote($supervisorOffice) . "
      ORDER BY ds.start_time ASC, al.log_id DESC"
 );
 
@@ -78,6 +79,8 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
         'student_code' => (string) ($row['student_code'] ?? ''),
         'time_in' => $timeIn ? date('g:i A', strtotime((string) $timeIn)) : '-',
         'time_out' => $timeOut ? date('g:i A', strtotime((string) $timeOut)) : ($timeIn ? 'In Progress' : '-'),
+        'duty_start' => !empty($row['start_time']) ? date('g:i A', strtotime((string) $row['start_time'])) : '-',
+        'duty_end' => !empty($row['end_time']) ? date('g:i A', strtotime((string) $row['end_time'])) : '-',
         'status' => match ($status) {
             'present', 'completed' => 'Present',
             'late' => 'Late',

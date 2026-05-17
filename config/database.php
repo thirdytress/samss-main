@@ -26,15 +26,25 @@ function sams_pdo(): PDO
     }
 
     $config = sams_db_config();
-    
-    // Try direct connection using hostname instead of localhost
-    $dsn = sprintf(
-        'mysql:host=%s;port=%s;dbname=%s;charset=%s',
-        'localhost',
-        $config['port'],
-        $config['name'],
-        $config['charset']
-    );
+    $appEnv = strtolower((string) (getenv('APP_ENV') ?: 'local'));
+
+    if ($appEnv !== 'local' && $appEnv !== 'development') {
+        if (($config['user'] === 'root' || $config['user'] === '') && $config['pass'] === '') {
+            throw new RuntimeException('Refusing insecure DB credentials outside local/development. Set SAMS_DB_USER and SAMS_DB_PASSWORD.');
+        }
+    }
+
+    if ($config['dsn'] !== '') {
+        $dsn = $config['dsn'];
+    } else {
+        $dsn = sprintf(
+            'mysql:host=%s;port=%s;dbname=%s;charset=%s',
+            $config['host'],
+            $config['port'],
+            $config['name'],
+            $config['charset']
+        );
+    }
 
     try {
         $pdo = new PDO($dsn, $config['user'], $config['pass'], [
@@ -43,7 +53,11 @@ function sams_pdo(): PDO
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
     } catch (PDOException $exception) {
-        // If localhost fails, try 127.0.0.1
+        // If localhost fails, try 127.0.0.1 as a local-only fallback.
+        if ($config['dsn'] !== '' || $config['host'] !== 'localhost') {
+            throw new RuntimeException('Unable to connect to the SAMS database: ' . $exception->getMessage());
+        }
+
         try {
             $dsn2 = sprintf(
                 'mysql:host=127.0.0.1;port=%s;dbname=%s;charset=%s',

@@ -19,6 +19,7 @@ $supervisorStatement = $pdo->prepare(
 $supervisorStatement->execute(['user_id' => (int) ($user['user_id'] ?? 0)]);
 $supervisorRow = $supervisorStatement->fetch(PDO::FETCH_ASSOC) ?: [];
 $supervisorOffice = (string) ($supervisorRow['office_name'] ?? ($user['office_name'] ?? 'Assigned Office'));
+$prefillApplicationId = isset($_GET['application_id']) ? (int) $_GET['application_id'] : 0;
 
 $pdo->exec(
     "CREATE TABLE IF NOT EXISTS student_reports (
@@ -78,6 +79,14 @@ $reportsStmt = $pdo->prepare(
 );
 $reportsStmt->execute(['office' => $supervisorOffice]);
 $reports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$studentsCount = count($students);
+$recentReportsCount = count($reports);
+$openReportsCount = 0;
+foreach ($reports as $reportRow) {
+    if (strtolower((string) ($reportRow['status'] ?? 'open')) === 'open') {
+        $openReportsCount++;
+    }
+}
 
 ?>
 <!doctype html>
@@ -112,20 +121,29 @@ $reports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         .topbar{background:var(--color-white);border-bottom:1px solid var(--color-border);height:var(--topbar-height);padding:0 32px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:50}
         .topbar__title{font-size:var(--font-lg);font-weight:700;color:var(--color-heading)}
         .topbar__sub{font-size:var(--font-sm);color:var(--color-body)}
-        .dashboard{flex:1;padding:32px;display:flex;flex-direction:column;gap:20px}
+        .dashboard{flex:1;padding:36px;display:flex;flex-direction:column;gap:22px}
         .card{background:var(--color-white);padding:18px;border-radius:var(--radius-card);border:1px solid var(--color-border);box-shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05)}
         .form-label{display:block;font-weight:600;margin-bottom:6px}
-        .form-input,.form-textarea,.form-select{width:100%;padding:10px;border:1px solid #e6e9ee;border-radius:8px}
-        .btn{background:#155dfc;color:#fff;padding:10px 14px;border-radius:8px;border:0;font-weight:600}
+        .form-input,.form-textarea,.form-select{width:100%;padding:10px;border:1px solid #e6e9ee;border-radius:10px;transition:border-color .18s ease, box-shadow .18s ease}
+        .form-input:focus,.form-textarea:focus,.form-select:focus{outline:none;border-color:#9fc0ff;box-shadow:0 0 0 3px rgba(21,93,252,.12)}
+        .btn{background:var(--gradient-brand);color:#fff;padding:10px 14px;border-radius:10px;border:0;font-weight:700;box-shadow:0 8px 16px rgba(21,93,252,.2)}
         .recent-list{display:flex;flex-direction:column;gap:12px}
-        .report-item{border:1px solid #eef2f7;padding:12px;border-radius:12px;background:#fff;transition:transform .15s ease,box-shadow .15s ease}
+        .report-item{border:1px solid #eef2f7;padding:12px;border-radius:12px;background:#fff;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
         .report-item:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(16,24,40,.06)}
         .meta{color:#6b7280;font-size:13px}
         .report-title{font-size:24px;font-weight:700;color:var(--color-heading);margin-bottom:8px}
         /* Tabs */
-        .tabs{display:flex;gap:8px;margin-bottom:12px}
-        .tab{padding:8px 12px;border-radius:8px;background:#fff;border:1px solid var(--color-border);cursor:pointer;font-weight:700;color:var(--color-label)}
+        .tabs{display:flex;gap:8px;margin-bottom:4px;background:#fff;border:1px solid var(--color-border);border-radius:12px;padding:6px;max-width:max-content}
+        .tab{padding:8px 12px;border-radius:8px;background:#fff;border:1px solid transparent;cursor:pointer;font-weight:700;color:var(--color-label);transition:all .18s ease}
+        .tab:hover{background:#f5f8ff;color:#0f3fb8}
         .tab--active{background:var(--color-primary);color:#fff;border-color:var(--color-primary)}
+        .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+        .stat{position:relative;background:#fff;border:1px solid var(--color-border);border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+        .stat::before{content:'';position:absolute;left:0;top:0;width:100%;height:3px;border-radius:14px 14px 0 0;background:linear-gradient(90deg,#155dfc,#9810fa)}
+        .stat__label{font-size:12px;color:var(--color-muted)}
+        .stat__value{margin-top:6px;font-size:30px;font-weight:800;color:var(--color-heading);line-height:1}
+        .tab-panel{background:var(--color-white);padding:18px;border-radius:var(--radius-card);border:1px solid var(--color-border);box-shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05)}
+        @media (max-width:900px){.stats{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
@@ -182,12 +200,17 @@ $reports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </div>
             </header>
             <main class="dashboard">
+                <section class="stats" aria-label="Reports summary">
+                    <article class="stat"><div class="stat__label">Students in Office</div><div class="stat__value"><?php echo (int) $studentsCount; ?></div></article>
+                    <article class="stat"><div class="stat__label">Recent Reports</div><div class="stat__value"><?php echo (int) $recentReportsCount; ?></div></article>
+                    <article class="stat"><div class="stat__label">Open Reports</div><div class="stat__value"><?php echo (int) $openReportsCount; ?></div></article>
+                </section>
+
                 <div class="tabs" role="tablist" aria-label="Reports tabs">
                     <button id="tabForm" class="tab tab--active" role="tab" aria-selected="true">Student report</button>
                     <button id="tabHistory" class="tab" role="tab" aria-selected="false">History</button>
                 </div>
-                <section class="card">
-                    <section id="formSection" class="card">
+                <section id="formSection" class="tab-panel">
                     <div class="report-title">Report Student</div>
                     <div class="muted-desc">Use this form to submit a report for students assigned to your office. Only students with duty schedules in <?php echo htmlspecialchars($supervisorOffice); ?> are shown.</div>
                     <div>
@@ -209,9 +232,10 @@ $reports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                     </div>
                     <div class="text-right mt-12">
                         <button id="submitReport" class="btn">Submit Report</button>
-                    </section>
+                    </div>
+                </section>
 
-                <section id="historySection" class="hidden">
+                <section id="historySection" class="tab-panel hidden">
                     <div class="report-title mt-4">Recent Reports</div>
                     <div class="recent-list" id="recentList">
                         <?php foreach ($reports as $r): ?>
@@ -241,6 +265,16 @@ $reports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
             var student = document.getElementById('student');
             var recent = document.getElementById('recentList');
             var csrf = '<?php echo htmlspecialchars(sams_csrf_token(), ENT_QUOTES); ?>';
+            var prefillApplicationId = <?php echo (int) $prefillApplicationId; ?>;
+
+            if (prefillApplicationId > 0) {
+                for (var i = 0; i < student.options.length; i++) {
+                    if ((student.options[i].getAttribute('data-application') || '') === String(prefillApplicationId)) {
+                        student.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
 
             function showTab(name){
                 var f = document.getElementById('formSection');

@@ -110,7 +110,9 @@ if ($currentUser && ($currentUser['role'] ?? null) === 'student') {
 
       if ($studentId > 0) {
         $schedStmt = $pdo->prepare(
-          "SELECT ds.duty_id AS id, a.preferred_office AS office_name, ds.day_of_week, ds.start_time AS time_start, ds.end_time AS time_end, ds.status,
+            "SELECT ds.duty_id AS id,
+              COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') AS office_name,
+              ds.day_of_week, ds.start_time AS time_start, ds.end_time AS time_end, ds.status,
                   ds.term_id, t.term_name, t.term_year AS school_year,
                   al.log_id AS attendance_id, al.status AS attendance_status, al.late_minutes, al.notes AS remarks, al.clock_in_time AS time_in, al.clock_out_time AS time_out
            FROM duty_schedules ds

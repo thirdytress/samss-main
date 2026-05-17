@@ -21,14 +21,7 @@ $supervisorStatement->execute(['user_id' => (int) ($user['user_id'] ?? 0)]);
 $supervisorRow = $supervisorStatement->fetch(PDO::FETCH_ASSOC) ?: [];
 $supervisorOffice = trim((string) ($supervisorRow['office_name'] ?? ($user['office_name'] ?? '')));
 
-$termStatement = $pdo->query(
-    'SELECT term_id, term_name, term_year
-     FROM terms
-     WHERE start_date <= CURDATE() AND end_date >= CURDATE()
-     ORDER BY term_id DESC
-     LIMIT 1'
-);
-$activeTerm = $termStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+$activeTerm = sams_current_term($pdo);
 $activeTermId = (int) ($activeTerm['term_id'] ?? 0);
 $termLabel = trim((string) ($activeTerm['term_name'] ?? '') . ' ' . (string) ($activeTerm['term_year'] ?? ''));
 if ($termLabel === '') {
@@ -52,7 +45,6 @@ $termFilterForEval = '';
 if ($activeTermId > 0) {
     $where[] = 'ds.term_id = :term_id_ds';
     $params['term_id_ds'] = $activeTermId;
-    $termFilterForSchedules = ' AND ds2.term_id = :term_id_ds2';
     $termFilterForLogs = ' AND l.term_id = :term_id_logs';
     $termFilterForEval = ' AND e.term_id = :term_id_eval';
     $params['term_id_logs'] = $activeTermId;
@@ -60,8 +52,12 @@ if ($activeTermId > 0) {
 }
 
 if ($search !== '') {
-    $where[] = '(u.first_name LIKE :q OR u.last_name LIKE :q OR s.student_id_number LIKE :q OR s.program LIKE :q)';
-    $params['q'] = '%' . $search . '%';
+    $where[] = '(u.first_name LIKE :search_first_name OR u.last_name LIKE :search_last_name OR s.student_id_number LIKE :search_student_id OR s.program LIKE :search_program)';
+    $searchLike = '%' . $search . '%';
+    $params['search_first_name'] = $searchLike;
+    $params['search_last_name'] = $searchLike;
+    $params['search_student_id'] = $searchLike;
+    $params['search_program'] = $searchLike;
 }
 
 $sql =
@@ -114,6 +110,7 @@ foreach ($students as $studentRow) {
 }
 $departmentCount = count($departments);
 $avgRating = $ratingCount > 0 ? $ratingSum / $ratingCount : 0.0;
+$resultCount = count($students);
 
 function h(?string $value): string
 {
@@ -154,20 +151,28 @@ function h(?string $value): string
         .topbar{background:var(--color-white);border-bottom:1px solid var(--color-border);height:var(--topbar-height);padding:0 32px;display:flex;align-items:center;justify-content:space-between}
         .topbar__title{font-size:var(--font-lg);font-weight:700;color:var(--color-heading)}
         .topbar__sub{font-size:var(--font-sm);color:var(--color-body)}
-        .page{flex:1;padding:32px;display:flex;flex-direction:column;gap:16px}
+        .page{flex:1;padding:36px;display:flex;flex-direction:column;gap:18px}
         .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-        .stat{background:#fff;border:1px solid var(--color-border);border-radius:14px;padding:16px}
+        .stat{position:relative;background:#fff;border:1px solid var(--color-border);border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+        .stat::before{content:'';position:absolute;left:0;top:0;width:100%;height:3px;border-radius:14px 14px 0 0;background:linear-gradient(90deg,#155dfc,#9810fa)}
         .stat__label{font-size:13px;color:var(--color-muted)}
         .stat__value{margin-top:6px;font-size:34px;font-weight:800;line-height:1;color:var(--color-heading)}
         .card{background:#fff;border:1px solid var(--color-border);border-radius:14px;overflow:hidden}
-        .toolbar{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:16px;border-bottom:1px solid var(--color-border)}
-        .search{width:100%;max-width:320px;height:40px;border:1px solid var(--color-border);border-radius:10px;padding:0 12px;font-size:14px}
+        .card__head{padding:16px;border-bottom:1px solid var(--color-border);background:linear-gradient(180deg,#fbfcff 0%,#ffffff 100%)}
+        .card__title{font-size:18px;font-weight:700;color:var(--color-heading)}
+        .card__meta{margin-top:4px;font-size:13px;color:var(--color-body)}
+        .toolbar{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:16px;border-bottom:1px solid var(--color-border);background:#fcfcfd}
+        .search{width:100%;max-width:320px;height:40px;border:1px solid var(--color-border);border-radius:10px;padding:0 12px;font-size:14px;transition:border-color .18s ease, box-shadow .18s ease}
+        .search:focus{outline:none;border-color:#9fc0ff;box-shadow:0 0 0 3px rgba(21,93,252,.12)}
         table{width:100%;border-collapse:collapse}
         thead th{padding:12px 16px;border-bottom:1px solid var(--color-border);font-size:13px;color:var(--color-heading);text-align:left;background:#f9fafb}
         tbody td{padding:12px 16px;border-bottom:1px solid var(--color-border);font-size:14px;color:var(--color-heading);vertical-align:middle}
+        tbody tr:hover td{background:#f8faff}
         tbody tr:last-child td{border-bottom:none}
         .pill{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:9999px;background:#e8f0ff;color:#155dfc;font-size:12px;font-weight:700}
-        .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 12px;border-radius:10px;background:#155dfc;color:#fff;font-weight:700;font-size:13px}
+        .pill--active{background:#ecfdf3;color:#027a48}
+        .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 12px;border-radius:10px;background:var(--gradient-brand);color:#fff;font-weight:700;font-size:13px;box-shadow:0 8px 16px rgba(21,93,252,.2)}
+        .btn:hover{opacity:.95;transform:translateY(-1px)}
         .muted{color:var(--color-muted)}
         .empty{padding:24px;text-align:center;color:var(--color-muted)}
         @media (max-width:960px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.page{padding:20px}}
@@ -240,6 +245,10 @@ function h(?string $value): string
             </div>
 
             <div class="card">
+                <div class="card__head">
+                    <div class="card__title">Student Directory</div>
+                    <div class="card__meta">Showing <?php echo (int) $resultCount; ?> result<?php echo (int) $resultCount === 1 ? '' : 's'; ?> for <?php echo h($supervisorOffice !== '' ? $supervisorOffice : 'assigned office'); ?>.</div>
+                </div>
                 <form method="get" class="toolbar">
                     <input class="search" type="text" name="q" value="<?php echo h($search); ?>" placeholder="Search students by name, ID, or program" />
                     <button class="btn" type="submit">Search</button>
@@ -276,7 +285,7 @@ function h(?string $value): string
                                 <td><?php echo (int) ($studentRow['accepted_schedule_count'] ?? 0); ?></td>
                                 <td><?php echo number_format((float) ($studentRow['rendered_hours'] ?? 0), 1); ?>h</td>
                                 <td><?php echo $rating > 0 ? number_format($rating, 1) . '/5' : 'N/A'; ?></td>
-                                <td><span class="pill">Active</span></td>
+                                <td><span class="pill pill--active">Active</span></td>
                                 <td><a class="btn" href="student_profile.php?application_id=<?php echo (int) ($studentRow['application_id'] ?? 0); ?>">View</a></td>
                             </tr>
                         <?php endforeach; ?>

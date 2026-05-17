@@ -17,6 +17,12 @@ try {
     // don't block page load on failure
 }
 
+$reportsFlash = '';
+if (isset($_SESSION['reports_flash'])) {
+    $reportsFlash = (string) $_SESSION['reports_flash'];
+    unset($_SESSION['reports_flash']);
+}
+
 $applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
 
 $admin_name = (string) ($currentUser['name'] ?? 'SAMS Admin');
@@ -354,9 +360,10 @@ foreach ($officeRows as $officeRow) {
 
 // Recent student reports for admin history
 $reportsStmt = $pdo->prepare(
-    'SELECT sr.*, CONCAT(COALESCE(u.first_name, ""), CASE WHEN u.first_name IS NOT NULL AND u.last_name IS NOT NULL THEN " " ELSE "" END, COALESCE(u.last_name, "")) AS reporter_name, a.preferred_office
+    'SELECT sr.*, CONCAT(COALESCE(u.first_name, ""), CASE WHEN u.first_name IS NOT NULL AND u.last_name IS NOT NULL THEN " " ELSE "" END, COALESCE(u.last_name, "")) AS reporter_name, COALESCE(sp.office_name, a.preferred_office, "Unassigned") AS reporter_office
      FROM student_reports sr
      LEFT JOIN users u ON u.user_id = sr.reporter_id
+     LEFT JOIN supervisors sp ON sp.user_id = sr.reporter_id
      LEFT JOIN applications a ON a.application_id = sr.application_id
      ORDER BY sr.created_at DESC
      LIMIT 200'
@@ -906,6 +913,172 @@ if (!empty($attendance_data)) {
             line-height: 24px;
         }
 
+        .report-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .report-actions form {
+            display: inline-flex;
+            margin: 0;
+        }
+
+        .report-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 30px;
+            padding: 0 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .report-action--light {
+            border: 1px solid var(--clr-border-input);
+            background: #fff;
+            color: var(--clr-text-primary);
+        }
+
+        .report-action--primary {
+            background: var(--clr-blue);
+            color: #fff;
+        }
+
+        .report-action--danger {
+            border: 0;
+            background: #111827;
+            color: #fff;
+        }
+
+        .report-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 300;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--sp-24);
+        }
+
+        .report-modal[hidden] { display: none; }
+
+        .report-modal__backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+        }
+
+        .report-modal__dialog {
+            position: relative;
+            width: min(760px, 100%);
+            max-height: min(84vh, 900px);
+            overflow: auto;
+            background: var(--clr-white);
+            border-radius: 18px;
+            box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+            border: 1px solid var(--clr-border);
+        }
+
+        .report-modal__header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--sp-16);
+            padding: var(--sp-24);
+            border-bottom: 1px solid var(--clr-border);
+        }
+
+        .report-modal__eyebrow {
+            font-size: var(--fs-xs);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--clr-text-muted);
+            margin-bottom: 6px;
+        }
+
+        .report-modal__title {
+            font-size: var(--fs-lg);
+            font-weight: 800;
+            color: var(--clr-text-primary);
+            line-height: 1.2;
+        }
+
+        .report-modal__close {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-pill);
+            background: #F3F4F6;
+            color: var(--clr-text-body);
+            font-size: 22px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .report-modal__body {
+            padding: var(--sp-24);
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-24);
+        }
+
+        .report-modal__grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--sp-16);
+        }
+
+        .report-modal__grid strong,
+        .report-modal__notes strong {
+            display: block;
+            font-size: var(--fs-sm);
+            color: var(--clr-text-muted);
+            margin-bottom: 6px;
+        }
+
+        .report-modal__grid div div,
+        .report-modal__notes-text {
+            font-size: var(--fs-base);
+            color: var(--clr-text-primary);
+            line-height: 1.6;
+        }
+
+        .report-modal__notes {
+            padding: var(--sp-16);
+            border: 1px solid var(--clr-border);
+            border-radius: 14px;
+            background: #FAFAFB;
+        }
+
+        .report-modal__notes-text {
+            white-space: pre-wrap;
+        }
+
+        .report-modal__footer {
+            padding: 0 var(--sp-24) var(--sp-24);
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .report-modal__open {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 40px;
+            padding: 0 14px;
+            border-radius: 10px;
+            background: var(--clr-blue);
+            color: var(--clr-white);
+            font-weight: 700;
+            font-size: var(--fs-sm);
+        }
+
         .att-present { font-weight: bold; color: var(--clr-green); }
         .att-late    { font-weight: bold; color: var(--clr-amber); }
         .att-absent  { font-weight: bold; color: var(--clr-red); }
@@ -1118,159 +1291,7 @@ if (!empty($attendance_data)) {
 <div class="sidebar-overlay sidebar-overlay--hidden" id="sidebarOverlay"></div>
 
 <div class="app">
-
-    <!-- ================================================================
-         SIDEBAR
-    ================================================================ -->
-    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Admin navigation">
-
-        <div class="sidebar__header">
-            <div class="sidebar__brand">
-                <div class="sidebar__logo" aria-hidden="true">
-                    <span class="sidebar__logo-text">NU</span>
-                </div>
-                <div class="sidebar__brand-info">
-                    <span class="sidebar__app-name">SA System</span>
-                    <span class="sidebar__app-sub">Admin Panel</span>
-                </div>
-            </div>
-        </div>
-
-        <nav class="sidebar__nav" aria-label="Main menu">
-            <ul class="nav__list">
-                <li class="nav__item">
-                    <a href="dashboard.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="2" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
-                                <rect x="11" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
-                                <rect x="2" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
-                                <rect x="11" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Dashboard</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="applications.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M6 2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M7 7h6M7 10h6M7 13h4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Applications</span>
-                        <?php if ($applicationBadgeCount > 0): ?><span class="nav__badge" aria-label="<?= $applicationBadgeCount ?> pending"><?= (int) $applicationBadgeCount ?></span><?php endif; ?>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="scheduling.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="2" y="4" width="16" height="14" rx="2" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M6 2v4M14 2v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                                <path d="M2 9h16" stroke="#364153" stroke-width="1.2"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Scheduling</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="attendance.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="10" cy="10" r="8" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Attendance</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="evaluation.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M10 2l2.09 4.26L17 7.27l-3.5 3.41.83 4.82L10 13.27l-4.33 2.23.83-4.82L3 7.27l4.91-.71L10 2z" stroke="#364153" stroke-width="1.5" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Evaluation</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="reports.php" class="nav__link nav__link--active" aria-current="page">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="3" y="12" width="3" height="6" rx="1" fill="white"/>
-                                <rect x="8.5" y="8" width="3" height="10" rx="1" fill="white"/>
-                                <rect x="14" y="4" width="3" height="14" rx="1" fill="white"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Reports</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="announcements.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Announcements</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="meetings.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Meetings</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="students.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="10" cy="6.5" r="3" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Students</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-            </ul>
-        </nav>
-
-        <div class="sidebar__footer">
-            <ul class="nav__list">
-                <li class="nav__item">
-                    <a href="settings.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M8.325 2.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z" stroke="#364153" stroke-width="1.3"/>
-                                <circle cx="10" cy="10" r="3" stroke="#364153" stroke-width="1.3"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Settings</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="logout.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M7 3H4a1 1 0 00-1 1v12a1 1 0 001 1h3" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                                <path d="M13 14l3-4-3-4M16 10H7" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Sign Out</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </aside>
+    <?php $activeAdminNav = 'reports'; $pendingApplications = (int) $applicationBadgeCount; include __DIR__ . '/_sidebar.php'; ?>
 
     <!-- ================================================================
          MAIN
@@ -1314,6 +1335,12 @@ if (!empty($attendance_data)) {
 
         <!-- Page Content -->
         <section class="page-content" aria-label="Reports and Analytics content">
+
+            <?php if ($reportsFlash !== ''): ?>
+                <div style="margin:0 0 16px;padding:14px 16px;border-radius:12px;border:1px solid #bbf7d0;background:#ecfdf5;color:#047857;font-weight:700;">
+                    <?= htmlspecialchars($reportsFlash) ?>
+                </div>
+            <?php endif; ?>
 
             <!-- Page Header Row -->
             <div class="page-header-row">
@@ -1517,6 +1544,7 @@ if (!empty($attendance_data)) {
                                 <col style="width:10%">
                                 <col style="width:8%">
                                 <col style="width:12%">
+                                <col style="width:14%">
                             </colgroup>
                             <thead>
                                 <tr>
@@ -1528,6 +1556,7 @@ if (!empty($attendance_data)) {
                                     <th>Office</th>
                                     <th>Status</th>
                                     <th>Created</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1538,14 +1567,68 @@ if (!empty($attendance_data)) {
                                     <td><?php echo (int)($r['application_id'] ?? 0); ?></td>
                                     <td><?php echo '<strong>' . htmlspecialchars((string)($r['title'] ?? '-')) . '</strong><div style="color:var(--clr-text-muted);font-size:13px;margin-top:6px;white-space:pre-wrap">' . htmlspecialchars((string)($r['notes'] ?? '')) . '</div>'; ?></td>
                                     <td><?php echo htmlspecialchars((string)($r['reporter_name'] ?? '')); ?></td>
-                                    <td><?php echo htmlspecialchars((string)($r['preferred_office'] ?? '')); ?></td>
+                                    <td><?php echo htmlspecialchars((string)($r['reporter_office'] ?? 'Unassigned')); ?></td>
                                     <td><?php echo htmlspecialchars((string)($r['status'] ?? 'open')); ?></td>
-                                    <td><?php echo htmlspecialchars((string)($r['created_at'] ?? '')); ?> <a href="report_detail.php?report_id=<?php echo (int)($r['report_id'] ?? 0); ?>" style="margin-left:8px">Open</a></td>
+                                    <td><?php echo htmlspecialchars((string)($r['created_at'] ?? '')); ?></td>
+                                    <td>
+                                        <div class="report-actions">
+                                        <button
+                                            type="button"
+                                            class="report-preview-btn report-action report-action--light"
+                                            data-report-id="<?php echo (int)($r['report_id'] ?? 0); ?>"
+                                            data-student="<?php echo htmlspecialchars((string)($r['student_code'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-application="<?php echo (int)($r['application_id'] ?? 0); ?>"
+                                            data-title="<?php echo htmlspecialchars((string)($r['title'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-notes="<?php echo htmlspecialchars((string)($r['notes'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-reporter="<?php echo htmlspecialchars((string)($r['reporter_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-office="<?php echo htmlspecialchars((string)($r['reporter_office'] ?? 'Unassigned'), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-status="<?php echo htmlspecialchars((string)($r['status'] ?? 'open'), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-created="<?php echo htmlspecialchars((string)($r['created_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                        >Preview</button>
+                                        <a class="report-action report-action--primary" href="report_detail.php?report_id=<?php echo (int)($r['report_id'] ?? 0); ?>">Open</a>
+                                        <!-- Delete moved to preview modal to keep list clean -->
+                                        </div>
+                                    </td>
                                 </tr>
                                 <?php endforeach; ?>
-                                <?php if (empty($student_reports)): ?><tr><td colspan="8" style="padding:24px">No reports yet.</td></tr><?php endif; ?>
+                                <?php if (empty($student_reports)): ?><tr><td colspan="9" style="padding:24px">No reports yet.</td></tr><?php endif; ?>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="reportPreviewModal" class="report-modal" hidden aria-hidden="true">
+                <div class="report-modal__backdrop" data-close-report-modal></div>
+                <div class="report-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="reportPreviewTitle">
+                    <div class="report-modal__header">
+                        <div>
+                            <div class="report-modal__eyebrow">Report Preview</div>
+                            <h3 id="reportPreviewTitle" class="report-modal__title">Report #</h3>
+                        </div>
+                        <button type="button" class="report-modal__close" data-close-report-modal aria-label="Close preview">×</button>
+                    </div>
+                    <div class="report-modal__body">
+                        <div class="report-modal__grid">
+                            <div><strong>Student</strong><div id="reportPreviewStudent"></div></div>
+                            <div><strong>Application</strong><div id="reportPreviewApplication"></div></div>
+                            <div><strong>Reporter</strong><div id="reportPreviewReporter"></div></div>
+                            <div><strong>Office</strong><div id="reportPreviewOffice"></div></div>
+                            <div><strong>Status</strong><div id="reportPreviewStatus"></div></div>
+                            <div><strong>Created</strong><div id="reportPreviewCreated"></div></div>
+                        </div>
+                        <div class="report-modal__notes">
+                            <strong>Title / Notes</strong>
+                            <div id="reportPreviewNotes" class="report-modal__notes-text"></div>
+                        </div>
+                    </div>
+                    <div class="report-modal__footer">
+                        <a id="reportPreviewOpenLink" class="report-modal__open" href="#">Open Full Report</a>
+                        <form id="reportPreviewDeleteForm" method="post" action="#" style="margin-left:12px" onsubmit="return confirm('Delete this report permanently? This cannot be undone.')">
+                            <?php echo sams_csrf_input_field(); ?>
+                            <input type="hidden" name="action" value="delete">
+                            <button type="submit" class="report-action report-action--danger">Delete</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -1692,32 +1775,194 @@ if (!empty($attendance_data)) {
         });
     });
 
-    /* ---- Live refresh ---- */
+    /* ---- Report Preview Modal ---- */
+    var reportModal = document.getElementById('reportPreviewModal');
+    var reportModalTitle = document.getElementById('reportPreviewTitle');
+    var reportModalStudent = document.getElementById('reportPreviewStudent');
+    var reportModalApplication = document.getElementById('reportPreviewApplication');
+    var reportModalReporter = document.getElementById('reportPreviewReporter');
+    var reportModalOffice = document.getElementById('reportPreviewOffice');
+    var reportModalStatus = document.getElementById('reportPreviewStatus');
+    var reportModalCreated = document.getElementById('reportPreviewCreated');
+    var reportModalNotes = document.getElementById('reportPreviewNotes');
+    var reportModalOpenLink = document.getElementById('reportPreviewOpenLink');
+    var reportModalDeleteForm = document.getElementById('reportPreviewDeleteForm');
+    var reportPreviewButtons = document.querySelectorAll('.report-preview-btn');
+    var lastFocusedElement = null;
+
+    function openReportModal(button) {
+        if (!reportModal || !button) return;
+        lastFocusedElement = document.activeElement;
+        var reportId = button.getAttribute('data-report-id') || '';
+        var student = button.getAttribute('data-student') || '-';
+        var application = button.getAttribute('data-application') || '0';
+        var title = button.getAttribute('data-title') || '-';
+        var notes = button.getAttribute('data-notes') || '';
+        var reporter = button.getAttribute('data-reporter') || '-';
+        var office = button.getAttribute('data-office') || 'Unassigned';
+        var status = button.getAttribute('data-status') || 'open';
+        var created = button.getAttribute('data-created') || '-';
+
+        reportModalTitle.textContent = 'Report #' + reportId;
+        reportModalStudent.textContent = student;
+        reportModalApplication.textContent = application && application !== '0' ? application : '-';
+        reportModalReporter.textContent = reporter || '-';
+        reportModalOffice.textContent = office || 'Unassigned';
+        reportModalStatus.textContent = status || '-';
+        reportModalCreated.textContent = created || '-';
+        reportModalNotes.textContent = (title ? title + '\n\n' : '') + notes;
+        reportModalOpenLink.setAttribute('href', 'report_detail.php?report_id=' + encodeURIComponent(reportId));
+        if (reportModalDeleteForm) {
+            reportModalDeleteForm.setAttribute('action', 'report_detail.php?report_id=' + encodeURIComponent(reportId));
+        }
+
+        reportModal.hidden = false;
+        reportModal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        reportModal.querySelector('.report-modal__close').focus();
+    }
+
+    function closeReportModal() {
+        if (!reportModal) return;
+        reportModal.hidden = true;
+        reportModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+            lastFocusedElement.focus();
+        }
+    }
+
+    reportPreviewButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openReportModal(btn);
+        });
+    });
+
+    if (reportModal) {
+        reportModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-close-report-modal')) {
+                closeReportModal();
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && reportModal && !reportModal.hidden) {
+                closeReportModal();
+            }
+        });
+    }
+
+    /* ---- Live Chart Updates ---- */
+    var chartsTimer = null;
+    var chartsLastSuccess = null;
+    var chartsFailureCount = 0;
+    var chartsMaxRetries = 5;
+
+    function getChartQueryParams() {
+        var params = new URLSearchParams(window.location.search);
+        return {
+            period: params.get('period') || 'month',
+            office: params.get('office') || 'all',
+            mode: params.get('mode') || 'scheduled'
+        };
+    }
+
+    function updateChartsFromAPI() {
+        var params = getChartQueryParams();
+        var url = 'reports_data.php?period=' + encodeURIComponent(params.period) +
+                  '&office=' + encodeURIComponent(params.office) +
+                  '&mode=' + encodeURIComponent(params.mode);
+
+        fetch(url, { method: 'GET', cache: 'no-cache' })
+            .then(function (response) {
+                if (!response.ok) throw new Error('API responded with ' + response.status);
+                return response.json();
+            })
+            .then(function (data) {
+                if (!data.success || !data.data) throw new Error('Invalid API response');
+                chartsFailureCount = 0;
+                chartsLastSuccess = Date.now();
+                updateMonthlyChart(data.data);
+                updateOfficeChart(data.data);
+            })
+            .catch(function (err) {
+                console.warn('Chart update failed:', err);
+                chartsFailureCount++;
+                if (chartsFailureCount >= chartsMaxRetries && chartsTimer) {
+                    console.error('Chart polling stopped after ' + chartsMaxRetries + ' failures');
+                    clearInterval(chartsTimer);
+                    chartsTimer = null;
+                }
+            });
+    }
+
+    function updateMonthlyChart(data) {
+        var maxH = data.max_h || 1;
+        var months = data.months || [];
+        var barChart = document.querySelector('.bar-chart');
+        if (!barChart) return;
+
+        var bars = barChart.querySelectorAll('.bar-chart__bar');
+        bars.forEach(function (bar, idx) {
+            if (!months[idx]) return;
+            var fill = bar.querySelector('.bar-chart__fill');
+            if (!fill) return;
+            var barH = Math.round((months[idx].h / maxH) * 224);
+            fill.style.height = barH + 'px';
+            fill.setAttribute('aria-label', months[idx].label + ': ' + months[idx].h + ' hours');
+        });
+    }
+
+    function updateOfficeChart(data) {
+        var offices = data.offices || [];
+        var distBars = document.querySelector('.dist-bars');
+        if (!distBars) return;
+
+        var bars = distBars.querySelectorAll('.dist-bar');
+        bars.forEach(function (bar, idx) {
+            if (!offices[idx]) return;
+            var office = offices[idx];
+
+            var nameSpan = bar.querySelector('.dist-bar__name');
+            if (nameSpan) nameSpan.textContent = office.name;
+
+            var countSpan = bar.querySelector('.dist-bar__count');
+            if (countSpan) countSpan.textContent = office.count + ' (' + office.pct + ')';
+
+            var fill = bar.querySelector('.dist-bar__fill');
+            if (fill) {
+                fill.style.width = office.fill_pct + '%';
+                fill.setAttribute('aria-valuenow', office.fill_pct);
+            }
+
+            var track = bar.querySelector('.dist-bar__track');
+            if (track) track.setAttribute('aria-valuenow', office.fill_pct);
+        });
+    }
+
+    function startChartPolling() {
+        if (chartsTimer) clearInterval(chartsTimer);
+        updateChartsFromAPI();
+        chartsTimer = setInterval(updateChartsFromAPI, 30000);
+    }
+
+    function stopChartPolling() {
+        if (chartsTimer) {
+            clearInterval(chartsTimer);
+            chartsTimer = null;
+        }
+    }
+
     var auto = document.getElementById('auto-refresh');
     if (auto) {
         var key = 'admin_reports_auto_refresh';
         try { auto.checked = localStorage.getItem(key) === '1'; } catch (e) {}
 
-        var timer = null;
-        function startAutoRefresh() {
-            if (timer) clearInterval(timer);
-            timer = setInterval(function () {
-                location.reload();
-            }, 60000);
-        }
-        function stopAutoRefresh() {
-            if (timer) {
-                clearInterval(timer);
-                timer = null;
-            }
-        }
-
         auto.addEventListener('change', function () {
             try { localStorage.setItem(key, auto.checked ? '1' : '0'); } catch (e) {}
-            if (auto.checked) startAutoRefresh(); else stopAutoRefresh();
+            if (auto.checked) startChartPolling(); else stopChartPolling();
         });
 
-        if (auto.checked) startAutoRefresh();
+        if (auto.checked) startChartPolling();
     }
 
 })();

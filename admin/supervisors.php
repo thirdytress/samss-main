@@ -381,67 +381,7 @@ function h(?string $value): string
 </head>
 <body>
 <div class="shell">
-    <aside class="sidebar" aria-label="Admin navigation">
-        <div class="sidebar__brand">
-            <div class="sidebar__logo" aria-hidden="true"><span class="sidebar__logo-text">NU</span></div>
-            <div>
-                <div class="sidebar__brand-name">SA System</div>
-                <div class="sidebar__brand-sub">Admin Panel</div>
-            </div>
-        </div>
-        <nav class="sidebar__nav" aria-label="Main navigation">
-            <a href="dashboard.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.5 7.5L10 2.5L17.5 7.5V17.5H12.5V12.5H7.5V17.5H2.5V7.5Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Dashboard
-            </a>
-            <a href="applications.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 3h8l4 4v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 3v4h4" stroke="#364153" stroke-width="1.5"/><path d="M7 10h6M7 13h4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Applications
-            </a>
-            <a href="scheduling.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/><path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Scheduling
-            </a>
-            <a href="attendance.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Attendance
-            </a>
-            <a href="evaluation.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2l2 5.5H17l-4 3 1.5 5.5L10 13l-4.5 3L7 11 3 8h5L10 2Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Evaluation
-            </a>
-            <a href="reports.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" rx="2" stroke="#364153" stroke-width="1.5"/><path d="M6 14V10M10 14V7M14 14V11" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Reports
-            </a>
-            <a href="announcements.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Announcements
-            </a>
-            <a href="supervisors.php" class="sidebar__nav-link sidebar__nav-link--active" aria-current="page">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM3 18a7 7 0 0 1 14 0" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Supervisors
-            </a>
-            <a href="meetings.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/><path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Meetings
-            </a>
-            <a href="students.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Students
-            </a>
-        </nav>
-        <div class="sidebar__footer">
-            <a href="settings.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="2.5" stroke="#364153" stroke-width="1.5"/><path d="M17.14 12.19A7.5 7.5 0 0 0 17.5 10a7.5 7.5 0 0 0-.36-2.19l1.57-1.57-2.5-4.33-2.08.76A7.5 7.5 0 0 0 12 1.92V0H8v1.92a7.5 7.5 0 0 0-2.13.75l-2.08-.76L1.29 6.24l1.57 1.57A7.5 7.5 0 0 0 2.5 10a7.5 7.5 0 0 0 .36 2.19l-1.57 1.57 2.5 4.33 2.08-.76A7.5 7.5 0 0 0 8 18.08V20h4v-1.92a7.5 7.5 0 0 0 2.13-.75l2.08.76 2.5-4.33-1.57-1.57Z" stroke="#364153" stroke-width="1.5"/></svg>
-                Settings
-            </a>
-            <a href="logout.php" class="sidebar__nav-link">
-                <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M13 15l5-5-5-5M18 10H8" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 17.5H3.5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5H8" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Sign Out
-            </a>
-        </div>
-    </aside>
+    <?php $activeAdminNav = 'supervisors'; include __DIR__ . '/_sidebar.php'; ?>
 
     <div class="main">
         <header class="topbar">

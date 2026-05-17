@@ -96,6 +96,21 @@ function sams_admin_meetings_generate_notifications(PDO $pdo, int $adminUserId):
         $startsAt = new DateTimeImmutable($startsAtRaw);
         $upcomingAt = new DateTimeImmutable($upcomingAtRaw);
 
+        if ($startsAt > $now) {
+            $insert->execute([
+                'meeting_id' => $meetingId,
+                'admin_user_id' => $adminUserId,
+                'notify_type' => 'scheduled',
+                'scheduled_notify_at' => $now->format('Y-m-d H:i:s'),
+                'message' => sprintf(
+                    'Meeting scheduled: %s on %s at %s',
+                    $title,
+                    $startsAt->format('M d, Y'),
+                    $startsAt->format('g:i A')
+                ),
+            ]);
+        }
+
         if ($reminderMinutes > 0 && $upcomingAt <= $now) {
             $insert->execute([
                 'meeting_id' => $meetingId,

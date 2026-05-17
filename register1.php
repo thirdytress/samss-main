@@ -8,22 +8,16 @@ $values = [
     'course'          => '',
     'year_level'      => '',
     'gpa'             => '',
-    'sdao_experience' => '',
-    'hours_per_week'  => '',
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $values['course']          = trim($_POST['course']          ?? '');
     $values['year_level']      = trim($_POST['year_level']      ?? '');
     $values['gpa']             = trim($_POST['gpa']             ?? '');
-    $values['sdao_experience'] = trim($_POST['sdao_experience'] ?? '');
-    $values['hours_per_week']  = trim($_POST['hours_per_week']  ?? '');
 
     // Required fields validation
     if ($values['course']          === '') $errors['course']          = 'Course/Program is required.';
     if ($values['year_level']      === '') $errors['year_level']      = 'Year Level is required.';
-    if ($values['sdao_experience'] === '') $errors['sdao_experience'] = 'Please indicate your SDAO experience.';
-    if ($values['hours_per_week']  === '') $errors['hours_per_week']  = 'Available hours per week is required.';
 
     // Optional GPA – validate format if provided
     if ($values['gpa'] !== '' && !preg_match('/^\d+(\.\d{1,2})?$/', $values['gpa'])) {
@@ -656,46 +650,7 @@ function isSelected(string $key, string $option, array $values): string {
             <?php echo err('gpa', $errors); ?>
           </div>
 
-          <!-- Previous SDAO Experience -->
-          <div class="form__group">
-            <label class="form__label" for="sdao_experience">Previous SDAO Experience? *</label>
-            <div class="form__select-wrap">
-              <select
-                class="<?php echo selectClass('sdao_experience', $errors); ?>"
-                id="sdao_experience"
-                name="sdao_experience"
-                required
-                aria-required="true"
-              >
-                <option value="" <?php echo isSelected('sdao_experience', '', $values); ?>>Select option</option>
-                <option value="yes" <?php echo isSelected('sdao_experience', 'yes', $values); ?>>Yes</option>
-                <option value="no"  <?php echo isSelected('sdao_experience', 'no',  $values); ?>>No</option>
-              </select>
-            </div>
-            <?php echo err('sdao_experience', $errors); ?>
-          </div>
 
-          <!-- Available Hours Per Week – full width -->
-          <div class="form__group form__group--full">
-            <label class="form__label" for="hours_per_week">Available Hours Per Week *</label>
-            <div class="form__select-wrap">
-              <select
-                class="<?php echo selectClass('hours_per_week', $errors); ?>"
-                id="hours_per_week"
-                name="hours_per_week"
-                required
-                aria-required="true"
-              >
-                <option value=""    <?php echo isSelected('hours_per_week', '',    $values); ?>>Select hours</option>
-                <option value="5"   <?php echo isSelected('hours_per_week', '5',   $values); ?>>5 hours/week</option>
-                <option value="10"  <?php echo isSelected('hours_per_week', '10',  $values); ?>>10 hours/week</option>
-                <option value="15"  <?php echo isSelected('hours_per_week', '15',  $values); ?>>15 hours/week</option>
-                <option value="20"  <?php echo isSelected('hours_per_week', '20',  $values); ?>>20 hours/week</option>
-                <option value="25"  <?php echo isSelected('hours_per_week', '25',  $values); ?>>25 hours/week</option>
-              </select>
-            </div>
-            <?php echo err('hours_per_week', $errors); ?>
-          </div>
 
         </div><!-- /.form__grid -->
 

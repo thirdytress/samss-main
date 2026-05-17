@@ -165,7 +165,9 @@ $latestAttendance = null;
 
 if ($studentDbId > 0) {
     $scheduleStmt = $pdo->prepare(
-        'SELECT ds.duty_id AS id, a.preferred_office AS office_name, ds.day_of_week, ds.start_time AS time_start, ds.end_time AS time_end, ds.status
+        'SELECT ds.duty_id AS id,
+            COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") AS office_name,
+            ds.day_of_week, ds.start_time AS time_start, ds.end_time AS time_end, ds.status
          FROM duty_schedules ds
          LEFT JOIN applications a ON a.application_id = ds.application_id
          WHERE a.student_id = :student_id

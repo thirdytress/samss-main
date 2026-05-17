@@ -115,6 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
           sams_login($user);
 
+          if ((int) ($user['must_change_password'] ?? 0) === 1) {
+            header('Location: change_password.php');
+            exit;
+          }
+
           header('Location: ' . sams_dashboard_for_role($user['role']));
           exit;
         }

@@ -122,7 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $course = trim((string) ($step2['course'] ?? ''));
             $yearLevel = sams_map_year_level((string) ($step2['year_level'] ?? '1'));
             $gpa = trim((string) ($step2['gpa'] ?? ''));
-            $availableHoursPerWeek = (float) ($step2['hours_per_week'] ?? 0);
 
             // Default password is the student ID. Student can change it later if you add that feature.
             $userPasswordHash = password_hash($studentCode, PASSWORD_DEFAULT);
@@ -186,11 +185,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $applicationStatement = $pdo->prepare(
                 'INSERT INTO applications (
-                    student_id, term_id, status, preferred_office, skills,
-                    available_hours_per_week, submitted_at
+                    student_id, term_id, status, preferred_office, skills, submitted_at
                  ) VALUES (
-                    :student_id, :term_id, :status, :preferred_office, :skills,
-                    :available_hours_per_week, NOW()
+                    :student_id, :term_id, :status, :preferred_office, :skills, NOW()
                  )'
             );
             $applicationStatement->execute([
@@ -199,7 +196,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => 'pending',
                 'preferred_office' => $work_location,
                 'skills' => $skills,
-                'available_hours_per_week' => $availableHoursPerWeek,
             ]);
 
             $applicationId = (int) $pdo->lastInsertId();
@@ -306,6 +302,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'application_id' => $applicationId,
                 'student_id' => $studentId,
                 'term_id' => (int) $activeTermId,
+                'student_name' => $fullName,
+                'student_number' => $studentCode,
+                'course' => $course,
+                'year_level' => $yearLevel,
+                'date_submitted' => date('F j, Y'),
+                'status' => 'PENDING',
             ];
 
             header('Location: students/availability.php');

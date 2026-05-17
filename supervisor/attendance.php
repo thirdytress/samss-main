@@ -22,15 +22,7 @@ $supervisorOffice = trim((string) ($supervisorRow['office_name'] ?? ($currentUse
 $supervisorName = trim((string) ($currentUser['name'] ?? 'Supervisor'));
 
 $currentDay = date('l');
-$activeTermStmt = $pdo->query(
-    'SELECT term_id, term_name, term_year
-     FROM terms
-     WHERE start_date <= CURDATE()
-       AND end_date >= CURDATE()
-     ORDER BY term_id DESC
-     LIMIT 1'
-);
-$activeTerm = $activeTermStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$activeTerm = sams_current_term($pdo);
 $activeTermId = (int) ($activeTerm['term_id'] ?? 0);
 $termLabel = trim((string) ($activeTerm['term_name'] ?? '') . ' ' . (string) ($activeTerm['term_year'] ?? ''));
 if ($termLabel === '') {
@@ -40,7 +32,7 @@ if ($termLabel === '') {
 $todayRows = [];
 if ($supervisorOffice !== '' && $activeTermId > 0) {
     $stmt = $pdo->prepare(
-        'SELECT u.first_name, u.last_name, s.student_id AS student_code, a.application_id, ds.duty_id, a.preferred_office AS office_name,
+    'SELECT u.first_name, u.last_name, s.student_id AS student_code, a.application_id, ds.duty_id, COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") AS office_name,
                 al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time, ds.end_time
          FROM duty_schedules ds
          INNER JOIN applications a ON a.application_id = ds.application_id
@@ -55,9 +47,9 @@ if ($supervisorOffice !== '' && $activeTermId > 0) {
              LIMIT 1
          )
          WHERE ds.day_of_week = :day
-           AND ds.status = "assigned"
+                     AND ds.status = "accepted"
            AND ds.term_id = :term_id
-           AND a.preferred_office = :office
+                     AND COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") = :office
          ORDER BY ds.start_time ASC, al.log_id DESC'
     );
     $stmt->execute([
@@ -162,26 +154,33 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
         .topbar{background:var(--color-white);border-bottom:1px solid var(--color-border);height:var(--topbar-height);padding:0 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
         .topbar__title{font-size:var(--font-lg);font-weight:700;color:var(--color-heading)}
         .topbar__sub{font-size:var(--font-sm);color:var(--color-body)}
-        .button{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border-radius:8px;font-weight:600;font-size:var(--font-sm);border:0;cursor:pointer;transition:all .2s ease}
-        .button--primary{background:var(--color-primary);color:#fff}
+        .button{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border-radius:10px;font-weight:700;font-size:var(--font-sm);border:0;cursor:pointer;transition:all .2s ease}
+        .button--primary{background:var(--gradient-brand);color:#fff;box-shadow:0 8px 16px rgba(21,93,252,.2)}
         .button--primary:hover{background:var(--color-primary-dark)}
         .button--neutral{background:#6b7280;color:#fff}
-        .page-content{flex:1;padding:32px;display:flex;flex-direction:column;gap:20px}
-        .header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+        .page-content{flex:1;padding:36px;display:flex;flex-direction:column;gap:22px}
+        .header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;background:#fff;border:1px solid var(--color-border);border-radius:14px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
         .header-row__title{font-size:24px;font-weight:700;color:var(--color-heading)}
         .header-row__subtitle{font-size:var(--font-sm);color:var(--color-body);margin-top:4px}
-        .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-        .metric{background:var(--color-white);border:1px solid var(--color-border);border-radius:var(--radius-card);padding:20px;min-height:120px}
+        .metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+        .metric{position:relative;background:var(--color-white);border:1px solid var(--color-border);border-radius:var(--radius-card);padding:20px;min-height:120px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+        .metric::before{content:'';position:absolute;left:0;top:0;width:100%;height:4px;border-radius:16px 16px 0 0;background:linear-gradient(90deg,#155dfc,#9810fa)}
         .metric__label{font-size:var(--font-sm);color:var(--color-body);margin-top:8px}
         .metric__value{font-size:32px;font-weight:800;color:var(--color-heading);line-height:1}
         .card{background:var(--color-white);border:1px solid var(--color-border);border-radius:var(--radius-card);overflow:hidden}
         .card__header{padding:20px;border-bottom:1px solid var(--color-border)}
         .card__title{font-size:18px;font-weight:700;color:var(--color-heading)}
         .card__meta{margin-top:6px;font-size:13px;color:var(--color-body)}
+        .card__legend{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+        .legend-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700}
+        .legend-chip--present{background:#dcfce7;color:#008236}
+        .legend-chip--late{background:#dbeafe;color:#1447e6}
+        .legend-chip--absent{background:#f3f4f6;color:#4a5565}
         .table-wrap{overflow-x:auto}
         table{width:100%;border-collapse:collapse;min-width:900px}
         thead th{background:#f9fafb;text-align:left;padding:14px 16px;border-bottom:1px solid var(--color-border);font-size:13px;color:var(--color-heading)}
         tbody td{padding:14px 16px;border-bottom:1px solid var(--color-border);font-size:14px;color:var(--color-heading)}
+        tbody tr:hover td{background:#f8faff}
         .dot{display:inline-block;width:10px;height:10px;border-radius:9999px;margin-right:8px;vertical-align:middle}
         .dot--green{background:#00c950}
         .dot--blue{background:#2b7fff}
@@ -193,8 +192,10 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
         .empty{padding:24px;text-align:center;color:var(--color-body)}
         .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .select{height:40px;padding:0 12px;border:1px solid var(--color-border);border-radius:8px;background:#fff;font-size:14px;color:var(--color-heading)}
+        .select:focus{outline:none;border-color:#9fc0ff;box-shadow:0 0 0 3px rgba(21,93,252,.12)}
         .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--color-body)}
-        @media (max-width: 1100px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media (max-width: 1200px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        @media (max-width: 900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
         @media (max-width: 780px){.shell{flex-direction:column}.sidebar{width:100%;height:auto;position:relative}.page-content{padding:16px}.metrics{grid-template-columns:1fr}.topbar{padding:0 16px;height:auto;min-height:89px;align-items:flex-start;padding-top:16px;padding-bottom:16px;flex-wrap:wrap}}
     </style>
 </head>
@@ -290,12 +291,21 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
                     <div class="metric__value"><?php echo (int) $attendanceRate; ?>%</div>
                     <div class="metric__label">Attendance Rate</div>
                 </div>
+                <div class="metric">
+                    <div class="metric__value"><?php echo number_format((float) $metrics['rendered_hours'], 1); ?>h</div>
+                    <div class="metric__label">Rendered Hours</div>
+                </div>
             </div>
 
             <div class="card">
                 <div class="card__header">
                     <div class="card__title">Accepted schedules for today</div>
-                    <div class="card__meta">Only accepted schedules from the current term are shown. Missing logs are treated as absent for the supervisor view.</div>
+                    <div class="card__meta">Showing <?php echo (int) $metrics['total']; ?> schedule<?php echo (int) $metrics['total'] === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($supervisorOffice !== '' ? $supervisorOffice : 'your office'); ?>. Missing logs are treated as absent.</div>
+                    <div class="card__legend">
+                        <span class="legend-chip legend-chip--present">Present</span>
+                        <span class="legend-chip legend-chip--late">Late</span>
+                        <span class="legend-chip legend-chip--absent">Absent</span>
+                    </div>
                 </div>
                 <div class="table-wrap">
                     <table aria-label="Supervisor attendance log">
@@ -317,7 +327,7 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
                                         <span class="dot dot--<?php echo htmlspecialchars($row['dot']); ?>"></span>
                                         <?php echo htmlspecialchars($row['name']); ?>
                                         <?php if (!empty($row['student_code'])): ?>
-                                            <div class="meta-small"><?php echo htmlspecialchars($row['student_code']); ?></div>
+                                            <div class="meta-small">Student ID: <?php echo htmlspecialchars($row['student_code']); ?></div>
                                         <?php endif; ?>
                                     </td>
                                     <td><?php echo htmlspecialchars($row['office']); ?></td>

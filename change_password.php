@@ -14,11 +14,6 @@ if (!$user) {
     exit;
 }
 
-if (($user['role'] ?? '') !== 'student') {
-    header('Location: index.php');
-    exit;
-}
-
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -64,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $_SESSION['sams_user']['must_change_password'] = 0;
 
-                header('Location: students/dashboard.php');
+                header('Location: ' . sams_dashboard_for_role((string) ($user['role'] ?? '')));
                 exit;
         }
         }

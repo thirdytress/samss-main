@@ -16,7 +16,7 @@ if ($reportId <= 0) {
     exit;
 }
 
-// POST actions: close/reopen
+// POST actions: close/reopen/delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // CSRF protection
     $postedToken = (string)($_POST['_csrf'] ?? '');
@@ -32,6 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     } elseif ($action === 'reopen') {
         $upd = $pdo->prepare('UPDATE student_reports SET status = "open" WHERE report_id = :id');
         $upd->execute(['id' => $reportId]);
+    } elseif ($action === 'delete') {
+        $del = $pdo->prepare('DELETE FROM student_reports WHERE report_id = :id');
+        $del->execute(['id' => $reportId]);
+        $_SESSION['reports_flash'] = 'Report deleted successfully.';
+        header('Location: reports.php');
+        exit;
     }
     header('Location: report_detail.php?report_id=' . $reportId);
     exit;
@@ -46,11 +52,14 @@ try {
 }
 
 $stmt = $pdo->prepare(
-    'SELECT sr.*, u.email AS reporter_email, u.name AS reporter_name, a.preferred_office
+    "SELECT sr.*, u.email AS reporter_email, CONCAT(u.first_name, ' ', u.last_name) AS reporter_name, a.preferred_office,
+            s.student_id_number AS student_id_number, CONCAT(su.first_name, ' ', su.last_name) AS student_name
      FROM student_reports sr
      LEFT JOIN users u ON u.user_id = sr.reporter_id
      LEFT JOIN applications a ON a.application_id = sr.application_id
-     WHERE sr.report_id = :id'
+     LEFT JOIN students s ON s.student_id = sr.student_code
+     LEFT JOIN users su ON su.user_id = s.user_id
+     WHERE sr.report_id = :id"
 );
 $stmt->execute(['id' => $reportId]);
 $report = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -92,11 +101,32 @@ if (!$report) {
                         <button type="submit" style="background:#10b981;color:#fff;padding:8px 12px;border-radius:6px;border:0">Reopen</button>
                     </form>
                 <?php endif; ?>
+                <form method="post" style="display:inline;margin-left:8px" onsubmit="return confirm('Delete this report permanently? This cannot be undone.')">
+                    <?php echo sams_csrf_input_field(); ?>
+                    <input type="hidden" name="action" value="delete">
+                    <button type="submit" style="background:#111827;color:#fff;padding:8px 12px;border-radius:6px;border:0">Delete Report</button>
+                </form>
             </div>
         </div>
 
         <div style="margin-bottom:12px">
-            <strong>Student</strong>: <?php echo htmlspecialchars((string)($report['student_code'] ?? '-')); ?><br>
+            <?php
+                $studentDisplay = '-';
+                if (!empty($report['student_name']) || !empty($report['student_id_number'])) {
+                    $name = trim((string)($report['student_name'] ?? ''));
+                    $num = trim((string)($report['student_id_number'] ?? ''));
+                    if ($name !== '' && $num !== '') {
+                        $studentDisplay = $name . ' (' . $num . ')';
+                    } elseif ($name !== '') {
+                        $studentDisplay = $name;
+                    } else {
+                        $studentDisplay = $num !== '' ? $num : '-';
+                    }
+                } elseif (!empty($report['student_code'])) {
+                    $studentDisplay = 'ID: ' . (int)$report['student_code'];
+                }
+            ?>
+            <strong>Student</strong>: <?php echo htmlspecialchars($studentDisplay); ?><br>
             <strong>Application</strong>: <?php if (!empty($report['application_id'])): ?><a href="application_detail.php?application_id=<?php echo (int)$report['application_id']; ?>"><?php echo (int)$report['application_id']; ?></a><?php else: ?>-<?php endif; ?><br>
             <strong>Office</strong>: <?php echo htmlspecialchars((string)($report['preferred_office'] ?? '-')); ?><br>
             <strong>Status</strong>: <?php echo htmlspecialchars((string)($report['status'] ?? '-')); ?>

@@ -1,0 +1,70 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../config/bootstrap.php';
+
+header('Content-Type: application/json; charset=utf-8');
+
+$user = sams_authenticated_user();
+if (!$user || (($user['role'] ?? null) !== 'admin')) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'forbidden']);
+    exit;
+}
+
+$adminUserId = (int) ($user['user_id'] ?? 0);
+if ($adminUserId <= 0) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'invalid user']);
+    exit;
+}
+
+$notificationId = (int) ($_POST['notification_id'] ?? 0);
+$reportId = (int) ($_POST['report_id'] ?? 0);
+$type = trim((string) ($_POST['type'] ?? ''));
+
+if ($type === '' || ($notificationId <= 0 && $reportId <= 0)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'invalid payload']);
+    exit;
+}
+
+$pdo = sams_pdo();
+
+try {
+    if ($type === 'meeting' && $notificationId > 0) {
+        $stmt = $pdo->prepare(
+            'UPDATE admin_meeting_notifications
+             SET is_read = 1, read_at = NOW()
+             WHERE notification_id = :notification_id
+               AND admin_user_id = :admin_user_id
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'notification_id' => $notificationId,
+            'admin_user_id' => $adminUserId,
+        ]);
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    if ($type === 'report' && $reportId > 0) {
+        $stmt = $pdo->prepare(
+            'UPDATE student_reports
+             SET is_new = 0
+             WHERE report_id = :report_id
+             LIMIT 1'
+        );
+        $stmt->execute(['report_id' => $reportId]);
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'unsupported type']);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'db error']);
+}

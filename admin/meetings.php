@@ -173,6 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'delete_meeting') {
             $meetingId = (int) ($_POST['meeting_id'] ?? 0);
             if ($meetingId <= 0) {
+
                 throw new RuntimeException('Invalid meeting delete request.');
             }
 
@@ -408,61 +409,163 @@ foreach ($meetings as $row) {
 </head>
 <body>
     <div class="shell">
-        <aside class="sidebar" aria-label="Admin navigation">
-            <div class="sidebar__brand">
-                <div class="sidebar__logo" aria-hidden="true"><span class="sidebar__logo-text">NU</span></div>
-                <div>
-                    <div class="sidebar__brand-name">SA System</div>
-                    <div class="sidebar__brand-sub">Admin Panel</div>
+        <?php $activeAdminNav = 'meetings'; $pendingApplications = 0; include __DIR__ . '/_sidebar.php'; ?>
+
+        <aside class="sidebar" aria-label="Admin navigation" style="display:none">
+            <div class="sidebar__header">
+                <div class="sidebar__brand">
+                    <div class="sidebar__logo" aria-hidden="true">
+                        <span class="sidebar__logo-text">NU</span>
+                    </div>
+                    <div class="sidebar__brand-info">
+                        <span class="sidebar__app-name">SA System</span>
+                        <span class="sidebar__app-sub">Admin Panel</span>
+                    </div>
                 </div>
             </div>
-            <nav class="sidebar__nav" aria-label="Main navigation">
-                <a href="dashboard.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.5 7.5L10 2.5L17.5 7.5V17.5H12.5V12.5H7.5V17.5H2.5V7.5Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    Dashboard
-                </a>
-                <a href="application.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 3h8l4 4v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 3v4h4" stroke="#364153" stroke-width="1.5"/><path d="M7 10h6M7 13h4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    Applications
-                </a>
-                <a href="scheduling.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/><path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    Scheduling
-                </a>
-                <a href="attendance.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    Attendance
-                </a>
-                <a href="evaluation.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2l2 5.5H17l-4 3 1.5 5.5L10 13l-4.5 3L7 11 3 8h5L10 2Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    Evaluation
-                </a>
-                <a href="reports.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" rx="2" stroke="#364153" stroke-width="1.5"/><path d="M6 14V10M10 14V7M14 14V11" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    Reports
-                </a>
-                <a href="announcements.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    Announcements
-                </a>
-                <a href="supervisors.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM3 18a7 7 0 0 1 14 0" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    Supervisors
-                </a>
-                <a href="meetings.php" class="sidebar__nav-link sidebar__nav-link--active" aria-current="page">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="white" stroke-width="1.5"/><path d="M2.5 6h15M7 1v4M13 1v4" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    Meetings
-                </a>
-                <a href="students.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    Students
-                </a>
+
+            <nav class="sidebar__nav" aria-label="Main menu">
+                <ul class="nav__list">
+                    <li class="nav__item">
+                        <a href="dashboard.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="2" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
+                                    <rect x="11" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
+                                    <rect x="2" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
+                                    <rect x="11" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="applications.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M6 2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="#364153" stroke-width="1.5"/>
+                                    <path d="M7 7h6M7 10h6M7 13h4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Applications</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="scheduling.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="2" y="4" width="16" height="14" rx="2" stroke="#364153" stroke-width="1.5"/>
+                                    <path d="M6 2v4M14 2v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                                    <path d="M2 9h16" stroke="#364153" stroke-width="1.2"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Scheduling</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="attendance.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="10" cy="10" r="8" stroke="#364153" stroke-width="1.5"/>
+                                    <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Attendance</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="evaluation.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M10 2l2.09 4.26L17 7.27l-3.5 3.41.83 4.82L10 13.27l-4.33 2.23.83-4.82L3 7.27l4.91-.71L10 2z" stroke="#364153" stroke-width="1.5" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Evaluation</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="reports.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="3" y="12" width="3" height="6" rx="1" fill="#364153"/>
+                                    <rect x="8.5" y="8" width="3" height="10" rx="1" fill="#364153"/>
+                                    <rect x="14" y="4" width="3" height="14" rx="1" fill="#364153"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Reports</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="announcements.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Announcements</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="supervisors.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="10" cy="7" r="3" stroke="#364153" stroke-width="1.5"/>
+                                    <path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Supervisors</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="meetings.php" class="nav__link nav__link--active" aria-current="page">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="white" stroke-width="1.5"/>
+                                    <path d="M2.5 6h15M7 1v4M13 1v4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Meetings</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="students.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="10" cy="6.5" r="3" stroke="#364153" stroke-width="1.5"/>
+                                    <path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Students</span>
+                        </a>
+                    </li>
+                </ul>
             </nav>
+
             <div class="sidebar__footer">
-                <a href="logout.php" class="sidebar__nav-link">
-                    <svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h3" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/><path d="M13 14l3-4-3-4M16 10H7" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    Sign Out
-                </a>
+                <ul class="nav__list">
+                    <li class="nav__item">
+                        <a href="settings.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M8.325 2.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z" stroke="#364153" stroke-width="1.3"/>
+                                    <circle cx="10" cy="10" r="3" stroke="#364153" stroke-width="1.3"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Settings</span>
+                        </a>
+                    </li>
+                    <li class="nav__item">
+                        <a href="logout.php" class="nav__link">
+                            <span class="nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M7 3H4a1 1 0 00-1 1v12a1 1 0 001 1h3" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
+                                    <path d="M13 14l3-4-3-4M16 10H7" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <span class="nav__label">Sign Out</span>
+                        </a>
+                    </li>
+                </ul>
             </div>
         </aside>
 

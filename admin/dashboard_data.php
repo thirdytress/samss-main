@@ -60,7 +60,7 @@ try {
     $todayAttendanceStmt = $pdo->query(
         "SELECT u.first_name,
                 u.last_name,
-                a.preferred_office AS office_name,
+                COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') AS office_name,
                 al.clock_in_time AS time_in,
                 al.status
          FROM attendance_logs al

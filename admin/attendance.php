@@ -14,7 +14,8 @@ $pdo = sams_pdo();
 $applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
 
 $currentDay = date('l');
-$activeTermId = (int) ($pdo->query("SELECT COALESCE(MAX(term_id), 0) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE()")->fetchColumn() ?: 0);
+$activeTerm = sams_current_term($pdo);
+$activeTermId = (int) ($activeTerm['term_id'] ?? 0);
 
 function sams_admin_attendance_display_name(array $row): string
 {
@@ -47,39 +48,83 @@ function sams_admin_attendance_duration_label(?string $timeIn, ?string $timeOut)
     return '-';
 }
 
-$todayRowsStmt = $pdo->query(
-        "SELECT u.first_name, u.last_name, s.student_id AS student_code, a.preferred_office AS office_name,
-                        al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time
+$todayRows = [];
+if ($activeTermId > 0) {
+    $todayRowsStmt = $pdo->prepare(
+        'SELECT u.first_name, u.last_name, s.student_id AS student_code,
+                COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") AS office_name,
+                al.clock_in_time AS time_in, al.clock_out_time AS time_out, al.status, al.late_minutes, ds.start_time
          FROM duty_schedules ds
          INNER JOIN applications a ON a.application_id = ds.application_id
          LEFT JOIN students s ON s.student_id = a.student_id
          LEFT JOIN users u ON u.user_id = s.user_id
          LEFT JOIN attendance_logs al ON al.log_id = (
-                 SELECT al2.log_id
-                 FROM attendance_logs al2
-                 WHERE al2.application_id = ds.application_id AND al2.duty_id = ds.duty_id
-                 ORDER BY al2.log_id DESC
-                 LIMIT 1
+             SELECT al2.log_id
+             FROM attendance_logs al2
+             WHERE al2.application_id = ds.application_id
+               AND al2.duty_id = ds.duty_id
+             ORDER BY al2.log_id DESC
+             LIMIT 1
          )
-         WHERE ds.day_of_week = " . $pdo->quote($currentDay) . "
-             AND ds.status = 'accepted'
-             AND ds.term_id = " . $activeTermId . "
-         ORDER BY ds.start_time ASC, al.log_id DESC"
-);
+         WHERE ds.day_of_week = :day
+           AND ds.status = "accepted"
+           AND ds.term_id = :term_id
+         ORDER BY ds.start_time ASC, al.log_id DESC'
+    );
+    $todayRowsStmt->execute([
+        'day' => $currentDay,
+        'term_id' => $activeTermId,
+    ]);
+    $todayRows = $todayRowsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
 $attendance_rows = [];
-foreach ($todayRowsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+$activeNow = 0;
+$completedToday = 0;
+$totalSchedules = count($todayRows);
+$officeSummary = [];
+
+foreach ($todayRows as $row) {
     $status = sams_attendance_display_status((string) ($row['status'] ?? ''));
     if ($status === '') {
         $status = 'absent';
     }
-    $timeIn = sams_attendance_clocking_enabled() ? ($row['time_in'] ?? null) : null;
-    $timeOut = sams_attendance_clocking_enabled() ? ($row['time_out'] ?? null) : null;
+
+    $timeIn = !empty($row['time_in']) ? (string) $row['time_in'] : null;
+    $timeOut = !empty($row['time_out']) ? (string) $row['time_out'] : null;
+
+    if (!sams_attendance_clocking_enabled()) {
+        $timeIn = null;
+        $timeOut = null;
+        $status = 'absent';
+    }
+
+    if ($timeIn !== null && $timeOut === null) {
+        $activeNow++;
+    }
+    if ($timeIn !== null && $timeOut !== null) {
+        $completedToday++;
+    }
+
+    $officeName = (string) ($row['office_name'] ?? 'Unassigned');
+    if (!isset($officeSummary[$officeName])) {
+        $officeSummary[$officeName] = [
+            'name' => $officeName,
+            'count' => 0,
+            'active' => 0,
+        ];
+    }
+    $officeSummary[$officeName]['count']++;
+    if ($timeIn !== null && $timeOut === null) {
+        $officeSummary[$officeName]['active']++;
+    }
+
     $attendance_rows[] = [
         'dot' => sams_admin_attendance_dot($status),
         'name' => sams_admin_attendance_display_name($row),
-        'office' => (string) ($row['office_name'] ?? '-'),
-        'time_in' => $timeIn ? date('g:i A', strtotime((string) $timeIn)) : '-',
-        'time_out' => $timeOut ? date('g:i A', strtotime((string) $timeOut)) : ($timeIn ? 'In Progress' : '-'),
+        'office' => $officeName,
+        'time_in' => $timeIn ? date('g:i A', strtotime($timeIn)) : '-',
+        'time_out' => $timeOut ? date('g:i A', strtotime($timeOut)) : ($timeIn ? 'In Progress' : '-'),
         'duration' => sams_admin_attendance_duration_label($timeIn, $timeOut),
         'method' => !empty($timeIn) ? 'Live DB' : '-',
         'status' => match ($status) {
@@ -90,36 +135,10 @@ foreach ($todayRowsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
     ];
 }
 
-$activeNowStmt = $pdo->query(
-    "SELECT COUNT(*) FROM attendance_logs WHERE 1 = 0"
-);
-$activeNow = (int) $activeNowStmt->fetchColumn();
-
-$completedTodayStmt = $pdo->query(
-    "SELECT COUNT(*) FROM attendance_logs WHERE 1 = 0"
-);
-$completedToday = (int) $completedTodayStmt->fetchColumn();
-
-$totalSchedulesStmt = $pdo->query(
-    "SELECT COUNT(DISTINCT ds.duty_id) FROM duty_schedules ds 
-     WHERE ds.status = 'assigned' AND ds.term_id = (SELECT MAX(term_id) FROM terms WHERE start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1)"
-);
-$totalSchedules = (int) $totalSchedulesStmt->fetchColumn();
-
-$officeStmt = $pdo->query(
-    "SELECT COALESCE(a.preferred_office, 'Unassigned') AS office_name,
-            COUNT(DISTINCT al.log_id) AS total,
-            SUM(CASE WHEN al.clock_out_time IS NULL THEN 1 ELSE 0 END) AS active
-     FROM attendance_logs al
-     LEFT JOIN applications a ON a.application_id = al.application_id
-     WHERE DATE(al.created_at) = CURDATE()
-     GROUP BY COALESCE(a.preferred_office, 'Unassigned')
-     ORDER BY total DESC"
-);
 $offices = [];
-foreach ($officeStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $office) {
-    $name = (string) ($office['office_name'] ?? 'Unassigned');
-    $count = (int) ($office['total'] ?? 0);
+foreach ($officeSummary as $office) {
+    $name = (string) ($office['name'] ?? 'Unassigned');
+    $count = (int) ($office['count'] ?? 0);
     $active = (int) ($office['active'] ?? 0);
     $pct = $totalSchedules > 0 ? (int) round(($count / $totalSchedules) * 100) : 0;
 
@@ -144,8 +163,7 @@ foreach ($officeStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $office) {
     ];
 }
 
-$verifiedStmt = $pdo->query("SELECT COUNT(*) FROM attendance_logs WHERE 1 = 0");
-$verifiedCount = (int) $verifiedStmt->fetchColumn();
+$verifiedCount = $completedToday + $activeNow;
 
 $currentDateLabel = date('l, F j, Y');
 ?>
@@ -949,158 +967,7 @@ $currentDateLabel = date('l, F j, Y');
 <div class="sidebar-overlay sidebar-overlay--hidden" id="sidebarOverlay"></div>
 
 <div class="app">
-
-    <!-- ================================================================
-         SIDEBAR
-    ================================================================ -->
-    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Admin navigation">
-
-        <div class="sidebar__header">
-            <div class="sidebar__brand">
-                <div class="sidebar__logo" aria-hidden="true">
-                    <span class="sidebar__logo-text">NU</span>
-                </div>
-                <div class="sidebar__brand-info">
-                    <span class="sidebar__app-name">SA System</span>
-                    <span class="sidebar__app-sub">Admin Panel</span>
-                </div>
-            </div>
-        </div>
-
-        <nav class="sidebar__nav" aria-label="Main menu">
-            <ul class="nav__list">
-                <li class="nav__item">
-                    <a href="dashboard.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="2" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
-                                <rect x="11" y="2" width="7" height="7" rx="1.5" fill="#364153"/>
-                                <rect x="2" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
-                                <rect x="11" y="11" width="7" height="7" rx="1.5" fill="#364153"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Dashboard</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="applications.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M6 2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M7 7h6M7 10h6M7 13h4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Applications</span>
-                        <?php if ($applicationBadgeCount > 0): ?><span class="nav__badge" aria-label="<?= $applicationBadgeCount ?> pending"><?= (int) $applicationBadgeCount ?></span><?php endif; ?>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="scheduling.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="2" y="4" width="16" height="14" rx="2" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M6 2v4M14 2v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                                <path d="M2 9h16" stroke="#364153" stroke-width="1.2"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Scheduling</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="attendance.php" class="nav__link nav__link--active" aria-current="page">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="10" cy="10" r="8" stroke="white" stroke-width="1.5"/>
-                                <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Attendance</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="evaluation.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M10 2l2.09 4.26L17 7.27l-3.5 3.41.83 4.82L10 13.27l-4.33 2.23.83-4.82L3 7.27l4.91-.71L10 2z" stroke="#364153" stroke-width="1.5" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Evaluation</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="reports.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="3" y="12" width="3" height="6" rx="1" fill="#364153"/>
-                                <rect x="8.5" y="8" width="3" height="10" rx="1" fill="#364153"/>
-                                <rect x="14" y="4" width="3" height="14" rx="1" fill="#364153"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Reports</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="announcements.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Announcements</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="meetings.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Meetings</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="students.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="10" cy="6.5" r="3" stroke="#364153" stroke-width="1.5"/>
-                                <path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Students</span>
-                    </a>
-                </li>
-            </ul>
-        </nav>
-
-        <div class="sidebar__footer">
-            <ul class="nav__list">
-                <li class="nav__item">
-                    <a href="settings.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M8.325 2.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z" stroke="#364153" stroke-width="1.3"/>
-                                <circle cx="10" cy="10" r="3" stroke="#364153" stroke-width="1.3"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Settings</span>
-                    </a>
-                </li>
-                <li class="nav__item">
-                    <a href="logout.php" class="nav__link">
-                        <span class="nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M7 3H4a1 1 0 00-1 1v12a1 1 0 001 1h3" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/>
-                                <path d="M13 14l3-4-3-4M16 10H7" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <span class="nav__label">Sign Out</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </aside>
+    <?php $activeAdminNav = 'attendance'; $pendingApplications = (int) $applicationBadgeCount; include __DIR__ . '/_sidebar.php'; ?>
 
     <!-- ================================================================
          MAIN

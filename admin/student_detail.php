@@ -164,6 +164,13 @@ try {
     $acceptedSchedulesStmt->execute(['student_id' => $studentId, 'status' => 'accepted']);
     $acceptedSchedules = (int) $acceptedSchedulesStmt->fetchColumn();
 
+    // Treat both 'pending' and 'assigned' as pending for the UI summary
+    $pendingSchedulesStmt = $pdo->prepare(
+        "SELECT COUNT(*) FROM duty_schedules ds INNER JOIN applications a ON a.application_id = ds.application_id WHERE a.student_id = :student_id AND ds.status IN ('pending','assigned')"
+    );
+    $pendingSchedulesStmt->execute(['student_id' => $studentId]);
+    $pendingSchedules = (int) $pendingSchedulesStmt->fetchColumn();
+
     $totalSchedulesStmt = $pdo->prepare(
         'SELECT COUNT(*) FROM duty_schedules ds INNER JOIN applications a ON a.application_id = ds.application_id WHERE a.student_id = :student_id'
     );
@@ -244,6 +251,7 @@ try {
         'student_status_class' => $studentStatusClass,
         'total_hours' => number_format($totalDutyHours, 1),
         'accepted_schedules' => $acceptedSchedules,
+        'pending_schedules' => $pendingSchedules,
         'total_schedules' => $totalSchedules,
         'attendance_rate' => $attendanceRate,
         'latest_attendance' => $latestAttendance,

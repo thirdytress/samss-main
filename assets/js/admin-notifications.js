@@ -97,6 +97,17 @@
     });
   }
 
+  function postForm(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: new URLSearchParams(data).toString()
+    }).catch(function () {
+      // Ignore mark-read failures so navigation remains smooth.
+    });
+  }
+
   function renderItems(items) {
     ensureDropdown();
 
@@ -114,8 +125,18 @@
       var office = escapeHtml(item.preferred_office || item.type || 'General');
       var snippet = escapeHtml(item.snippet || 'No details provided.');
       var createdAt = escapeHtml(item.created_at || '');
+      var type = escapeHtml(item.type || '');
+      var notificationId = Number(item.notification_id || 0);
+      var reportId = Number(item.report_id || 0);
+      var attrs = ' data-notif-type="' + type + '"';
+      if (notificationId > 0) {
+        attrs += ' data-notification-id="' + notificationId + '"';
+      }
+      if (reportId > 0) {
+        attrs += ' data-report-id="' + reportId + '"';
+      }
 
-      html += '<a href="' + linkUrl + '" style="display:block;padding:12px 14px;border-bottom:1px solid #f8fafc;text-decoration:none;color:#111827;">';
+      html += '<a href="' + linkUrl + '"' + attrs + ' style="display:block;padding:12px 14px;border-bottom:1px solid #f8fafc;text-decoration:none;color:#111827;">';
       html += '<div style="display:flex;justify-content:space-between;gap:8px;">';
       html += '<strong style="font-size:13px;">' + title + '</strong>';
       html += '<span style="font-size:12px;color:#6b7280;white-space:nowrap;">' + createdAt + '</span>';
@@ -198,6 +219,32 @@
       return;
     }
     closeDropdown();
+  });
+
+  document.addEventListener('click', function (event) {
+    var link = event.target && event.target.closest ? event.target.closest('#admin-notif-dropdown a[data-notif-type]') : null;
+    if (!link) {
+      return;
+    }
+
+    var type = (link.getAttribute('data-notif-type') || '').trim();
+    var notificationId = Number(link.getAttribute('data-notification-id') || 0);
+    var reportId = Number(link.getAttribute('data-report-id') || 0);
+
+    if (type === 'meeting' && notificationId > 0) {
+      postForm('notifications_mark_read.php', {
+        type: 'meeting',
+        notification_id: String(notificationId)
+      });
+      return;
+    }
+
+    if (type === 'report' && reportId > 0) {
+      postForm('notifications_mark_read.php', {
+        type: 'report',
+        report_id: String(reportId)
+      });
+    }
   });
 
   document.addEventListener('keydown', function (event) {

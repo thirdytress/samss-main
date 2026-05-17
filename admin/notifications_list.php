@@ -68,9 +68,7 @@ try {
         ];
     }
 
-    $meetingNotificationIds = [];
     foreach ($meetingRows as $row) {
-        $meetingNotificationIds[] = (int) ($row['notification_id'] ?? 0);
         $title = trim((string) ($row['title'] ?? 'Meeting'));
         $meetingDate = (string) ($row['meeting_date'] ?? '');
         $startTime = (string) ($row['start_time'] ?? '');
@@ -90,16 +88,6 @@ try {
             'link_url' => 'meetings.php?meeting_id=' . (int) ($row['meeting_id'] ?? 0),
             'meeting_at' => $whenText,
         ];
-    }
-
-    if (!empty($meetingNotificationIds)) {
-        $meetingNotificationIds = array_values(array_filter($meetingNotificationIds, static fn(int $id): bool => $id > 0));
-        if (!empty($meetingNotificationIds)) {
-            $placeholders = implode(',', array_fill(0, count($meetingNotificationIds), '?'));
-            $markReadSql = "UPDATE admin_meeting_notifications SET is_read = 1, read_at = NOW() WHERE notification_id IN ({$placeholders})";
-            $markReadStmt = $pdo->prepare($markReadSql);
-            $markReadStmt->execute($meetingNotificationIds);
-        }
     }
 
     usort(

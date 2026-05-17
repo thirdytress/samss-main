@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+
 require_once __DIR__ . '/../config/bootstrap.php';
 
 $currentUser = sams_authenticated_user();
@@ -11,25 +12,31 @@ if (!$currentUser || ($currentUser['role'] ?? null) !== 'admin') {
 $pdo = sams_pdo();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  // CSRF protection
-  $postedToken = (string)($_POST['_csrf'] ?? '');
-  if (!sams_verify_csrf($postedToken)) {
-    http_response_code(400);
-    echo 'Invalid CSRF token';
-    exit;
-  }
-    $title = trim((string)($_POST['title'] ?? ''));
-    $body = trim((string)($_POST['body'] ?? ''));
-    $audience = in_array((string)($_POST['audience'] ?? ''), ['students','supervisors','all'], true) ? (string)$_POST['audience'] : 'students';
+    $postedToken = (string) ($_POST['_csrf'] ?? '');
+    if (!sams_verify_csrf($postedToken)) {
+        http_response_code(400);
+        echo 'Invalid CSRF token';
+        exit;
+    }
+
+    $title = trim((string) ($_POST['title'] ?? ''));
+    $body = trim((string) ($_POST['body'] ?? ''));
+    $audience = in_array((string) ($_POST['audience'] ?? ''), ['students', 'supervisors', 'all'], true)
+        ? (string) $_POST['audience']
+        : 'students';
 
     if ($title !== '' && $body !== '') {
-        $stmt = $pdo->prepare('INSERT INTO announcements (title, body, audience, is_active, created_by) VALUES (:title, :body, :audience, 1, :created_by)');
+        $stmt = $pdo->prepare(
+            'INSERT INTO announcements (title, body, audience, is_active, created_by)
+             VALUES (:title, :body, :audience, 1, :created_by)'
+        );
         $stmt->execute([
             'title' => $title,
             'body' => $body,
             'audience' => $audience,
-            'created_by' => (int)($currentUser['user_id'] ?? $currentUser['id'] ?? 0),
+            'created_by' => (int) ($currentUser['user_id'] ?? $currentUser['id'] ?? 0),
         ]);
+
         header('Location: announcements.php?created=1');
         exit;
     }
@@ -38,15 +45,454 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $listStmt = $pdo->query('SELECT id, title, body, audience, is_active, created_at FROM announcements ORDER BY created_at DESC LIMIT 50');
 $announcements = $listStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$department  = 'NU Lipa - Student Development and Activities Office';
+$department = 'NU Lipa - Student Development and Activities Office';
+$activeAdminNav = 'announcements';
+$pendingApplications = 0;
 
-function h(?string $s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-function sams_admin_dashboard_initials(?string $firstName, ?string $lastName): string {
-    $a = strtoupper(substr(trim((string) $firstName), 0, 1));
-    $b = strtoupper(substr(trim((string) $lastName), 0, 1));
-    $initials = trim($a . $b);
+function h(?string $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+function sams_admin_dashboard_initials(?string $firstName, ?string $lastName): string
+{
+    $first = strtoupper(substr(trim((string) $firstName), 0, 1));
+    $last = strtoupper(substr(trim((string) $lastName), 0, 1));
+    $initials = trim($first . $last);
+
     return $initials !== '' ? $initials : 'SA';
 }
+
+$adminName = trim((string) ($currentUser['first_name'] ?? '') . ' ' . (string) ($currentUser['last_name'] ?? ''));
+if ($adminName === '') {
+    $adminName = 'Admin User';
+}
+
+$adminRole = (string) ($currentUser['role'] ?? 'SDAO Head');
 ?>
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Announcements â€“ NU SA System Admin</title><link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet"/><style>:root{--color-blue:#155dfc;--color-blue-dark:#1447e6;--color-dark:#101828;--color-body:#364153;--color-muted:#4a5565;--color-white:#ffffff;--color-bg:#f9fafb;--color-border:#e5e7eb;--color-input-border:#d1d5dc;--grad-brand:linear-gradient(135deg,#155dfc 0%,#9810fa 100%);--shadow-card:0 1px 3px 0 rgba(0,0,0,.10),0 1px 2px 0 rgba(0,0,0,.06);--sidebar-w:256px;--topbar-h:89px;--radius-md:10px;--radius-lg:16px;--font-xs:12px;--font-sm:14px;--font-base:16px;--font-lg:18px;--font-xl:24px;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px}*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:"Inter",Arial,sans-serif;font-size:var(--font-base);color:var(--color-dark);background:var(--color-bg);-webkit-font-smoothing:antialiased}a{text-decoration:none;color:inherit}#app{display:flex;height:100%;flex-direction:row}.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--color-white);border-right:1px solid var(--color-border);display:flex;flex-direction:column;height:100%}.sidebar__brand{height:var(--topbar-h);border-bottom:1px solid var(--color-border);padding:var(--space-6);display:flex;align-items:center;gap:var(--space-3);flex-shrink:0}.sidebar__logo{width:40px;height:40px;border-radius:var(--radius-md);background:var(--grad-brand);display:flex;align-items:center;justify-content:center;font-size:var(--font-lg);font-weight:700;color:var(--color-white);flex-shrink:0}.sidebar__brand-name{font-size:var(--font-base);font-weight:700;color:var(--color-dark)}.sidebar__brand-sub{font-size:var(--font-xs);color:var(--color-muted)}.sidebar__nav{flex:1;overflow-y:auto;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-1);scroll-behavior:smooth}.sidebar__nav-link{display:flex;align-items:center;gap:12px;height:48px;padding:0 16px;border-radius:var(--radius-md);font-size:var(--font-base);color:var(--color-body);transition:background .15s,color .15s;white-space:nowrap;text-decoration:none!important;cursor:pointer}.sidebar__nav-link:hover{background:var(--color-bg)}.sidebar__nav-link:visited{color:var(--color-body)}.sidebar__nav-link--active{background:var(--color-blue);color:white!important}.sidebar__nav-link--active .sidebar__nav-label{color:white!important}.sidebar__nav-link--active:hover{opacity:.92}.sidebar__nav-link--active:visited{color:white!important}.sidebar__nav-link--active svg{stroke:white!important}.sidebar__nav-icon{width:20px;height:20px;flex-shrink:0}.sidebar__footer{border-top:1px solid var(--color-border);padding:17px var(--space-4) var(--space-4);display:flex;flex-direction:column;gap:var(--space-1);flex-shrink:0}.main{flex:1;display:flex;flex-direction:column;overflow:hidden}.topbar{height:var(--topbar-h);border-bottom:1px solid var(--color-border);background:var(--color-white);padding:0 var(--space-6);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:var(--shadow-card)}.topbar__title{font-size:var(--font-lg);font-weight:700;color:var(--color-dark)}.topbar__subtitle{font-size:var(--font-sm);color:var(--color-muted)}.topbar__user{display:flex;align-items:center;gap:var(--space-3)}.topbar__avatar{width:40px;height:40px;border-radius:50%;background:var(--grad-brand);display:flex;align-items:center;justify-content:center;font-size:var(--font-base);font-weight:700;color:var(--color-white)}.content{flex:1;overflow-y:auto;padding:var(--space-6)}.section-head{margin-bottom:var(--space-6)}.section-head__title{font-size:var(--font-xl);font-weight:700;color:var(--color-dark);margin-bottom:var(--space-2)}.section-head__sub{font-size:var(--font-sm);color:var(--color-muted)}.form-card{background:var(--color-white);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-6);margin-bottom:var(--space-6);box-shadow:var(--shadow-card)}.form-group{margin-bottom:var(--space-4)}.form-group:last-child{margin-bottom:0}.form-label{display:block;font-size:var(--font-sm);font-weight:600;color:var(--color-dark);margin-bottom:var(--space-2)}.form-input,.form-textarea,.form-select{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-input-border);border-radius:var(--radius-md);font-family:inherit;font-size:var(--font-base);color:var(--color-dark);background:var(--color-white);transition:border-color .15s}.form-input:focus,.form-textarea:focus,.form-select:focus{outline:none;border-color:var(--color-blue);box-shadow:0 0 0 3px rgba(21,93,252,.1)}.form-textarea{resize:vertical}.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);height:44px;padding:0 var(--space-5);border:none;border-radius:var(--radius-md);font-size:var(--font-base);font-weight:600;cursor:pointer;transition:all .15s}.btn-primary{background:var(--color-blue);color:var(--color-white)}.btn-primary:hover{background:var(--color-blue-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(21,93,252,.3)}.announcements-list{display:flex;flex-direction:column;gap:var(--space-4)}.announcement-item{background:var(--color-white);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-5);box-shadow:var(--shadow-card);transition:all .15s}.announcement-item:hover{border-color:var(--color-blue);box-shadow:0 4px 12px rgba(21,93,252,.1)}.announcement-title{font-size:var(--font-lg);font-weight:700;color:var(--color-dark);margin-bottom:var(--space-2)}.announcement-meta{display:flex;gap:var(--space-3);font-size:var(--font-sm);color:var(--color-muted);margin-bottom:var(--space-3)}.announcement-badge{display:inline-block;padding:4px 12px;background:#dbeafe;color:#1447e6;border-radius:9999px;font-size:var(--font-xs);font-weight:600}.announcement-body{color:var(--color-body);line-height:1.6;white-space:pre-wrap;word-break:break-word}.alert{padding:var(--space-4);border-radius:var(--radius-md);margin-bottom:var(--space-4);border-left:4px solid var(--color-blue);background:#eff6ff;color:#1447e6;font-size:var(--font-sm)}.empty-state{padding:var(--space-6);text-align:center;color:var(--color-muted);background:var(--color-white);border:1px dashed var(--color-border);border-radius:var(--radius-lg)}</style></head><body><div id="app"><aside class="sidebar" id="sidebar" aria-label="Main navigation"><div class="sidebar__brand"><div class="sidebar__logo" aria-hidden="true">NU</div><div><div class="sidebar__brand-name">SA System</div><div class="sidebar__brand-sub">Admin Panel</div></div></div><nav class="sidebar__nav" aria-label="Site navigation"><a href="dashboard.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 4h4v4H4V4Zm6 0h4v4h-4V4Zm0 6h4v4h-4v-4Zm-6 0h4v4H4v-4Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Dashboard</a><a href="application.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 4h12v12H4V4Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/><path d="M6 8h8M6 11h8" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>Applications</a><a href="scheduling.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/><path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>Scheduling</a><a href="attendance.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>Attendance</a><a href="evaluation.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2l2 5.5H17l-4 3 1.5 5.5L10 13l-4.5 3L7 11 3 8h5L10 2Z" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Evaluation</a><a href="reports.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" rx="2" stroke="#364153" stroke-width="1.5"/><path d="M6 14V10M10 14V7M14 14V11" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>Reports</a><a href="announcements.php" class="sidebar__nav-link sidebar__nav-link--active" aria-current="page"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 1c-1.5 0-2.5 1.5-2.5 3v4H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h1v2c0 1.1.9 2 2 2s2-.9 2-2v-2h4v2c0 1.1.9 2 2 2s2-.9 2-2v-2h1c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2h-3.5V4c0-1.5-1-3-2.5-3Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sidebar__nav-label">Announcements</span></a><a href="meetings.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="14" rx="1.5" stroke="#364153" stroke-width="1.5"/><path d="M2.5 6h15M7 1v4M13 1v4" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>Meetings</a><a href="students.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17.5 17.5c0-4.14-3.36-7.5-7.5-7.5S2.5 13.36 2.5 17.5" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>Students</a></nav><div class="sidebar__footer"><a href="settings.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="2.5" stroke="#364153" stroke-width="1.5"/><path d="M17.14 12.19A7.5 7.5 0 0 0 17.5 10a7.5 7.5 0 0 0-.36-2.19l1.57-1.57-2.5-4.33-2.08.76A7.5 7.5 0 0 0 12 1.92V0H8v1.92a7.5 7.5 0 0 0-2.13.75l-2.08-.76L1.29 6.24l1.57 1.57A7.5 7.5 0 0 0 2.5 10a7.5 7.5 0 0 0 .36 2.19l-1.57 1.57 2.5 4.33 2.08-.76A7.5 7.5 0 0 0 8 18.08V20h4v-1.92a7.5 7.5 0 0 0 2.13-.75l2.08.76 2.5-4.33-1.57-1.57Z" stroke="#364153" stroke-width="1.5"/></svg>Settings</a><a href="logout.php" class="sidebar__nav-link"><svg class="sidebar__nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M13 15l5-5-5-5M18 10H8" stroke="#364153" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 17.5H3.5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5H8" stroke="#364153" stroke-width="1.5" stroke-linecap="round"/></svg>Sign Out</a></div></aside><div class="main"><div class="topbar"><div><div class="topbar__title">Announcements</div><div class="topbar__subtitle"><?php echo h($department); ?></div></div><div class="topbar__user"><div><div style="font-weight:600;font-size:var(--font-sm);color:var(--color-dark);">Admin User</div><div style="font-size:var(--font-xs);color:var(--color-muted);">SDAO Head</div></div><div class="topbar__avatar"><?php echo h(sams_admin_dashboard_initials($currentUser['first_name']??'', $currentUser['last_name']??'')); ?></div></div></div><div class="content"><div class="section-head"><div class="section-head__title">Create & Manage Announcements</div><div class="section-head__sub">Publish announcements to students, supervisors, or all users in real-time</div></div><?php if (!empty($_GET['created'])): ?><div class="alert">âœ“ Announcement published successfully and visible to users in real-time</div><?php endif; ?><div class="form-card"><form method="post"><?php echo sams_csrf_input_field(); ?><div class="form-group"><label class="form-label" for="title">Announcement Title *</label><input type="text" id="title" name="title" class="form-input" placeholder="e.g., Meeting Schedule Updated" required/></div><div class="form-group"><label class="form-label" for="body">Message *</label><textarea id="body" name="body" class="form-textarea" rows="8" placeholder="Enter your announcement message here..." required></textarea></div><div class="form-group"><label class="form-label" for="audience">Audience *</label><select id="audience" name="audience" class="form-select"><option value="students">Students Only</option><option value="supervisors">Supervisors Only</option><option value="all">All (Students & Supervisors)</option></select></div><button type="submit" class="btn btn-primary"><svg style="width:20px;height:20px;" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2v16M2 10h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Publish Announcement</button></form></div><div><div class="section-head" style="margin-top:var(--space-8);margin-bottom:var(--space-4);"><div class="section-head__title">Recent Announcements</div><div class="section-head__sub">Latest <?php echo count($announcements); ?> announcements (up to 50 total)</div></div><?php if (empty($announcements)): ?><div class="empty-state">ðŸ“¢ No announcements yet. Create one above to get started!</div><?php else: ?><div class="announcements-list"><?php foreach ($announcements as $a): ?><div class="announcement-item"><div class="announcement-title"><?php echo h($a['title']); ?></div><div class="announcement-meta"><span class="announcement-badge"><?php $audienceLabel=match($a['audience']){'students'=>'ðŸ‘¥ Students','supervisors'=>'ðŸ‘” Supervisors','all'=>'ðŸ“¢ All Users',default=>h($a['audience'])};echo $audienceLabel; ?></span><span><?php echo h($a['created_at']); ?></span><?php if (!$a['is_active']): ?><span style="color:#999;font-style:italic;">(Inactive)</span><?php endif; ?></div><div class="announcement-body"><?php echo h($a['body']); ?></div></div><?php endforeach; ?></div><?php endif; ?></div></div></div></div></body></html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Announcements - NU SA System Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../assets/css/sams-shell.css" />
+    <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
+    <style>
+        .page.announcements-page {
+            padding: 32px;
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .hero-card,
+        .panel-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .hero-card {
+            padding: 24px 28px;
+        }
+
+        .hero-kicker,
+        .section-kicker {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .hero-card h1,
+        .panel-title {
+            margin: 0;
+            color: #111827;
+            letter-spacing: -0.02em;
+        }
+
+        .hero-card h1 {
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+
+        .hero-card p,
+        .panel-subtitle {
+            margin: 0;
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .announcements-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+            gap: 24px;
+            align-items: start;
+        }
+
+        .panel-card {
+            padding: 24px;
+            min-width: 0;
+        }
+
+        .panel-header {
+            margin-bottom: 18px;
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .panel-subtitle {
+            margin-top: 4px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #111827;
+            font: inherit;
+            padding: 12px 14px;
+            outline: none;
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
+
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: #9ca3af;
+        }
+
+        .form-textarea {
+            min-height: 180px;
+            resize: vertical;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.10);
+        }
+
+        .announcement-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .announcement-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            background: #ffffff;
+            transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+        }
+
+        .announcement-item:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
+        }
+
+        .announcement-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 8px;
+            line-height: 1.35;
+        }
+
+        .announcement-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 10px;
+        }
+
+        .announcement-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .announcement-body {
+            color: #374151;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 14px;
+        }
+
+        .page-alert {
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .page-alert--success {
+            background: #ecfdf3;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+        }
+
+        .page-alert--error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+
+        .empty-state {
+            padding: 18px;
+            text-align: center;
+            border: 1px dashed #d1d5db;
+            border-radius: 12px;
+            color: #6b7280;
+            background: #ffffff;
+        }
+
+        .topbar__user {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            white-space: nowrap;
+        }
+
+        .topbar__user-info {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .topbar__user-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.2;
+        }
+
+        .topbar__user-role {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.2;
+        }
+
+        .topbar__avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            flex-shrink: 0;
+            font-weight: 700;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 0 16px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: #3b82f6;
+            color: #fff;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s ease, transform .15s ease, box-shadow .15s ease;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(59, 130, 246, .18);
+        }
+
+        @media (max-width: 1024px) {
+            .announcements-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .page.announcements-page {
+                padding: 20px 16px 28px;
+            }
+
+            .hero-card,
+            .panel-card {
+                padding: 20px;
+            }
+
+            .hero-card h1 {
+                font-size: 24px;
+            }
+
+            .topbar__user-info {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <?php require_once __DIR__ . '/_sidebar.php'; ?>
+
+    <div class="main">
+        <header class="topbar" role="banner">
+            <div>
+                <div class="topbar__title">Announcements</div>
+                <div class="topbar__sub"><?= h($department) ?></div>
+            </div>
+
+            <div class="topbar__user" aria-label="Logged in user">
+                <div class="topbar__user-info">
+                    <div class="topbar__user-name"><?= h($adminName) ?></div>
+                    <div class="topbar__user-role"><?= h($adminRole) ?></div>
+                </div>
+                <div class="topbar__avatar" aria-hidden="true"><?= h(sams_admin_dashboard_initials((string) ($currentUser['first_name'] ?? ''), (string) ($currentUser['last_name'] ?? ''))) ?></div>
+            </div>
+        </header>
+
+        <main class="page announcements-page" role="main">
+            <section class="hero-card">
+                <div class="hero-kicker">Broadcast center</div>
+                <h1>Create & Manage Announcements</h1>
+                <p>Publish updates to students, supervisors, or everyone from one consistent admin workspace.</p>
+            </section>
+
+            <?php if (!empty($_GET['created'])): ?>
+                <div class="page-alert page-alert--success">✓ Announcement published successfully and visible to users in real time.</div>
+            <?php endif; ?>
+
+            <?php if (!empty($_POST) && empty($_GET['created'])): ?>
+                <div class="page-alert page-alert--error">Please complete both the title and message before publishing.</div>
+            <?php endif; ?>
+
+            <div class="announcements-grid">
+                <section class="panel-card" aria-labelledby="announcement-form-title">
+                    <div class="panel-header">
+                        <div class="section-kicker">Compose</div>
+                        <div class="panel-title" id="announcement-form-title">New announcement</div>
+                        <div class="panel-subtitle">Use the same clean admin layout as the rest of the system.</div>
+                    </div>
+
+                    <form method="post">
+                        <?= sams_csrf_input_field() ?>
+
+                        <div class="form-group">
+                            <label class="form-label" for="title">Announcement Title *</label>
+                            <input type="text" id="title" name="title" class="form-input" placeholder="e.g., Meeting Schedule Updated" required />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="body">Message *</label>
+                            <textarea id="body" name="body" class="form-textarea" rows="8" placeholder="Enter your announcement message here..." required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="audience">Audience *</label>
+                            <select id="audience" name="audience" class="form-select">
+                                <option value="students">Students Only</option>
+                                <option value="supervisors">Supervisors Only</option>
+                                <option value="all">All (Students & Supervisors)</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn-primary">
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                <path d="M10 2v16M2 10h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Publish Announcement
+                        </button>
+                    </form>
+                </section>
+
+                <section class="panel-card" aria-labelledby="recent-announcements-title">
+                    <div class="panel-header">
+                        <div class="section-kicker">History</div>
+                        <div class="panel-title" id="recent-announcements-title">Recent announcements</div>
+                        <div class="panel-subtitle">Latest <?= (int) count($announcements) ?> announcements, up to 50 entries.</div>
+                    </div>
+
+                    <?php if (empty($announcements)): ?>
+                        <div class="empty-state">📢 No announcements yet. Create one above to get started!</div>
+                    <?php else: ?>
+                        <div class="announcement-list">
+                            <?php foreach ($announcements as $announcement): ?>
+                                <?php
+                                    $audienceLabel = match ((string) ($announcement['audience'] ?? '')) {
+                                        'students' => 'Students',
+                                        'supervisors' => 'Supervisors',
+                                        'all' => 'All Users',
+                                        default => (string) ($announcement['audience'] ?? ''),
+                                    };
+                                    $createdAt = (string) ($announcement['created_at'] ?? '');
+                                    $createdAtLabel = $createdAt !== '' ? date('M d, Y g:i A', strtotime($createdAt)) : 'Unknown date';
+                                ?>
+                                <article class="announcement-item">
+                                    <div class="announcement-title"><?= h((string) ($announcement['title'] ?? 'Untitled')) ?></div>
+                                    <div class="announcement-meta">
+                                        <span class="announcement-badge"><?= h($audienceLabel) ?></span>
+                                        <span><?= h($createdAtLabel) ?></span>
+                                        <?php if (empty($announcement['is_active'])): ?>
+                                            <span style="color:#999;font-style:italic;">(Inactive)</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="announcement-body"><?= h((string) ($announcement['body'] ?? '')) ?></div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </section>
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>
