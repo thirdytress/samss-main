@@ -600,13 +600,17 @@ function isSelected(string $key, string $option, array $values): string {
                 aria-required="true"
               >
                 <option value="" <?php echo isSelected('course', '', $values); ?>>Select course</option>
-                <option value="BSIT"  <?php echo isSelected('course', 'BSIT',  $values); ?>>BS Information Technology</option>
-                <option value="BSCS"  <?php echo isSelected('course', 'BSCS',  $values); ?>>BS Computer Science</option>
-                <option value="BSBA"  <?php echo isSelected('course', 'BSBA',  $values); ?>>BS Business Administration</option>
-                <option value="BEED"  <?php echo isSelected('course', 'BEED',  $values); ?>>Bachelor of Elementary Education</option>
-                <option value="BSED"  <?php echo isSelected('course', 'BSED',  $values); ?>>Bachelor of Secondary Education</option>
-                <option value="BSHM"  <?php echo isSelected('course', 'BSHM',  $values); ?>>BS Hospitality Management</option>
-                <option value="OTHER" <?php echo isSelected('course', 'OTHER', $values); ?>>Other</option>
+                <option value="BSN"   <?php echo isSelected('course', 'BSN',   $values); ?>>Bachelor of Science in Nursing (BSN)</option>
+                <option value="BSMT"  <?php echo isSelected('course', 'BSMT',  $values); ?>>Bachelor of Science in Medical Technology (BSMT)</option>
+                <option value="BSPSYCH" <?php echo isSelected('course', 'BSPSYCH', $values); ?>>Bachelor of Science in Psychology (BS Psych)</option>
+                <option value="BSCE"  <?php echo isSelected('course', 'BSCE',  $values); ?>>Bachelor of Science in Civil Engineering (BSCE)</option>
+                <option value="BSARCH" <?php echo isSelected('course', 'BSARCH', $values); ?>>Bachelor of Science in Architecture (BS Arch)</option>
+                <option value="BSCS"  <?php echo isSelected('course', 'BSCS',  $values); ?>>Bachelor of Science in Computer Science (BSCS)</option>
+                <option value="BSIT"  <?php echo isSelected('course', 'BSIT',  $values); ?>>Bachelor of Science in Information Technology (BSIT)</option>
+                <option value="BSA"   <?php echo isSelected('course', 'BSA',   $values); ?>>Bachelor of Science in Accountancy (BSA)</option>
+                <option value="BSBAFM" <?php echo isSelected('course', 'BSBAFM', $values); ?>>Bachelor of Science in Business Administration major in Financial Management (BSBA-FM)</option>
+                <option value="BSBAMM" <?php echo isSelected('course', 'BSBAMM', $values); ?>>Bachelor of Science in Business Administration major in Marketing Management (BSBA-MM)</option>
+                <option value="BSTM"  <?php echo isSelected('course', 'BSTM',  $values); ?>>Bachelor of Science in Tourism Management (BSTM)</option>
               </select>
             </div>
             <?php echo err('course', $errors); ?>

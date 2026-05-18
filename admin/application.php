@@ -59,25 +59,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       ]);
 
       if ($reviewAction === 'approve') {
-        $mustChangeCol = sams_first_existing_column($pdo, 'users', ['must_change_password']);
-
-        if ($mustChangeCol !== null) {
-          $activateStatement = $pdo->prepare(
-            'UPDATE users u
-             INNER JOIN students s ON s.user_id = u.user_id
-             INNER JOIN applications a ON a.student_id = s.student_id
-             SET u.is_active = 1, u.' . $mustChangeCol . ' = 1
-             WHERE a.application_id = :application_id'
-          );
-        } else {
-          $activateStatement = $pdo->prepare(
-            'UPDATE users u
-             INNER JOIN students s ON s.user_id = u.user_id
-             INNER JOIN applications a ON a.student_id = s.student_id
-             SET u.is_active = 1
-             WHERE a.application_id = :application_id'
-          );
-        }
+        $activateStatement = $pdo->prepare(
+          'UPDATE users u
+           INNER JOIN students s ON s.user_id = u.user_id
+           INNER JOIN applications a ON a.student_id = s.student_id
+           SET u.is_active = 1
+           WHERE a.application_id = :application_id'
+        );
 
         $activateStatement->execute(['application_id' => $applicationId]);
       }
@@ -171,8 +159,6 @@ $pdo = sams_pdo();
 $applicationCounts = [
   'all' => 0,
   'pending' => 0,
-  'under_review' => 0,
-  'interview' => 0,
   'approved' => 0,
   'rejected' => 0,
 ];
@@ -204,7 +190,8 @@ $applicationsStatement = $pdo->query(
     s.program,
     s.year_level,
     t.term_name,
-    t.term_year AS school_year
+    t.term_year AS school_year,
+    (SELECT COALESCE(SUM(TIMESTAMPDIFF(MINUTE, start_time, end_time)), 0) / 60 FROM availability WHERE application_id = a.application_id) AS total_available_hours
   FROM applications a
   INNER JOIN students s ON s.student_id = a.student_id
   INNER JOIN users u ON u.user_id = s.user_id
@@ -213,6 +200,42 @@ $applicationsStatement = $pdo->query(
 );
 
 $applications = $applicationsStatement->fetchAll();
+
+// --- RECOMMENDATION LOGIC ---
+$recommendedIds = [];
+$eligibleApps = [];
+foreach ($applications as $app) {
+    if ($app['status'] === 'pending') {
+        $eligibleApps[] = $app;
+    }
+}
+usort($eligibleApps, function($a, $b) {
+    $hoursA = (float)($a['total_available_hours'] ?? 0);
+    $hoursB = (float)($b['total_available_hours'] ?? 0);
+    return $hoursB <=> $hoursA;
+});
+$top5 = array_slice($eligibleApps, 0, 5);
+foreach ($top5 as $app) {
+    $recommendedIds[$app['application_id']] = true;
+}
+$recommendedAppsList = [];
+$otherAppsList = [];
+foreach ($applications as $app) {
+    if (isset($recommendedIds[$app['application_id']])) {
+        $app['is_recommended'] = true;
+        $recommendedAppsList[] = $app;
+    } else {
+        $app['is_recommended'] = false;
+        $otherAppsList[] = $app;
+    }
+}
+usort($recommendedAppsList, function($a, $b) {
+    $hoursA = (float)($a['total_available_hours'] ?? 0);
+    $hoursB = (float)($b['total_available_hours'] ?? 0);
+    return $hoursB <=> $hoursA;
+});
+$applications = array_merge($recommendedAppsList, $otherAppsList);
+// ----------------------------
 
 if ($flashMessage === '' && isset($_SESSION['sams_app_flash'])) {
   $flashMessage = (string) $_SESSION['sams_app_flash'];
@@ -227,8 +250,6 @@ if ($flashError === '' && isset($_SESSION['sams_app_error'])) {
 $statusFilterOptions = [
   'all' => 'All',
   'pending' => 'Pending',
-  'under_review' => 'Under Review',
-  'interview' => 'Interview',
   'approved' => 'Approved',
   'rejected' => 'Rejected',
 ];
@@ -498,6 +519,9 @@ $pendingApplications = (int) $applicationCounts['pending'];
     .badge--interview { background: #bfdbfe; color: #1e40af; }
     .badge--approved  { background: #d1fae5; color: #065f46; }
     .badge--rejected  { background: #fee2e2; color: #991b1b; }
+    .badge--recommended { background: #fef08a; color: #854d0e; margin-left: 8px; border: 1px solid #fde047; }
+    .tr-recommended { background-color: #fefce8 !important; }
+    .tr-recommended:hover { background-color: #fef9c3 !important; }
 
     /* Page content styling */
     .page.content {
@@ -1203,12 +1227,17 @@ $pendingApplications = (int) $applicationCounts['pending'];
                   $submittedAt = $application['submitted_at'] ? date('M j, Y', strtotime((string) $application['submitted_at'])) : 'N/A';
                   $skillsText = implode(', ', $skills);
                 ?>
-              <tr data-status="<?= htmlspecialchars($status) ?>">
+              <tr data-status="<?= htmlspecialchars($status) ?>" class="<?= !empty($application['is_recommended']) ? 'tr-recommended' : '' ?>">
                 <td data-label="Applicant">
                   <div class="applicant">
                     <div class="applicant__avatar" aria-hidden="true"><?= htmlspecialchars($avatar) ?></div>
                     <div>
-                      <div class="applicant__name"><?= htmlspecialchars($fullName !== '' ? $fullName : 'Unnamed Applicant') ?></div>
+                      <div class="applicant__name">
+                        <?= htmlspecialchars($fullName !== '' ? $fullName : 'Unnamed Applicant') ?>
+                        <?php if (!empty($application['is_recommended'])): ?>
+                          <span class="badge badge--recommended" title="This student has the highest available hours (<?= htmlspecialchars((string) round((float)($application['total_available_hours'] ?? 0), 1)) ?> hrs/week)">🌟 Top Recommended</span>
+                        <?php endif; ?>
+                      </div>
                       <div class="applicant__date">Applied <?= htmlspecialchars($submittedAt) ?></div>
                     </div>
                   </div>
@@ -1725,6 +1754,17 @@ $pendingApplications = (int) $applicationCounts['pending'];
   });
 }
 
+    function formatTime12Hour(timeStr) {
+      if (!timeStr) return '';
+      var time = timeStr.substr(0, 5); // Get HH:MM
+      var parts = time.split(':');
+      var hours = parseInt(parts[0], 10);
+      var minutes = parts[1] || '00';
+      var ampm = hours >= 12 ? 'PM' : 'AM';
+      var displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+      return (displayHours < 10 ? '0' : '') + displayHours + ':' + minutes + ' ' + ampm;
+    }
+
     function renderAvailability(list) {
       var container = document.getElementById('modal-availability');
       if (!container) return;
@@ -1740,8 +1780,8 @@ $pendingApplications = (int) $applicationCounts['pending'];
       list.forEach(function (row) {
         var li = document.createElement('li');
         li.style.padding = '6px 0';
-        var start = (row.time_start || row.start_time || '').substr(0, 5);
-        var end   = (row.time_end || row.end_time || '').substr(0, 5);
+        var start = formatTime12Hour(row.time_start || row.start_time || '');
+        var end = formatTime12Hour(row.time_end || row.end_time || '');
         li.textContent = (row.day_of_week || '') + ': ' + start + ' — ' + end;
         ul.appendChild(li);
       });

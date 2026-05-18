@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/bootstrap.php';
+require_once __DIR__ . '/../config/mail.php';
 
 $currentUser = sams_authenticated_user();
 if (!$currentUser || ($currentUser['role'] ?? null) !== 'admin') {
@@ -115,6 +116,28 @@ function schedule_badge_label(string $status): string
     };
 }
 
+function schedule_badge_html(string $status): string
+{
+    $status = strtolower(trim($status));
+    $colorClass = match ($status) {
+        'deployed' => 'sched-item__badge--blue',
+        'accepted' => 'sched-item__badge--confirmed', // Green
+        'assigned', 'pending' => 'sched-item__badge--declined', // Red
+        'declined' => 'sched-item__badge--declined',
+        default => 'sched-item__badge--pending',
+    };
+    
+    $label = match ($status) {
+        'deployed' => 'Deployed',
+        'accepted' => 'Accepted',
+        'assigned', 'pending' => 'Not Accepted',
+        'declined' => 'Declined',
+        default => ucfirst($status),
+    };
+    
+    return '<span class="sched-item__badge ' . $colorClass . '">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+}
+
 function schedule_day_label(string $day): string
 {
     $normalized = trim($day);
@@ -208,26 +231,25 @@ function generate_schedules(PDO $pdo, int $adminId, bool $hasOfficeColumn, ?stri
                  WHERE a.student_id = :student_id
                      AND ds.term_id = :term_id
                      AND ds.day_of_week = :day_of_week
-                     AND ds.status <> 'declined'"
+                     AND ds.status <> 'declined'
+                     AND (
+                         (ds.start_time < :end_time AND ds.end_time > :start_time)
+                     )"
         );
 
     if ($hasOfficeColumn) {
         $insertStmt = $pdo->prepare(
             "INSERT INTO duty_schedules
                 (application_id, office_name, term_id, day_of_week, start_time, end_time, status)
-             SELECT :application_id_insert, :office_name_insert, :term_id_insert, :day_of_week_insert, :start_time_insert, :end_time_insert, 'assigned'
-             WHERE NOT EXISTS (
-                 SELECT 1 FROM duty_schedules WHERE application_id = :application_id_exists AND day_of_week = :day_of_week_exists
-             )"
+             VALUES
+                (:application_id_insert, :office_name_insert, :term_id_insert, :day_of_week_insert, :start_time_insert, :end_time_insert, 'assigned')"
         );
     } else {
         $insertStmt = $pdo->prepare(
             "INSERT INTO duty_schedules
                 (application_id, term_id, day_of_week, start_time, end_time, status)
-             SELECT :application_id_insert, :term_id_insert, :day_of_week_insert, :start_time_insert, :end_time_insert, 'assigned'
-             WHERE NOT EXISTS (
-                 SELECT 1 FROM duty_schedules WHERE application_id = :application_id_exists AND day_of_week = :day_of_week_exists
-             )"
+             VALUES
+                (:application_id_insert, :term_id_insert, :day_of_week_insert, :start_time_insert, :end_time_insert, 'assigned')"
         );
     }
 
@@ -237,6 +259,26 @@ function generate_schedules(PDO $pdo, int $adminId, bool $hasOfficeColumn, ?stri
         if ($office === '') {
             $skipped++;
             $errors[] = 'Skipped student ID ' . $student['student_id'] . ': no preferred office.';
+            continue;
+        }
+
+        // Check if student already has any existing schedules for this term
+        $checkExistingStmt = $pdo->prepare(
+            "SELECT COUNT(*)
+             FROM duty_schedules ds
+             JOIN applications a ON a.application_id = ds.application_id
+             WHERE a.student_id = :student_id
+                 AND ds.term_id = :term_id
+                 AND ds.status <> 'declined'"
+        );
+        $checkExistingStmt->execute([
+            'student_id' => (int) $student['student_id'],
+            'term_id' => (int) $student['term_id'],
+        ]);
+
+        if ((int) $checkExistingStmt->fetchColumn() > 0) {
+            $skipped++;
+            $errors[] = 'Skipped student ID ' . $student['student_id'] . ': already has existing schedules.';
             continue;
         }
 
@@ -262,17 +304,6 @@ function generate_schedules(PDO $pdo, int $adminId, bool $hasOfficeColumn, ?stri
                 continue;
             }
 
-            $existingStmt->execute([
-                'student_id' => (int) $student['student_id'],
-                'term_id' => (int) $student['term_id'],
-                'day_of_week' => $day,
-            ]);
-
-            if ((int) $existingStmt->fetchColumn() > 0) {
-                $skipped++;
-                continue;
-            }
-
             $availableStart = time_to_minutes((string) $availability['time_start']);
             $availableEnd = time_to_minutes((string) $availability['time_end']);
 
@@ -281,17 +312,36 @@ function generate_schedules(PDO $pdo, int $adminId, bool $hasOfficeColumn, ?stri
                 continue;
             }
 
-            // Maximum 4 hours per day, starting at the student's available start time.
+            // Enforce 2-hour minimum and maximum 4 hours per day
             $scheduleStart = $availableStart;
             $scheduleEnd = min($availableEnd, $scheduleStart + (4 * 60));
 
-            if (($scheduleEnd - $scheduleStart) < 60) {
+            $durationMinutes = $scheduleEnd - $scheduleStart;
+
+            // Skip if less than 2 hours (120 minutes)
+            if ($durationMinutes < 120) {
                 $skipped++;
+                $errors[] = sprintf('Skipped student %s on %s: available window too small (needs 2+ hours).', $student['student_id'], $day);
                 continue;
             }
 
             $startTime = minutes_to_time($scheduleStart);
             $endTime = minutes_to_time($scheduleEnd);
+
+            // Check for time conflicts with existing schedules (allow multiple schedules per day if no overlap)
+            $existingStmt->execute([
+                'student_id' => (int) $student['student_id'],
+                'term_id' => (int) $student['term_id'],
+                'day_of_week' => $day,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+            ]);
+
+            if ((int) $existingStmt->fetchColumn() > 0) {
+                $skipped++;
+                $errors[] = sprintf('Skipped student %s on %s: time conflict with existing schedule.', $student['student_id'], $day);
+                continue;
+            }
 
             $insertStmt->execute([
                 'application_id_insert' => (int) $student['application_id'],
@@ -300,8 +350,6 @@ function generate_schedules(PDO $pdo, int $adminId, bool $hasOfficeColumn, ?stri
                 'day_of_week_insert' => $day,
                 'start_time_insert' => $startTime,
                 'end_time_insert' => $endTime,
-                'application_id_exists' => (int) $student['application_id'],
-                'day_of_week_exists' => $day,
             ]);
 
             $created++;
@@ -360,6 +408,11 @@ if ($selectedOffice !== '') {
         $selectedStudentId = 0;
     }
 }
+
+// Show status filter: all | applied | approved | deployed
+$showStatus = trim((string) ($_GET['show_status'] ?? 'all'));
+$allowedStatus = ['all','applied','approved','deployed'];
+if (!in_array($showStatus, $allowedStatus, true)) { $showStatus = 'all'; }
 
 $studentsByOffice = [];
 $studentsByOfficeStmt = $pdo->query(
@@ -455,81 +508,283 @@ try {
             $redirectStudentId = $studentFilter;
         }
 
-        if ($action === 'edit_schedule') {
-
-            $scheduleId = (int)($_POST['schedule_id'] ?? 0);
-            $officeName = trim((string) ($_POST['office_name'] ?? ''));
-            $dayOfWeek = schedule_day_label(trim((string)($_POST['day_of_week'] ?? '')));
-            $timeStart = trim((string)($_POST['time_start'] ?? ''));
-            $timeEnd = trim((string)($_POST['time_end'] ?? ''));
-
-            if ($dayOfWeek === '') {
-                throw new RuntimeException('Please choose a valid day of the week.');
+        if ($action === 'approve_application') {
+            $applicationId = (int) ($_POST['application_id'] ?? 0);
+            if ($applicationId <= 0) {
+                throw new RuntimeException('Invalid application selected.');
             }
 
+            // Load application and ensure it's pending
+            $appCheck = $pdo->prepare('SELECT application_id, student_id, term_id, preferred_office FROM applications WHERE application_id = :aid AND status = "pending" LIMIT 1');
+            $appCheck->execute(['aid' => $applicationId]);
+            $appRow = $appCheck->fetch(PDO::FETCH_ASSOC);
+            if (!$appRow) {
+                throw new RuntimeException('Application not found or already processed.');
+            }
+
+            $availStmt = $pdo->prepare(
+                "SELECT day_of_week, start_time AS time_start, end_time AS time_end
+                 FROM availability
+                 WHERE application_id = :application_id
+                   AND term_id = :term_id
+                 ORDER BY FIELD(day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), start_time ASC"
+            );
+            $availStmt->execute(['application_id' => $applicationId, 'term_id' => (int)$appRow['term_id']]);
+            $availRows = $availStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!$availRows) {
+                throw new RuntimeException('No availability saved for this applicant.');
+            }
+
+            // Insert duty_schedules for each availability
+            if ($dutyScheduleHasOfficeColumn) {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, office_name, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :office_name, :term_id, :day_of_week, :time_start, :time_end, "assigned")'
+                );
+            } else {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :term_id, :day_of_week, :time_start, :time_end, "assigned")'
+                );
+            }
+
+            foreach ($availRows as $arow) {
+                $day = schedule_day_label((string)$arow['day_of_week']);
+                if ($dutyScheduleHasOfficeColumn) {
+                    $insertAppStmt->execute([
+                        'application_id' => $applicationId,
+                        'office_name' => $appRow['preferred_office'],
+                        'term_id' => (int)$appRow['term_id'],
+                        'day_of_week' => $day,
+                        'time_start' => (string)$arow['time_start'],
+                        'time_end' => (string)$arow['time_end'],
+                    ]);
+                } else {
+                    $insertAppStmt->execute([
+                        'application_id' => $applicationId,
+                        'term_id' => (int)$appRow['term_id'],
+                        'day_of_week' => $day,
+                        'time_start' => (string)$arow['time_start'],
+                        'time_end' => (string)$arow['time_end'],
+                    ]);
+                }
+            }
+
+            // Mark application approved
+            $updateApp = $pdo->prepare('UPDATE applications SET status = "approved" WHERE application_id = :aid');
+            $updateApp->execute(['aid' => $applicationId]);
+
+            $flashMessage = 'Application approved and schedules created.';
+        }
+
+        if ($action === 'deploy_application') {
+            $applicationId = (int) ($_POST['application_id'] ?? 0);
+            if ($applicationId <= 0) {
+                throw new RuntimeException('Invalid application selected.');
+            }
+
+            $appCheck = $pdo->prepare('SELECT application_id, student_id, term_id, preferred_office FROM applications WHERE application_id = :aid AND status = "approved" LIMIT 1');
+            $appCheck->execute(['aid' => $applicationId]);
+            $appRow = $appCheck->fetch(PDO::FETCH_ASSOC);
+            if (!$appRow) {
+                throw new RuntimeException('Application not approved or not found.');
+            }
+
+            $availStmt = $pdo->prepare(
+                "SELECT day_of_week, start_time AS time_start, end_time AS time_end
+                 FROM availability
+                 WHERE application_id = :application_id
+                   AND term_id = :term_id
+                 ORDER BY FIELD(day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), start_time ASC"
+            );
+            $availStmt->execute(['application_id' => $applicationId, 'term_id' => (int)$appRow['term_id']]);
+            $availRows = $availStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!$availRows) {
+                throw new RuntimeException('No availability saved for this applicant.');
+            }
+
+            if ($dutyScheduleHasOfficeColumn) {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, office_name, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :office_name, :term_id, :day_of_week, :time_start, :time_end, "assigned")'
+                );
+            } else {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :term_id, :day_of_week, :time_start, :time_end, "assigned")'
+                );
+            }
+
+            foreach ($availRows as $arow) {
+                $day = schedule_day_label((string)$arow['day_of_week']);
+                if ($dutyScheduleHasOfficeColumn) {
+                    $insertAppStmt->execute([
+                        'application_id' => $applicationId,
+                        'office_name' => $appRow['preferred_office'],
+                        'term_id' => (int)$appRow['term_id'],
+                        'day_of_week' => $day,
+                        'time_start' => (string)$arow['time_start'],
+                        'time_end' => (string)$arow['time_end'],
+                    ]);
+                } else {
+                    $insertAppStmt->execute([
+                        'application_id' => $applicationId,
+                        'term_id' => (int)$appRow['term_id'],
+                        'day_of_week' => $day,
+                        'time_start' => (string)$arow['time_start'],
+                        'time_end' => (string)$arow['time_end'],
+                    ]);
+                }
+            }
+
+            $flashMessage = 'Schedules created for approved application.';
+        }
+
+        if ($action === 'edit_schedule') {
+            $studentId = (int)($_POST['student_id'] ?? 0);
+            $officeName = trim((string) ($_POST['office_name'] ?? ''));
+            $scheduleJson = trim((string)($_POST['schedule_json'] ?? ''));
+            
+            if ($studentId <= 0) {
+                throw new RuntimeException('Invalid student selected.');
+            }
             if ($officeName !== '' && !in_array($officeName, $officeOptions, true)) {
                 throw new RuntimeException('Please choose a valid office.');
             }
+            
+            $entries = json_decode($scheduleJson, true);
+            if (!is_array($entries) || empty($entries)) {
+                throw new RuntimeException('No schedule blocks provided.');
+            }
+            
+            // Get the application ID
+            $appStmt = $pdo->prepare('
+                SELECT a.application_id, a.term_id, a.preferred_office, u.email, u.first_name, u.last_name
+                FROM applications a
+                INNER JOIN students s ON s.student_id = a.student_id
+                INNER JOIN users u ON u.user_id = s.user_id
+                WHERE a.student_id = :sid 
+                ORDER BY a.application_id DESC LIMIT 1
+            ');
+            $appStmt->execute(['sid' => $studentId]);
+            $appRow = $appStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$appRow) {
+                throw new RuntimeException('Application not found.');
+            }
+            $applicationId = (int)$appRow['application_id'];
+            $termId = (int)$appRow['term_id'];
+            $currentOffice = $officeName !== '' ? $officeName : trim((string) ($appRow['preferred_office'] ?? ''));
 
-            $scheduleStmt = $pdo->prepare(
-                'SELECT ds.application_id, ds.office_name, a.preferred_office
-                 FROM duty_schedules ds
-                 INNER JOIN applications a ON a.application_id = ds.application_id
-                 WHERE ds.duty_id = :duty_id
-                 LIMIT 1'
-            );
-            $scheduleStmt->execute(['duty_id' => $scheduleId]);
-            $scheduleRow = $scheduleStmt->fetch(PDO::FETCH_ASSOC);
+            // Delete existing schedules for this application
+            $delStmt = $pdo->prepare('DELETE FROM duty_schedules WHERE application_id = :aid');
+            $delStmt->execute(['aid' => $applicationId]);
 
-            if (!$scheduleRow) {
-                throw new RuntimeException('Schedule not found.');
+            // Insert new schedules (as 'accepted' so they appear in real-time on supervisor dashboard)
+            if ($dutyScheduleHasOfficeColumn) {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, office_name, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :office_name, :term_id, :day_of_week, :time_start, :time_end, "accepted")'
+                );
+            } else {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :term_id, :day_of_week, :time_start, :time_end, "accepted")'
+                );
             }
 
-            $applicationId = (int) ($scheduleRow['application_id'] ?? 0);
-            $currentOffice = trim((string) ($scheduleRow['office_name'] ?? $scheduleRow['preferred_office'] ?? ''));
-
-            if ($dutyScheduleHasOfficeColumn) {
-                $updateStmt = $pdo->prepare("
-                    UPDATE duty_schedules
-                    SET
-                        office_name = :office_name,
-                        day_of_week = :day_of_week,
-                        start_time = :time_start,
-                        end_time = :time_end
-                    WHERE duty_id = :duty_id
-                ");
-
-                $updateStmt->execute([
-                    'office_name' => $officeName !== '' ? $officeName : $currentOffice,
-                    'day_of_week' => $dayOfWeek,
-                    'time_start' => $timeStart,
-                    'time_end' => $timeEnd,
-                    'duty_id' => $scheduleId
-                ]);
-            } else {
-                $updateStmt = $pdo->prepare("
-                    UPDATE duty_schedules
-                    SET
-                        day_of_week = :day_of_week,
-                        start_time = :time_start,
-                        end_time = :time_end
-                    WHERE duty_id = :duty_id
-                ");
-
-                $updateStmt->execute([
-                    'day_of_week' => $dayOfWeek,
-                    'time_start' => $timeStart,
-                    'time_end' => $timeEnd,
-                    'duty_id' => $scheduleId
-                ]);
+            foreach ($entries as $entry) {
+                $day = schedule_day_label((string)$entry['day_of_week']);
+                if ($dutyScheduleHasOfficeColumn) {
+                    $insertAppStmt->execute([
+                        'application_id' => $applicationId,
+                        'office_name' => $currentOffice,
+                        'term_id' => $termId,
+                        'day_of_week' => $day,
+                        'time_start' => (string)$entry['time_start'],
+                        'time_end' => (string)$entry['time_end'],
+                    ]);
+                } else {
+                    $insertAppStmt->execute([
+                        'application_id' => $applicationId,
+                        'term_id' => $termId,
+                        'day_of_week' => $day,
+                        'time_start' => (string)$entry['time_start'],
+                        'time_end' => (string)$entry['time_end'],
+                    ]);
+                }
             }
 
             if ($officeName !== '') {
                 $redirectOffice = $officeName;
             }
 
-            $flashMessage = 'Schedule updated successfully.';
+            // Send email notification to student
+            try {
+                $emailDetails = ['Office' => $currentOffice];
+                $daysList = [];
+                foreach ($entries as $entry) {
+                    $day = (string)($entry['day_of_week'] ?? '');
+                    if ($day === '') continue;
+                    $start = date('g:i A', strtotime((string)($entry['time_start'] ?? '')));
+                    $end = date('g:i A', strtotime((string)($entry['time_end'] ?? '')));
+                    if (!isset($daysList[$day])) {
+                        $daysList[$day] = [];
+                    }
+                    $daysList[$day][] = "$start - $end";
+                }
+                foreach ($daysList as $day => $times) {
+                    $emailDetails[$day] = implode(', ', $times);
+                }
 
+                sams_send_schedule_email(
+                    (string)($appRow['email'] ?? ''),
+                    trim((string)($appRow['first_name'] ?? '') . ' ' . (string)($appRow['last_name'] ?? '')),
+                    'edit',
+                    $emailDetails
+                );
+            } catch (Throwable $e) {
+                $flashError = 'Schedule updated, but email could not be sent: ' . $e->getMessage();
+            }
+            $flashMessage = 'Student schedule updated successfully.';
+            $redirectStudentId = $studentId;
+        }
+
+        if ($action === 'accept_schedule') {
+            $studentId = (int)($_POST['student_id'] ?? 0);
+            if ($studentId <= 0) {
+                throw new RuntimeException('Invalid student selected.');
+            }
+            $statement = $pdo->prepare("UPDATE duty_schedules ds
+                INNER JOIN applications a ON a.application_id = ds.application_id
+                SET ds.status = 'accepted'
+                WHERE a.student_id = :sid AND ds.status = 'assigned'");
+            $statement->execute(['sid' => $studentId]);
+            $flashMessage = 'All assigned schedules for this student have been accepted.';
+            $redirectStudentId = $studentId;
+        }
+
+        if ($action === 'deploy_student') {
+            $studentId = (int)($_POST['student_id'] ?? 0);
+            if ($studentId <= 0) {
+                throw new RuntimeException('Invalid student selected.');
+            }
+            $statement = $pdo->prepare("UPDATE duty_schedules ds
+                INNER JOIN applications a ON a.application_id = ds.application_id
+                SET ds.status = 'deployed'
+                WHERE a.student_id = :sid AND (ds.status = 'assigned' OR ds.status = 'accepted')");
+            $statement->execute(['sid' => $studentId]);
+            $flashMessage = 'Student deployed. Schedules are now visible on the supervisor dashboard.';
+            $redirectStudentId = $studentId;
+        }
+
+        if ($action === 'undeploy_student') {
+            $studentId = (int)($_POST['student_id'] ?? 0);
+            if ($studentId <= 0) {
+                throw new RuntimeException('Invalid student selected.');
+            }
+            $statement = $pdo->prepare("UPDATE duty_schedules ds
+                INNER JOIN applications a ON a.application_id = ds.application_id
+                SET ds.status = 'accepted'
+                WHERE a.student_id = :sid AND ds.status = 'deployed'");
+            $statement->execute(['sid' => $studentId]);
+            $flashMessage = 'Student undeployed. You can now edit their schedule.';
+            $redirectStudentId = $studentId;
         }
 
         if ($action === 'update_status') {
@@ -540,10 +795,42 @@ try {
                 throw new RuntimeException('Invalid schedule status update.');
             }
 
+            // Fetch schedule and user info
+            $scheduleStmt = $pdo->prepare(
+                'SELECT ds.application_id, ds.office_name, ds.status, a.preferred_office, a.student_id, u.email, u.first_name, u.last_name
+                 FROM duty_schedules ds
+                 INNER JOIN applications a ON a.application_id = ds.application_id
+                 INNER JOIN students s ON s.student_id = a.student_id
+                 INNER JOIN users u ON u.user_id = s.user_id
+                 WHERE ds.duty_id = :duty_id
+                 LIMIT 1'
+            );
+            $scheduleStmt->execute(['duty_id' => $scheduleId]);
+            $scheduleRow = $scheduleStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$scheduleRow) {
+                throw new RuntimeException('Schedule not found.');
+            }
+
             $statement = $pdo->prepare(
                 'UPDATE duty_schedules SET status = :status, student_response_date = NOW() WHERE duty_id = :duty_id'
             );
             $statement->execute(['status' => $status, 'duty_id' => $scheduleId]);
+
+            // Send email if accepted
+            if ($status === 'accepted') {
+                try {
+                    sams_send_schedule_email(
+                        (string)($scheduleRow['email'] ?? ''),
+                        trim((string)($scheduleRow['first_name'] ?? '') . ' ' . (string)($scheduleRow['last_name'] ?? '')),
+                        'accept',
+                        [
+                            'office' => $scheduleRow['office_name'] ?? $scheduleRow['preferred_office'] ?? '',
+                        ]
+                    );
+                } catch (Throwable $e) {
+                    $flashError = 'Schedule accepted, but email could not be sent: ' . $e->getMessage();
+                }
+            }
             $flashMessage = 'Schedule status updated successfully.';
         }
 
@@ -595,18 +882,21 @@ if (isset($_SESSION['scheduling_error'])) {
     unset($_SESSION['scheduling_error']);
 }
 
-$scheduleSql = "SELECT
+
+// Only fetch schedules if a specific student is selected
+if ($selectedStudentId > 0) {
+    $scheduleSql = "SELECT
         ds.duty_id as id,
         a.student_id,
-    COALESCE(ds.office_name, a.preferred_office) AS office_name,
+        COALESCE(ds.office_name, a.preferred_office) AS office_name,
         ds.term_id,
         ds.day_of_week,
-    ds.start_time AS time_start,
-    ds.end_time AS time_end,
+        ds.start_time AS time_start,
+        ds.end_time AS time_end,
         ds.status,
         ds.created_at as assigned_at,
         ds.student_response_date as responded_at,
-    ROUND(TIMESTAMPDIFF(MINUTE, ds.start_time, ds.end_time) / 60, 2) AS required_hours,
+        ROUND(TIMESTAMPDIFF(MINUTE, ds.start_time, ds.end_time) / 60, 2) AS required_hours,
         st.student_id_number AS student_code,
         st.program,
         st.year_level,
@@ -616,24 +906,20 @@ $scheduleSql = "SELECT
      INNER JOIN applications a ON a.application_id = ds.application_id
      INNER JOIN students st ON st.student_id = a.student_id
      INNER JOIN users u ON u.user_id = st.user_id
-     WHERE 1 = 1";
-
-$scheduleParams = [];
-if ($selectedStudentId > 0) {
-    $scheduleSql .= ' AND a.student_id = :student_id';
-    $scheduleParams['student_id'] = $selectedStudentId;
+     WHERE a.student_id = :student_id";
+    $scheduleParams = ['student_id' => $selectedStudentId];
+    if ($selectedDay !== '') {
+        $scheduleSql .= ' AND ds.day_of_week = :day_of_week';
+        $scheduleParams['day_of_week'] = $selectedDay;
+    }
+    $scheduleSql .= " ORDER BY FIELD(ds.day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), ds.start_time ASC, u.last_name ASC";
+    $scheduleStmt = $pdo->prepare($scheduleSql);
+    $scheduleStmt->execute($scheduleParams);
+    $schedules = $scheduleStmt->fetchAll();
+} else {
+    // If 'All Students' is selected, show no schedules
+    $schedules = [];
 }
-
-if ($selectedDay !== '') {
-    $scheduleSql .= ' AND ds.day_of_week = :day_of_week';
-    $scheduleParams['day_of_week'] = $selectedDay;
-}
-
-$scheduleSql .= " ORDER BY FIELD(ds.day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), ds.start_time ASC, u.last_name ASC";
-
-$scheduleStmt = $pdo->prepare($scheduleSql);
-$scheduleStmt->execute($scheduleParams);
-$schedules = $scheduleStmt->fetchAll();
 
 $approvedStudentsSql = "SELECT COUNT(*) FROM applications
      WHERE status = 'approved'
@@ -648,6 +934,66 @@ if ($selectedOffice !== '') {
 $approvedStudentsStmt = $pdo->prepare($approvedStudentsSql);
 $approvedStudentsStmt->execute($approvedStudentsParams);
 $approvedStudents = (int) $approvedStudentsStmt->fetchColumn();
+
+// Pending applications for admin review
+$pendingApplicationsStmt = $pdo->prepare(
+    "SELECT a.application_id, a.student_id, a.term_id, a.preferred_office, a.created_at, s.student_id_number AS student_code, u.first_name, u.last_name
+     FROM applications a
+     INNER JOIN students s ON s.student_id = a.student_id
+     INNER JOIN users u ON u.user_id = s.user_id
+     WHERE a.status = 'pending'
+     ORDER BY a.created_at DESC"
+);
+$pendingApplicationsStmt->execute();
+$pendingApplications = $pendingApplicationsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// All applicants (for student dropdown)
+$studentsListStmt = $pdo->query(
+    "SELECT DISTINCT a.student_id, st.student_id_number AS student_code, u.first_name, u.last_name
+     FROM applications a
+     INNER JOIN students st ON st.student_id = a.student_id
+     INNER JOIN users u ON u.user_id = st.user_id
+     ORDER BY u.last_name ASC, u.first_name ASC"
+);
+$studentsList = $studentsListStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// If a student is selected, load their preferred application and availability
+$selectedPreferred = null;
+if ($selectedStudentId > 0) {
+    $appStmt = $pdo->prepare('SELECT application_id, term_id, preferred_office, status FROM applications WHERE student_id = :sid ORDER BY application_id DESC LIMIT 1');
+    $appStmt->execute(['sid' => $selectedStudentId]);
+    $selectedPreferred = $appStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    if ($selectedPreferred) {
+        $availStmt = $pdo->prepare("SELECT day_of_week, start_time AS time_start, end_time AS time_end FROM availability WHERE application_id = :aid AND term_id = :term_id ORDER BY FIELD(day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), start_time ASC");
+        $availStmt->execute(['aid' => (int)$selectedPreferred['application_id'], 'term_id' => (int)$selectedPreferred['term_id']]);
+        $selectedPreferred['availability'] = $availStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
+
+// Approved applicants
+$approvedApplicantsStmt = $pdo->prepare(
+    "SELECT a.application_id, a.student_id, a.term_id, a.preferred_office, s.student_id_number AS student_code, u.first_name, u.last_name, a.created_at
+     FROM applications a
+     INNER JOIN students s ON s.student_id = a.student_id
+     INNER JOIN users u ON u.user_id = s.user_id
+     WHERE a.status = 'approved'
+     ORDER BY a.created_at DESC"
+);
+$approvedApplicantsStmt->execute();
+$approvedApplicants = $approvedApplicantsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Deployed (students with schedules)
+$deployedStmt = $pdo->prepare(
+    "SELECT DISTINCT a.application_id, a.student_id, st.student_id_number AS student_code, u.first_name, u.last_name, COALESCE(ds.office_name, a.preferred_office) AS office_name
+     FROM duty_schedules ds
+     INNER JOIN applications a ON a.application_id = ds.application_id
+     INNER JOIN students st ON st.student_id = a.student_id
+     INNER JOIN users u ON u.user_id = st.user_id
+     WHERE ds.status <> 'declined'
+     ORDER BY u.last_name ASC"
+);
+$deployedStmt->execute();
+$deployedStudents = $deployedStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalSchedules = count($schedules);
 $acceptedCount = 0;
@@ -666,9 +1012,27 @@ foreach ($schedules as $schedule) {
 }
 
 $applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
+
 $calendarStartHour = 8;
-$calendarEndHour = 21;
-$hours = range($calendarStartHour, $calendarEndHour - 1);
+$calendarEndHour = 17; // default 5pm
+
+// If selected preferred office or any scheduled office is Clinic, set end hour to 20 (8pm)
+$isClinic = false;
+if (!empty($selectedPreferred['preferred_office']) && strtolower(trim($selectedPreferred['preferred_office'])) === 'clinic') {
+    $isClinic = true;
+}
+if (!$isClinic && !empty($schedules)) {
+    foreach ($schedules as $sch) {
+        if (isset($sch['office_name']) && strtolower(trim($sch['office_name'])) === 'clinic') {
+            $isClinic = true;
+            break;
+        }
+    }
+}
+if ($isClinic) {
+    $calendarEndHour = 20; // 8pm
+}
+$hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g., 17 for 5pm)
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -686,16 +1050,32 @@ $hours = range($calendarStartHour, $calendarEndHour - 1);
         .main{flex:1;min-width:0;display:flex;flex-direction:column}.topbar{background:#fff;border-bottom:1px solid var(--color-border);height:var(--topbar-height);padding:0 32px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:50}.topbar__left-wrap{display:flex;align-items:center}.topbar__title{font-size:var(--font-lg);font-weight:700}.topbar__sub{font-size:var(--font-sm);color:var(--color-body)}.topbar__right{display:flex;align-items:center;gap:12px}.topbar__notif-btn{width:36px;height:36px;border-radius:var(--radius-badge);display:flex;align-items:center;justify-content:center;position:relative}.topbar__notif-btn svg{width:20px;height:20px}.topbar__notif-dot{position:absolute;top:4px;right:4px;width:8px;height:8px;background:var(--color-red-dot);border-radius:var(--radius-badge)}.topbar__user-info{text-align:right}.topbar__user-name{font-size:var(--font-sm)}.topbar__user-role{font-size:var(--font-xs);color:var(--color-body)}.topbar__avatar{width:40px;height:40px;background:var(--gradient-brand);border-radius:var(--radius-badge);display:flex;align-items:center;justify-content:center;flex-shrink:0}.topbar__avatar svg{width:20px;height:20px}.topbar__hamburger{display:none;flex-direction:column;gap:5px;width:32px;height:32px;justify-content:center;align-items:center;padding:0;margin-right:16px}.topbar__hamburger-bar{display:block;width:22px;height:2px;background:var(--color-heading);border-radius:2px}
         .scheduling{padding:32px;display:flex;flex-direction:column;gap:24px;flex:1}.sched-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}.sched-header__title{font-size:var(--font-md);font-weight:700;margin-bottom:4px}.sched-header__sub{font-size:var(--font-sm);color:var(--color-body)}.sched-header__right{display:flex;align-items:center;gap:12px;flex-shrink:0;flex-wrap:wrap}.sched-toolbar-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sched-select{height:38px;min-width:190px;padding:0 10px;border:1px solid var(--color-border);border-radius:8px;background:#fff;color:var(--color-heading);font-size:13px}.sched-select:disabled{opacity:.6;cursor:not-allowed}.btn-create,.btn-danger,.btn-small{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:41px;padding:0 16px;border-radius:var(--radius-btn);font-size:var(--font-sm);font-weight:700;cursor:pointer;transition:opacity .15s;white-space:nowrap}.btn-create{background:var(--color-primary);color:#fff}.btn-danger{background:var(--color-red-bg);color:var(--color-red-text)}.btn-small{min-height:32px;padding:0 10px;font-size:12px;background:#eef2ff;color:#3730a3}.btn-create:hover,.btn-danger:hover,.btn-small:hover{opacity:.85}
         .alert{padding:14px 16px;border-radius:12px;font-size:14px;font-weight:700;border:1px solid}.alert-success{background:#ecfdf5;color:#047857;border-color:#a7f3d0}.alert-error{background:#fef2f2;color:#b91c1c;border-color:#fecaca}.stats-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.stat-card{background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-card);padding:18px;box-shadow:var(--shadow-card)}.stat-card__label{font-size:13px;color:var(--color-muted);margin-bottom:8px}.stat-card__value{font-size:26px;font-weight:900}
-        .sched-grid{display:grid;grid-template-columns:1fr 360px;gap:24px;align-items:start}.calendar-card,.card{background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-card);box-shadow:var(--shadow-card);overflow:hidden}.cal-days{display:grid;grid-template-columns:64px repeat(6,1fr);border-bottom:1px solid var(--color-border)}.cal-days__day{padding:16px 10px;text-align:center;border-left:1px solid var(--color-border)}.cal-days__day-name{font-size:var(--font-xs);font-weight:700;color:var(--color-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}.cal-days__day-num{font-size:var(--font-md);font-weight:700}.cal-body{display:grid;grid-template-columns:64px repeat(6,1fr)}.cal-time-col{display:flex;flex-direction:column}.cal-time-slot{height:80px;padding:8px 8px 0 0;text-align:right;font-size:var(--font-xs);color:var(--color-muted);border-bottom:1px solid var(--color-border);flex-shrink:0}.cal-day-col{border-left:1px solid var(--color-border);display:flex;flex-direction:column;min-height:<?= count($hours) * 80 ?>px;position:relative}.cal-day-col__slot{height:80px;flex-shrink:0;border-bottom:1px solid var(--color-border)}.sched-block{position:absolute;left:6px;right:6px;border-radius:var(--radius-block);padding:8px;overflow:hidden;transition:opacity .15s}.sched-block--blue{background:#dbeafe;border-left:3px solid var(--sched-blue)}.sched-block--green{background:#dcfce7;border-left:3px solid var(--sched-green)}.sched-block--purple{background:#f3e8ff;border-left:3px solid var(--sched-purple)}.sched-block--orange{background:#ffedd4;border-left:3px solid var(--sched-orange)}.sched-block--yellow{background:#fef9c2;border-left:3px solid var(--sched-yellow)}.sched-block__name{font-size:var(--font-xs);font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sched-block__time,.sched-block__loc{font-size:11px;color:var(--color-body)}
-        .sched-right{display:flex;flex-direction:column;gap:24px}.card{padding:24px}.card__title{font-size:var(--font-md);font-weight:700;margin-bottom:16px}.sched-list{display:flex;flex-direction:column;gap:12px;max-height:560px;overflow-y:auto}.sched-item{background:var(--color-bg-app);border-radius:var(--radius-nav);padding:16px;display:flex;flex-direction:column;gap:8px;border-left:4px solid transparent}.sched-item--blue{border-left-color:var(--sched-blue)}.sched-item--green{border-left-color:var(--sched-green)}.sched-item--purple{border-left-color:var(--sched-purple)}.sched-item--orange{border-left-color:var(--sched-orange)}.sched-item--yellow{border-left-color:var(--sched-yellow)}.sched-item__name{font-size:var(--font-base);font-weight:700}.sched-item__time,.sched-item__loc{font-size:var(--font-sm);color:var(--color-body)}.sched-item__actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.sched-item__badge{display:inline-block;padding:4px 10px;border-radius:var(--radius-badge);font-size:var(--font-xs);font-weight:700}.sched-item__badge--confirmed{background:var(--color-green-bg);color:var(--color-green-text)}.sched-item__badge--pending{background:var(--color-yellow-bg);color:var(--color-yellow-text)}.sched-item__badge--declined{background:var(--color-red-bg);color:var(--color-red-text)}
+        .sched-grid{display:grid;grid-template-columns:900px 360px;gap:24px;align-items:start;justify-content:center}.calendar-card,.card{background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-card);box-shadow:var(--shadow-card);overflow:hidden}.cal-days{display:grid;grid-template-columns:64px repeat(6,1fr);border-bottom:1px solid var(--color-border)}.cal-days__day{padding:16px 10px;text-align:center;border-left:1px solid var(--color-border)}.cal-days__day-name{font-size:var(--font-xs);font-weight:700;color:var(--color-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}.cal-days__day-num{font-size:var(--font-md);font-weight:700}.cal-body{display:grid;grid-template-columns:64px repeat(6,1fr)}.cal-time-col{display:flex;flex-direction:column}.cal-time-slot{height:80px;padding:8px 8px 0 0;text-align:right;font-size:var(--font-xs);color:var(--color-muted);border-bottom:1px solid var(--color-border);flex-shrink:0}.cal-day-col{border-left:1px solid var(--color-border);display:flex;flex-direction:column;min-height:<?= count($hours) * 80 ?>px;position:relative}.cal-day-col__slot{height:80px;flex-shrink:0;border-bottom:1px solid var(--color-border)}.sched-block{position:absolute;left:6px;right:6px;border-radius:var(--radius-block);padding:8px;overflow:hidden;transition:opacity .15s}.sched-block--blue{background:#dbeafe;border-left:3px solid var(--sched-blue)}.sched-block--green{background:#dcfce7;border-left:3px solid var(--sched-green)}.sched-block--purple{background:#f3e8ff;border-left:3px solid var(--sched-purple)}.sched-block--orange{background:#ffedd4;border-left:3px solid var(--sched-orange)}.sched-block--yellow{background:#fef9c2;border-left:3px solid var(--sched-yellow)}.sched-block--red{background:#fee2e2;border-left:3px solid #dc2626}.sched-block__name{font-size:var(--font-xs);font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sched-block__time,.sched-block__loc{font-size:11px;color:var(--color-body)}
+        .sched-right{display:flex;flex-direction:column;gap:24px}.card{padding:24px}.card__title{font-size:var(--font-md);font-weight:700;margin-bottom:16px}.sched-list{display:flex;flex-direction:column;gap:12px;max-height:560px;overflow-y:auto}.sched-item{background:var(--color-bg-app);border-radius:var(--radius-nav);padding:16px;display:flex;flex-direction:column;gap:8px;border-left:4px solid transparent}.sched-item--blue{border-left-color:var(--sched-blue)}.sched-item--green{border-left-color:var(--sched-green)}.sched-item--purple{border-left-color:var(--sched-purple)}.sched-item--orange{border-left-color:var(--sched-orange)}.sched-item--yellow{border-left-color:var(--sched-yellow)}.sched-item__name{font-size:var(--font-base);font-weight:700}.sched-item__time,.sched-item__loc{font-size:var(--font-sm);color:var(--color-body)}.sched-item__actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.sched-item__badge{display:inline-block;padding:4px 10px;border-radius:var(--radius-badge);font-size:var(--font-xs);font-weight:700}.sched-item__badge--confirmed{background:var(--color-green-bg);color:var(--color-green-text)}.sched-item__badge--pending{background:var(--color-yellow-bg);color:var(--color-yellow-text)}.sched-item__badge--declined{background:var(--color-red-bg);color:var(--color-red-text)}.sched-item__badge--blue{background:var(--color-blue-bg);color:var(--color-blue-text)}
         .table-card{background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-card);box-shadow:var(--shadow-card);overflow:hidden}.schedule-table{width:100%;border-collapse:collapse}.schedule-table th,.schedule-table td{padding:12px 14px;border-bottom:1px solid var(--color-border);text-align:left;font-size:14px}.schedule-table th{background:#f8fafc;color:var(--color-muted);text-transform:uppercase;font-size:12px;letter-spacing:.04em}.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:90}.sidebar-overlay--visible{display:block}
         @media(max-width:1200px){.sched-grid{grid-template-columns:1fr}.stats-row{grid-template-columns:repeat(2,1fr)}}@media(max-width:1024px){.sidebar{position:fixed;left:0;top:0;height:100%;z-index:100;transform:translateX(-100%);transition:transform .3s ease}.sidebar--open{transform:translateX(0)}.topbar__hamburger{display:flex}.topbar{padding:0 24px}.scheduling{padding:24px}}@media(max-width:768px){.topbar{padding:0 16px}.topbar__user-info{display:none}.scheduling{padding:16px;gap:16px}.stats-row{grid-template-columns:1fr}.calendar-card{overflow-x:auto}.cal-days,.cal-body{min-width:980px}}
+        /* Override: center the scheduling grid and set fixed column widths */
+        .sched-grid{max-width:1260px;margin:0 auto !important;display:flex !important;justify-content:center;gap:24px;align-items:flex-start}
+        .sched-grid > .calendar-card{flex:0 0 900px;max-width:900px}
+        .sched-grid > .sched-right{flex:0 0 360px;max-width:360px}
     </style>
 </head>
 <body>
 <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 <div class="shell">
-    <?php $activeAdminNav = 'scheduling'; $pendingApplications = (int) $applicationBadgeCount; include __DIR__ . '/_sidebar.php'; ?>
+    <?php
+        $activeAdminNav = 'scheduling';
+        // Preserve any existing $pendingApplications (array of rows) for this page
+        $__pendingApplications_backup = $pendingApplications ?? null;
+        $pendingApplications = (int) $applicationBadgeCount;
+        include __DIR__ . '/_sidebar.php';
+        // Restore the original variable (if it existed) so later code can iterate it
+        if ($__pendingApplications_backup !== null) {
+            $pendingApplications = $__pendingApplications_backup;
+        } else {
+            unset($pendingApplications);
+        }
+    ?>
     </aside>
     <div class="main">
         <header class="topbar" role="banner">
@@ -704,139 +1084,166 @@ $hours = range($calendarStartHour, $calendarEndHour - 1);
         </header>
         <main class="scheduling" id="main-content">
             <div class="sched-header">
-                <div class="sched-header__left">
-                    <div class="sched-header__title">Scheduling</div>
-                    <div class="sched-header__sub">Auto-generate and review student assistant duty schedules</div>
-                </div>
+                                <div class="sched-header__left"></div>
                 <div class="sched-header__right">
-                    <form method="GET" class="sched-toolbar-form" aria-label="Filter schedules">
-                        <select class="sched-select" name="office" id="filter-office-select">
-                            <option value="">All Offices</option>
-                            <?php foreach ($officeOptions as $officeOption): ?>
-                                <option value="<?= h($officeOption) ?>" <?= $selectedOffice === $officeOption ? 'selected' : '' ?>><?= h($officeOption) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <select class="sched-select" name="student_id" id="filter-student-select" <?= $selectedOffice === '' ? 'disabled' : '' ?>>
-                            <option value="">All Approved Students</option>
-                            <?php foreach ($approvedStudentOptions as $studentOption): ?>
-                                <?php $studentOptionId = (int) $studentOption['student_id']; ?>
-                                <?php $studentLabel = trim((string) $studentOption['last_name'] . ', ' . (string) $studentOption['first_name']) . ' (' . (string) $studentOption['student_code'] . ')'; ?>
-                                <option value="<?= $studentOptionId ?>" <?= $selectedStudentId === $studentOptionId ? 'selected' : '' ?>><?= h($studentLabel) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <select class="sched-select" name="day" id="filter-day-select">
-                            <option value="">All Days</option>
-                            <?php foreach ($days as $day): ?>
-                                <option value="<?= h($day) ?>" <?= $selectedDay === $day ? 'selected' : '' ?>><?= h($day) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button class="btn-small" type="submit">Apply Filter</button>
-                        <?php if ($selectedOffice !== '' || $selectedStudentId > 0 || $selectedDay !== ''): ?>
-                            <a class="btn-small" href="scheduling.php">Clear</a>
-                        <?php endif; ?>
-                    </form>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="font-weight:700;color:var(--color-body);">Pending applications appear below for review.</div>
+                        <form method="GET" style="margin-left:12px;display:flex;gap:8px;align-items:center;">
+                            <label for="student_id" style="margin-right:6px;color:var(--color-body);font-weight:600;">Student</label>
+                            <select id="student_id" name="student_id" class="sched-select" onchange="this.form.submit()">
+                                <option value="">All students</option>
+                                <?php foreach ($studentsList as $st): $sid = (int)$st['student_id']; $slabel = trim((string)$st['last_name'] . ', ' . (string)$st['first_name']) . ' (' . (string)$st['student_code'] . ')'; ?>
+                                    <option value="<?= $sid ?>" <?= $selectedStudentId === $sid ? 'selected' : '' ?>><?= h($slabel) ?></option>
+                                <?php endforeach; ?>
+                            </select>
 
-                    <form method="POST" class="sched-toolbar-form" onsubmit="return confirm('Generate schedules from approved applications and availability?');" aria-label="Generate schedules">
-                        <input type="hidden" name="action" value="auto_generate">
-                        <select class="sched-select" name="office_filter" id="generate-office-select" required>
-                            <option value="">Select Office</option>
-                            <?php foreach ($officeOptions as $officeOption): ?>
-                                <option value="<?= h($officeOption) ?>" <?= $selectedOffice === $officeOption ? 'selected' : '' ?>><?= h($officeOption) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-
-                        <select class="sched-select" name="student_filter" id="generate-student-select" <?= $selectedOffice === '' ? 'disabled' : '' ?>>
-                            <option value="">All Approved in Office</option>
-                            <?php foreach ($approvedStudentOptions as $studentOption): ?>
-                                <?php $studentOptionId = (int) $studentOption['student_id']; ?>
-                                <?php $studentLabel = trim((string) $studentOption['last_name'] . ', ' . (string) $studentOption['first_name']) . ' (' . (string) $studentOption['student_code'] . ')'; ?>
-                                <option value="<?= $studentOptionId ?>" <?= $selectedStudentId === $studentOptionId ? 'selected' : '' ?>><?= h($studentLabel) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-
-                        <input type="hidden" name="return_office" value="<?= h($selectedOffice) ?>">
-                        <input type="hidden" name="return_student_id" value="<?= (int) $selectedStudentId ?>">
-                        <input type="hidden" name="return_day" value="<?= h($selectedDay) ?>">
-                        <button class="btn-create" type="submit">Auto Generate Schedule</button>
-                    </form>
+                            <label for="show_status" style="margin-right:6px;color:var(--color-body);font-weight:600;">Show</label>
+                            <select id="show_status" name="show_status" onchange="this.form.submit()" class="sched-select">
+                                <option value="all" <?php echo $showStatus === 'all' ? 'selected' : ''; ?>>All</option>
+                                <option value="applied" <?php echo $showStatus === 'applied' ? 'selected' : ''; ?>>Applied</option>
+                                <option value="approved" <?php echo $showStatus === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                                <option value="deployed" <?php echo $showStatus === 'deployed' ? 'selected' : ''; ?>>Deployed</option>
+                                <option value="undeployed" <?php echo $showStatus === 'undeployed' ? 'selected' : ''; ?>>Undeployed</option>
+                            </select>
+                        </form>
+                    </div>
                 </div>
             </div>
             <?php if ($flashMessage !== ''): ?><div class="alert alert-success"><?= h($flashMessage) ?></div><?php endif; ?>
             <?php if ($flashError !== ''): ?><div class="alert alert-error"><?= h($flashError) ?></div><?php endif; ?>
-            <div class="stats-row"><div class="stat-card"><div class="stat-card__label">Approved Students Ready</div><div class="stat-card__value"><?= (int) $approvedStudents ?></div></div><div class="stat-card"><div class="stat-card__label">Total Schedules</div><div class="stat-card__value"><?= (int) $totalSchedules ?></div></div><div class="stat-card"><div class="stat-card__label">Accepted</div><div class="stat-card__value"><?= (int) $acceptedCount ?></div></div><div class="stat-card"><div class="stat-card__label">Total Duty Hours</div><div class="stat-card__value"><?= number_format($totalHours, 2) ?>h</div></div></div>
-            <div class="sched-grid">
-                <section class="calendar-card" aria-label="Weekly schedule calendar"><div class="cal-days" role="row"><div class="cal-days__time-gutter" aria-hidden="true"></div><?php foreach ($days as $day): ?><div class="cal-days__day"><div class="cal-days__day-name"><?= h($dayShort[$day]) ?></div><div class="cal-days__day-num"><?= h($day) ?></div></div><?php endforeach; ?></div><div class="cal-body" role="grid" aria-label="Calendar time grid"><div class="cal-time-col" aria-hidden="true"><?php foreach ($hours as $hour): ?><div class="cal-time-slot"><?= date('g A', strtotime(sprintf('%02d:00:00', $hour))) ?></div><?php endforeach; ?></div><?php foreach ($days as $day): ?><div class="cal-day-col" role="gridcell" aria-label="<?= h($day) ?>"><?php foreach ($hours as $_): ?><div class="cal-day-col__slot"></div><?php endforeach; ?><?php foreach ($schedules as $schedule): ?><?php $scheduleDay = schedule_day_label((string) $schedule['day_of_week']); if ($scheduleDay !== $day || $schedule['status'] === 'declined') continue; ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); $office = (string) $schedule['office_name']; $color = schedule_color($office); ?><div class="sched-block sched-block--<?= h($color) ?>" style="<?= h(calendar_block_style((string) $schedule['time_start'], (string) $schedule['time_end'])) ?>" title="<?= h($studentName . ' - ' . $office) ?>"><div class="sched-block__name"><?= h($studentName) ?></div><div class="sched-block__time"><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></div><div class="sched-block__loc"><?= h($office) ?></div></div><?php endforeach; ?></div><?php endforeach; ?></div></section>
-                <div class="sched-right">
-                    <section class="card" aria-labelledby="upcoming-heading">
-                        <h2 class="card__title" id="upcoming-heading">Generated Schedules</h2>
+                        <!-- stats cards removed as requested -->
+
+                        <div class="sched-flex" style="display:flex;max-width:1260px;margin:0 auto;gap:24px;align-items:flex-start;">
+                            <div style="flex:0 0 900px;max-width:900px;display:flex;flex-direction:column;gap:24px;">
+                                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:8px;">
+                                    <?php if ($selectedPreferred): ?>
+                                        <span style="font-size:22px;font-weight:900;letter-spacing:0.5px;">Preferred Schedule</span>
+                                        <span style="font-size:16px;color:#364153;">Preferred Office: <strong><?= h((string)$selectedPreferred['preferred_office']) ?></strong></span>
+                                    <?php endif; ?>
+                                </div>
+                                <section class="calendar-card" aria-label="Weekly schedule calendar" style="margin-left:auto;margin-right:auto;">
+                                    <div class="cal-days" role="row"><div class="cal-days__time-gutter" aria-hidden="true"></div><?php foreach ($days as $day): ?><div class="cal-days__day"><div class="cal-days__day-name"><?= h($dayShort[$day]) ?></div><div class="cal-days__day-num"><?= h($day) ?></div></div><?php endforeach; ?></div><div class="cal-body" role="grid" aria-label="Calendar time grid"><div class="cal-time-col" aria-hidden="true"><?php foreach ($hours as $hour): ?><div class="cal-time-slot"><?= date('g A', strtotime(sprintf('%02d:00:00', $hour))) ?></div><?php endforeach; ?></div><?php foreach ($days as $day): ?><div class="cal-day-col" role="gridcell" aria-label="<?= h($day) ?>"><?php foreach ($hours as $_): ?><div class="cal-day-col__slot"></div><?php endforeach; ?><?php foreach ($schedules as $schedule): ?><?php $scheduleDay = schedule_day_label((string) $schedule['day_of_week']); if ($scheduleDay !== $day || $schedule['status'] === 'declined') continue; ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); $office = (string) $schedule['office_name']; $statusStr = strtolower(trim($schedule['status'])); $color = match($statusStr) { 'deployed' => 'blue', 'accepted' => 'green', 'assigned', 'pending' => 'red', default => 'yellow' }; ?><div class="sched-block sched-block--<?= h($color) ?>" style="<?= h(calendar_block_style((string) $schedule['time_start'], (string) $schedule['time_end'])) ?>" title="<?= h($studentName . ' - ' . $office) ?>"><div class="sched-block__name"><?= h($studentName) ?></div><div class="sched-block__time"><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></div><div class="sched-block__loc"><?= h($office) ?></div></div><?php endforeach; ?></div><?php endforeach; ?></div>
+                                </section>
+                                <?php
+                                $isStudentDeployed = false;
+                                if (!empty($schedules)) {
+                                    foreach ($schedules as $s) {
+                                        if ($s['status'] === 'deployed') {
+                                            $isStudentDeployed = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                ?>
+                                <div style="display:flex;gap:18px;justify-content:flex-start;align-items:center;margin:18px 0 0 0;">
+                                    <?php if ($isStudentDeployed): ?>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="action" value="undeploy_student">
+                                            <input type="hidden" name="student_id" value="<?= (int)$selectedStudentId ?>">
+                                            <button type="submit" class="btn-create" style="background:#f59e42;min-width:150px;font-size:15px;box-shadow:0 2px 8px rgba(245,158,66,0.08);">Undeploy Student</button>
+                                        </form>
+                                        <?php if (!empty($schedules)): $firstSchedule = $schedules[0]; ?>
+                                            <button type="button" class="btn-small" style="background:#e5e7eb;color:#9ca3af;min-width:150px;font-size:15px;cursor:not-allowed;" disabled>Edit Schedule</button>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="action" value="accept_schedule">
+                                            <input type="hidden" name="student_id" value="<?= (int)$selectedStudentId ?>">
+                                            <button type="submit" class="btn-create" style="min-width:150px;font-size:15px;box-shadow:0 2px 8px rgba(21,93,252,0.08);">Accept Schedule</button>
+                                        </form>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="action" value="deploy_student">
+                                            <input type="hidden" name="student_id" value="<?= (int)$selectedStudentId ?>">
+                                            <button type="submit" class="btn-create" style="background:#00a63e;min-width:150px;font-size:15px;box-shadow:0 2px 8px rgba(0,166,62,0.08);">Deploy Student</button>
+                                        </form>
+                                        <?php if (!empty($schedules)): $firstSchedule = $schedules[0]; ?>
+                                            <button type="button" class="btn-small" style="background:#eef2ff;color:#3730a3;min-width:150px;font-size:15px;box-shadow:0 2px 8px rgba(55,48,163,0.08);" onclick="openEditModal(<?= (int)$firstSchedule['student_id'] ?>)">Edit Schedule</button>
+                                        <?php else: ?>
+                                            <button type="button" class="btn-small" style="background:#eef2ff;color:#3730a3;min-width:150px;font-size:15px;box-shadow:0 2px 8px rgba(55,48,163,0.08);" onclick="alert('No schedule to edit.')">Edit Schedule</button>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                                <section class="table-card" style="margin-top:24px;"><table class="schedule-table"><thead><tr><th>Student</th><th>Office</th><th>Day</th><th>Time</th><th>Hours</th><th>Status</th><th>Action</th></tr></thead><tbody><?php if (!$schedules): ?><tr><td colspan="7">No schedules found. Click Auto Generate Schedule.</td></tr><?php endif; ?><?php foreach ($schedules as $schedule): ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); ?><tr><td><?= h($studentName) ?></td><td><?= h((string) $schedule['office_name']) ?></td><td><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?></td><td><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></td><td><?= h(number_format((float) $schedule['required_hours'], 2)) ?>h</td><td><?= schedule_badge_html((string) $schedule['status']) ?></td><td><?php if ($schedule['status'] === 'deployed'): ?><button type="button" class="btn-small" style="background:#e5e7eb;color:#9ca3af;cursor:not-allowed;" disabled>Edit</button><?php else: ?><button type="button" class="btn-small" onclick="openEditModal(<?= (int)$schedule['student_id'] ?>)">Edit</button><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></section>
+                            </div>
+                            <div class="sched-right" style="flex:0 0 360px;max-width:360px;display:flex;flex-direction:column;gap:24px;">
+                    <section class="card" aria-labelledby="pending-heading">
+                        <h2 class="card__title" id="pending-heading">Pending Applications</h2>
+                        <!-- Preferred schedule shown above calendar -->
                         <div class="sched-list">
-                            <?php if (!$schedules): ?>
-                                <div class="sched-item">No schedules generated yet.</div>
+                            <?php if (($showStatus === 'all' || $showStatus === 'applied')): ?>
+                                <?php if (empty($pendingApplications)): ?>
+                                    <div class="sched-item">No pending applications.</div>
+                                <?php endif; ?>
+
+                                <?php foreach ($pendingApplications as $app): ?>
+                                <?php
+                                    $appName = trim((string)$app['first_name'] . ' ' . (string)$app['last_name']);
+                                    $appOffice = (string)$app['preferred_office'];
+                                    $availStmtRender = $pdo->prepare(
+                                        "SELECT day_of_week, start_time AS time_start, end_time AS time_end
+                                         FROM availability
+                                         WHERE application_id = :application_id
+                                           AND term_id = :term_id
+                                         ORDER BY FIELD(day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), start_time ASC"
+                                    );
+                                    $availStmtRender->execute(['application_id' => $app['application_id'], 'term_id' => $app['term_id']]);
+                                    $availRows = $availStmtRender->fetchAll(PDO::FETCH_ASSOC);
+                                ?>
+                                <div class="sched-item sched-item--<?= h(schedule_color($appOffice)) ?>">
+                                    <div class="sched-item__name"><?= h($appName) ?></div>
+                                    <div class="sched-item__loc"><strong>Preferred Office:</strong> <?= h($appOffice) ?> · <span style="color:#6b7280"><?= h((string)$app['student_code']) ?></span></div>
+                                    <div class="sched-item__time">
+                                        <?php if (empty($availRows)): ?>
+                                            <em>No availability provided.</em>
+                                        <?php else: ?>
+                                            <?php foreach ($availRows as $ar): ?>
+                                                <div style="font-size:13px;color:#111827;"><strong><?= h(schedule_day_label((string)$ar['day_of_week'])) ?></strong> — <span style="color:#374151"><?= h(display_time((string)$ar['time_start'])) ?> – <?= h(display_time((string)$ar['time_end'])) ?></span></div>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </div>
+
+                                </div>
+                                <?php endforeach; ?>
                             <?php endif; ?>
 
-                            <?php foreach ($schedules as $schedule): ?>
-                                <?php
-                                    $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']);
-                                    $office = (string) $schedule['office_name'];
-                                    $color = schedule_color($office);
-                                    $badge = schedule_badge_class((string) $schedule['status']);
-                                ?>
+                            <?php if ($showStatus === 'all' || $showStatus === 'approved'): ?>
+                                <?php if (empty($approvedApplicants)): ?>
+                                    <div class="sched-item">No approved applicants.</div>
+                                <?php else: ?>
+                                    <?php foreach ($approvedApplicants as $app): ?>
+                                        <?php $appName = trim((string)$app['first_name'] . ' ' . (string)$app['last_name']); $appOffice = (string)$app['preferred_office']; ?>
+                                        <div class="sched-item sched-item--<?= h(schedule_color($appOffice)) ?>">
+                                            <div class="sched-item__name"><?= h($appName) ?></div>
+                                            <div class="sched-item__loc">Preferred: <?= h($appOffice) ?> · <?= h((string)$app['student_code']) ?></div>
 
-                                <div class="sched-item sched-item--<?= h($color) ?>">
-                                    <div class="sched-item__name"><?= h($studentName) ?></div>
-                                    <div class="sched-item__time"><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?> · <?= h(display_time((string) $schedule['time_start'])) ?> – <?= h(display_time((string) $schedule['time_end'])) ?></div>
-                                    <div class="sched-item__loc"><?= h($office) ?> · <?= h(number_format((float) $schedule['required_hours'], 2)) ?>h</div>
-                                    <span class="sched-item__badge sched-item__badge--<?= h($badge) ?>"><?= h(schedule_badge_label((string) $schedule['status'])) ?></span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            <?php endif; ?>
 
-                                    <div class="sched-item__actions">
-                                        <?php
-                                        $checkScheduleStmt = $pdo->prepare("
-                                            SELECT COUNT(*)
-                                            FROM duty_schedules
-                                            INNER JOIN applications a ON a.application_id = duty_schedules.application_id
-                                            WHERE a.student_id = :student_id
-                                            AND duty_schedules.status = 'accepted'
-                                        ");
-
-                                        $checkScheduleStmt->execute([
-                                            'student_id' => $schedule['student_id']
-                                        ]);
-
-                                        $alreadyScheduled =
-                                            (int)$checkScheduleStmt->fetchColumn() > 0;
-                                        ?>
-
-                                        <form method="POST"><input type="hidden" name="action" value="update_status"><input type="hidden" name="schedule_id" value="<?= (int) $schedule['id'] ?>"><input type="hidden" name="status" value="accepted"><input type="hidden" name="return_office" value="<?= h($selectedOffice) ?>"><input type="hidden" name="return_student_id" value="<?= (int) $selectedStudentId ?>"><input type="hidden" name="return_day" value="<?= h($selectedDay) ?>"><button class="btn-small" type="submit">Accept</button></form>
-                                        <form method="POST"><input type="hidden" name="action" value="update_status"><input type="hidden" name="schedule_id" value="<?= (int) $schedule['id'] ?>"><input type="hidden" name="status" value="pending"><input type="hidden" name="return_office" value="<?= h($selectedOffice) ?>"><input type="hidden" name="return_student_id" value="<?= (int) $selectedStudentId ?>"><input type="hidden" name="return_day" value="<?= h($selectedDay) ?>"><button class="btn-small" type="submit">Pending</button></form>
-                                        <form method="POST"><input type="hidden" name="action" value="update_status"><input type="hidden" name="schedule_id" value="<?= (int) $schedule['id'] ?>"><input type="hidden" name="status" value="declined"><input type="hidden" name="return_office" value="<?= h($selectedOffice) ?>"><input type="hidden" name="return_student_id" value="<?= (int) $selectedStudentId ?>"><input type="hidden" name="return_day" value="<?= h($selectedDay) ?>"><button class="btn-small" type="submit">Decline</button></form>
-
-                                        <button
-                                            class="btn-small"
-                                            onclick="openEditModal(
-                                                <?= (int)$schedule['id'] ?>,
-                                                '<?= h($schedule['office_name']) ?>',
-                                                '<?= h(schedule_day_label((string) $schedule['day_of_week'])) ?>',
-                                                '<?= h($schedule['time_start']) ?>',
-                                                '<?= h($schedule['time_end']) ?>'
-                                            )"
-                                            type="button"
-                                        >
-                                            Edit
-                                        </button>
-
-                                        <form method="POST" onsubmit="return confirm('Delete this schedule?');"><input type="hidden" name="action" value="delete_schedule"><input type="hidden" name="schedule_id" value="<?= (int) $schedule['id'] ?>"><input type="hidden" name="return_office" value="<?= h($selectedOffice) ?>"><input type="hidden" name="return_student_id" value="<?= (int) $selectedStudentId ?>"><input type="hidden" name="return_day" value="<?= h($selectedDay) ?>"><button class="btn-danger" type="submit">Delete</button></form>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                            <?php if ($showStatus === 'all' || $showStatus === 'deployed'): ?>
+                                <?php if (empty($deployedStudents)): ?>
+                                    <div class="sched-item">No deployed students.</div>
+                                <?php else: ?>
+                                    <?php foreach ($deployedStudents as $ds): ?>
+                                        <?php $dName = trim((string)$ds['first_name'] . ' ' . (string)$ds['last_name']); $dOffice = (string)$ds['office_name']; ?>
+                                        <div class="sched-item sched-item--<?= h(schedule_color($dOffice)) ?>">
+                                            <div class="sched-item__name"><?= h($dName) ?></div>
+                                            <div class="sched-item__loc"><?= h($dOffice) ?> · <?= h((string)$ds['student_code']) ?></div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            <?php endif; ?>
                         </div>
                     </section>
+                    <!-- Generated Schedules section removed per user request -->
                     <section class="card">
                         <h2 class="card__title">Summary</h2>
                         <p style="font-size:14px;color:#4a5565;line-height:1.7;">Pending: <strong><?= (int) $pendingCount ?></strong><br>Accepted: <strong><?= (int) $acceptedCount ?></strong><br>Declined: <strong><?= (int) $declinedCount ?></strong><br>Students Scheduled: <strong><?= count($studentIds) ?></strong></p>
                     </section>
                 </div>
             </div>
-            <section class="table-card"><table class="schedule-table"><thead><tr><th>Student</th><th>Office</th><th>Day</th><th>Time</th><th>Hours</th><th>Status</th></tr></thead><tbody><?php if (!$schedules): ?><tr><td colspan="6">No schedules found. Click Auto Generate Schedule.</td></tr><?php endif; ?><?php foreach ($schedules as $schedule): ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); ?><tr><td><?= h($studentName) ?></td><td><?= h((string) $schedule['office_name']) ?></td><td><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?></td><td><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></td><td><?= h(number_format((float) $schedule['required_hours'], 2)) ?>h</td><td><?= h(schedule_badge_label((string) $schedule['status'])) ?></td></tr><?php endforeach; ?></tbody></table></section>
+
         </main>
     </div>
 </div>
@@ -895,25 +1302,147 @@ $hours = range($calendarStartHour, $calendarEndHour - 1);
     }
 })();
 
-function openEditModal(
-    id,
-    office,
-    day,
-    start,
-    end
-) {
+var studentAvailability = <?= json_encode($selectedPreferred['availability'] ?? []) ?>;
+var studentSchedules = <?= json_encode($schedules ?? []) ?>;
+
+function openEditModal(studentId) {
+    if (studentSchedules.length === 0) {
+        alert('No schedules available to edit for this student.');
+        return;
+    }
+
+    document.getElementById('edit_student_id').value = studentId;
+
+    // Use the office from the first schedule
+    document.getElementById('edit_office').value = studentSchedules[0].office_name;
+
+    // Reset all checkboxes and inputs to default
+    var days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    for (var i = 0; i < days.length; i++) {
+        document.querySelector('.edit-enabled-morning[data-index="' + i + '"]').checked = false;
+        document.querySelector('.edit-start-morning[data-index="' + i + '"]').value = '08:00';
+        document.querySelector('.edit-end-morning[data-index="' + i + '"]').value = '12:00';
+        
+        document.querySelector('.edit-enabled-afternoon[data-index="' + i + '"]').checked = false;
+        document.querySelector('.edit-start-afternoon[data-index="' + i + '"]').value = '13:00';
+        document.querySelector('.edit-end-afternoon[data-index="' + i + '"]').value = '17:00';
+    }
+
+    // Populate existing schedules
+    for (var i = 0; i < studentSchedules.length; i++) {
+        var s = studentSchedules[i];
+        var dayIdx = days.indexOf(s.day_of_week);
+        if (dayIdx !== -1) {
+            if (s.time_start < '12:30:00') {
+                document.querySelector('.edit-enabled-morning[data-index="' + dayIdx + '"]').checked = true;
+                document.querySelector('.edit-start-morning[data-index="' + dayIdx + '"]').value = s.time_start.substring(0, 5);
+                document.querySelector('.edit-end-morning[data-index="' + dayIdx + '"]').value = s.time_end.substring(0, 5);
+            } else {
+                document.querySelector('.edit-enabled-afternoon[data-index="' + dayIdx + '"]').checked = true;
+                document.querySelector('.edit-start-afternoon[data-index="' + dayIdx + '"]').value = s.time_start.substring(0, 5);
+                document.querySelector('.edit-end-afternoon[data-index="' + dayIdx + '"]').value = s.time_end.substring(0, 5);
+            }
+        }
+    }
+
+    // Build overall availability hint
+    var hint = document.getElementById('availability_hint');
+    if (studentAvailability.length > 0) {
+        var hintLines = [];
+        for (var d = 0; d < days.length; d++) {
+            var dayAvail = [];
+            for (var a = 0; a < studentAvailability.length; a++) {
+                if (studentAvailability[a].day_of_week === days[d]) {
+                    dayAvail.push(studentAvailability[a].time_start.substring(0,5) + '-' + studentAvailability[a].time_end.substring(0,5));
+                }
+            }
+            if (dayAvail.length > 0) {
+                hintLines.push('<strong>' + days[d].substring(0,3) + ':</strong> ' + dayAvail.join(', '));
+            }
+        }
+        hint.innerHTML = 'Availability: ' + hintLines.join(' | ');
+        hint.style.color = '#047857';
+    } else {
+        hint.innerHTML = 'No availability indicated.';
+        hint.style.color = '#b91c1c';
+    }
 
     document.getElementById('editModal').style.display = 'flex';
-
-    document.getElementById('edit_schedule_id').value = id;
-    document.getElementById('edit_office').value = office;
-    document.getElementById('edit_day').value = day;
-    document.getElementById('edit_start').value = start;
-    document.getElementById('edit_end').value = end;
 }
 
 function closeEditModal() {
     document.getElementById('editModal').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var editForm = document.getElementById('edit-schedule-form');
+    if (editForm) {
+        editForm.addEventListener('submit', function(e) {
+            var entries = [];
+            var days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            
+            for (var i = 0; i < days.length; i++) {
+                var day = days[i];
+                
+                var enabledMorning = document.querySelector('.edit-enabled-morning[data-index="' + i + '"]');
+                var startMorning = document.querySelector('.edit-start-morning[data-index="' + i + '"]');
+                var endMorning = document.querySelector('.edit-end-morning[data-index="' + i + '"]');
+                if (enabledMorning && enabledMorning.checked) {
+                    entries.push({
+                        day_of_week: day,
+                        time_start: startMorning.value,
+                        time_end: endMorning.value
+                    });
+                }
+                
+                var enabledAfternoon = document.querySelector('.edit-enabled-afternoon[data-index="' + i + '"]');
+                var startAfternoon = document.querySelector('.edit-start-afternoon[data-index="' + i + '"]');
+                var endAfternoon = document.querySelector('.edit-end-afternoon[data-index="' + i + '"]');
+                if (enabledAfternoon && enabledAfternoon.checked) {
+                    entries.push({
+                        day_of_week: day,
+                        time_start: startAfternoon.value,
+                        time_end: endAfternoon.value
+                    });
+                }
+            }
+            
+            if (entries.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one schedule block.');
+                return false;
+            }
+            
+            document.getElementById('edit_schedule_json').value = JSON.stringify(entries);
+        });
+    }
+});
+
+function openAppModal(id, name, office, avail) {
+    var modal = document.getElementById('appModal');
+    var body = document.getElementById('appModalBody');
+    var hidden = document.getElementById('appModalId');
+
+    hidden.value = String(id);
+    var html = '<div style="font-weight:700;margin-bottom:6px;">' + (name || 'Applicant') + '</div>';
+    html += '<div style="margin-bottom:6px;">Preferred Office: <strong>' + (office || '-') + '</strong></div>';
+    if (!avail || avail.length === 0) {
+        html += '<div><em>No availability provided</em></div>';
+    } else {
+        html += '<div style="margin-top:8px;">';
+        for (var i = 0; i < avail.length; i++) {
+            var a = avail[i];
+            html += '<div>' + (a.day_of_week || '') + ' — ' + (a.time_start || '') + ' – ' + (a.time_end || '') + '</div>';
+        }
+        html += '</div>';
+    }
+
+    body.innerHTML = html;
+    modal.style.display = 'flex';
+}
+
+function closeAppModal() {
+    document.getElementById('appModal').style.display = 'none';
 }
 
 </script>
@@ -924,105 +1453,156 @@ function closeEditModal() {
         display:none;
         position:fixed;
         inset:0;
-        background:rgba(0,0,0,.5);
+        background:rgba(16, 24, 40, 0.6);
+        backdrop-filter: blur(4px);
         z-index:9999;
         align-items:center;
         justify-content:center;
+        padding: 20px;
     "
 >
 
     <div
         style="
-            background:white;
-            padding:24px;
-            border-radius:16px;
-            width:400px;
+            background: #ffffff;
+            padding: 32px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 800px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            font-family: 'Inter', sans-serif;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
         "
     >
 
-        <h2 style="margin-bottom:16px;">
-            Edit Schedule
+        <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 800; color: #111827; display:flex; align-items:center; gap:8px; flex-shrink: 0;">
+            <svg style="width:24px;height:24px;color:#003087;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+            Edit Student Schedule
         </h2>
 
-        <form method="POST">
-
+        <form method="POST" id="edit-schedule-form" style="display:flex; flex-direction:column; min-height:0; flex:1;">
             <input type="hidden" name="action" value="edit_schedule">
-
-            <input type="hidden" name="schedule_id" id="edit_schedule_id">
+            <!-- Now storing student_id instead of a single schedule_id -->
+            <input type="hidden" name="student_id" id="edit_student_id">
             <input type="hidden" name="return_office" value="<?= h($selectedOffice) ?>">
             <input type="hidden" name="return_student_id" value="<?= (int) $selectedStudentId ?>">
             <input type="hidden" name="return_day" value="<?= h($selectedDay) ?>">
+            
+            <!-- We will serialize the checked schedule rows into this hidden input -->
+            <input type="hidden" name="schedule_json" id="edit_schedule_json">
 
-            <label>Office</label>
+            <div style="margin-bottom: 16px; flex-shrink: 0;">
+                <label style="display: block; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; margin-bottom: 8px;">Assign Office</label>
+                <select
+                    name="office_name"
+                    id="edit_office"
+                    style="width: 100%; padding: 12px 14px; border: 1px solid #d1d5dc; border-radius: 12px; font-size: 15px; color: #111827; outline: none; background: #fff;"
+                >
+                    <option value="ITSO">ITSO</option>
+                    <option value="SDAO">SDAO</option>
+                    <option value="Registrar">Registrar</option>
+                    <option value="Guidance Office">Guidance Office</option>
+                    <option value="Library">Library</option>
+                    <option value="Accounting Office">Accounting Office</option>
+                    <option value="Admissions Office">Admissions Office</option>
+                    <option value="Clinic">Clinic</option>
+                    <option value="Cashier">Cashier</option>
+                </select>
+            </div>
 
-            <select
-                name="office_name"
-                id="edit_office"
-                style="width:100%;margin-bottom:12px;"
-            >
-                <option value="ITSO">ITSO</option>
-                <option value="SDAO">SDAO</option>
-                <option value="Registrar">Registrar</option>
-                <option value="Guidance Office">Guidance Office</option>
-                <option value="Library">Library</option>
-                <option value="Accounting Office">Accounting Office</option>
-                <option value="Admissions Office">Admissions Office</option>
-                <option value="Clinic">Clinic</option>
-                <option value="Cashier">Cashier</option>
-            </select>
+            <div id="availability_hint" style="font-size: 13.5px; margin-bottom: 16px; padding: 14px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; color: #047857; flex-shrink: 0;"></div>
+            
+            <div style="overflow-y: auto; flex: 1; border: 1px solid var(--color-border); border-radius: 12px; margin-bottom: 24px;">
+                <table class="availability-table" id="edit_availability_table" style="margin-top:0;">
+                    <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 10;">
+                        <tr>
+                            <th>Day</th>
+                            <th>Morning</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Afternoon</th>
+                            <th>Start</th>
+                            <th>End</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach (['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'] as $dayIndex => $day): ?>
+                            <tr data-index="<?= (int) $dayIndex ?>" data-day="<?= htmlspecialchars($day) ?>">
+                                <td><?= htmlspecialchars($day) ?></td>
+                                <!-- Morning Slot -->
+                                <td>
+                                    <input type="checkbox" class="edit-enabled-morning" data-index="<?= (int) $dayIndex ?>" />
+                                </td>
+                                <td>
+                                    <div class="time-wrapper">
+                                        <input type="time" class="edit-start-morning" data-index="<?= (int) $dayIndex ?>" value="08:00" />
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="time-wrapper">
+                                        <input type="time" class="edit-end-morning" data-index="<?= (int) $dayIndex ?>" value="12:00" />
+                                    </div>
+                                </td>
+                                <!-- Afternoon Slot -->
+                                <td>
+                                    <input type="checkbox" class="edit-enabled-afternoon" data-index="<?= (int) $dayIndex ?>" />
+                                </td>
+                                <td>
+                                    <div class="time-wrapper">
+                                        <input type="time" class="edit-start-afternoon" data-index="<?= (int) $dayIndex ?>" value="13:00" />
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="time-wrapper">
+                                        <input type="time" class="edit-end-afternoon" data-index="<?= (int) $dayIndex ?>" value="17:00" />
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
 
-            <label>Day</label>
-
-            <select
-                name="day_of_week"
-                id="edit_day"
-                style="width:100%;margin-bottom:12px;"
-            >
-                <option value="Monday">Monday</option>
-                <option value="Tuesday">Tuesday</option>
-                <option value="Wednesday">Wednesday</option>
-                <option value="Thursday">Thursday</option>
-                <option value="Friday">Friday</option>
-                <option value="Saturday">Saturday</option>
-                
-            </select>
-
-            <label>Start Time</label>
-
-            <input
-                type="time"
-                name="time_start"
-                id="edit_start"
-                style="width:100%;margin-bottom:12px;"
-            >
-
-            <label>End Time</label>
-
-            <input
-                type="time"
-                name="time_end"
-                id="edit_end"
-                style="width:100%;margin-bottom:12px;"
-            >
-
-            <div style="display:flex;gap:10px;">
-
-                <button class="btn-create" type="submit">
-                    Save Changes
-                </button>
-
+            <div style="display:flex; gap:12px; justify-content: flex-end; flex-shrink: 0;">
                 <button
                     type="button"
-                    class="btn-danger"
+                    style="background: #ffffff; color: #003087; border: 2px solid #003087; padding: 12px 24px; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.2s;"
                     onclick="closeEditModal()"
                 >
                     Cancel
                 </button>
-
+                <button 
+                    type="submit" 
+                    style="background: linear-gradient(90deg, #ffb81c 0%, #ffa500 100%); color: #003087; padding: 12px 24px; border-radius: 14px; border: none; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px;"
+                >
+                    <svg style="width:18px;height:18px;color:#003087;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Save Changes
+                </button>
             </div>
-
         </form>
+    </div>
 
+</div>
+
+<!-- Application detail modal -->
+<div
+    id="appModal"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;"
+>
+    <div style="background:white;padding:24px;border-radius:16px;width:420px;max-width:95%;">
+        <h2 style="margin-bottom:8px;">Application Details</h2>
+        <div id="appModalBody" style="margin-bottom:12px;color:var(--color-body);"></div>
+
+        <form method="POST" id="appApproveForm">
+            <input type="hidden" name="action" value="approve_application">
+            <input type="hidden" name="application_id" id="appModalId">
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button type="submit" class="btn-create">Approve</button>
+                <button type="button" class="btn-danger" onclick="closeAppModal()">Close</button>
+            </div>
+        </form>
     </div>
 
 </div>

@@ -1,18 +1,85 @@
 <?php
 declare(strict_types=1);
 
+function sams_send_schedule_email(string $toEmail, string $toName, string $action, array $details = []): void
+{
+    require_once __DIR__ . '/../vendor/autoload.php';
+    $config = sams_mail_config();
+    $subject = 'SAMS Schedule Notification';
+    $eyebrow = 'SAMS Schedule Update';
+    $heading = 'Schedule Update';
+    $message = 'Hello ' . htmlspecialchars($toName, ENT_QUOTES, 'UTF-8') . ',<br><br>Your schedule has been updated.';
+    $accent = '#155dfc';
+    $ctaLabel = 'View Schedule';
+    $ctaUrl = 'http://localhost/samss-main/students/schedule.php';
+
+    if ($action === 'edit') {
+        $subject = 'Your schedule was edited';
+        $heading = 'Schedule Edited';
+        $message = 'Your schedule has been updated by the admin.';
+        $accent = '#f59e42';
+    } elseif ($action === 'accept') {
+        $subject = 'Your schedule was accepted';
+        $heading = 'Schedule Accepted';
+        $message = 'Your schedule has been accepted. Please check your account for details.';
+        $accent = '#008236';
+    } elseif ($action === 'approve') {
+        $subject = 'Your schedule was approved';
+        $heading = 'Schedule Approved';
+        $message = 'Your schedule has been approved. Please check your account for details.';
+        $accent = '#155dfc';
+    } elseif ($action === 'deploy') {
+        $subject = 'You have been deployed!';
+        $heading = 'Deployment Notice';
+        $message = 'Congratulations! You have been deployed. Your schedule is now final and cannot be edited.';
+        $accent = '#00a63e';
+    }
+
+    // Optionally add schedule details
+    if (!empty($details)) {
+        $message .= '<br><br><strong>Schedule Details:</strong><br>';
+        foreach ($details as $k => $v) {
+            $message .= ucfirst($k) . ': ' . htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8') . '<br>';
+        }
+    }
+
+    $mailer = new PHPMailer\PHPMailer\PHPMailer(true);
+    $mailer->CharSet = 'UTF-8';
+    $mailer->setFrom($config['from_email'], $config['from_name']);
+    $mailer->addAddress($toEmail, $toName);
+    sams_configure_mailer($mailer, $config);
+    $mailer->isHTML(true);
+    $mailer->Subject = $subject;
+    $mailer->Body = sams_build_branded_email(
+        $eyebrow,
+        $heading,
+        $message,
+        $accent,
+        $ctaLabel,
+        $ctaUrl,
+        true
+    );
+    $mailer->AltBody = strip_tags(str_replace('<br>', "\n", $message));
+    try {
+        $mailer->send();
+    } catch (Throwable $e) {
+        error_log('[sams] Schedule mailer failed: ' . $e->getMessage());
+        throw $e;
+    }
+}
+
 function sams_mail_config(): array
 {
     return [
-        'mode' => getenv('SAMS_MAIL_MODE') ?: 'smtp',
-        'host' => getenv('SAMS_MAIL_HOST') ?: 'smtp.gmail.com',
-        'port' => (int) (getenv('SAMS_MAIL_PORT') ?: 587),
-        'username' => getenv('SAMS_MAIL_USERNAME') ?: '',
-        'password' => getenv('SAMS_MAIL_PASSWORD') ?: '',
-        'encryption' => getenv('SAMS_MAIL_ENCRYPTION') ?: 'tls',
-        'from_email' => getenv('SAMS_MAIL_FROM_EMAIL') ?: '',
-        'from_name' => getenv('SAMS_MAIL_FROM_NAME') ?: 'SAMS OTP',
-        'test_to_email' => getenv('SAMS_MAIL_TEST_TO_EMAIL') ?: '',
+        'mode' => $_ENV['SAMS_MAIL_MODE'] ?? getenv('SAMS_MAIL_MODE') ?: 'smtp',
+        'host' => $_ENV['SAMS_MAIL_HOST'] ?? getenv('SAMS_MAIL_HOST') ?: 'smtp.gmail.com',
+        'port' => (int) ($_ENV['SAMS_MAIL_PORT'] ?? getenv('SAMS_MAIL_PORT') ?: 587),
+        'username' => $_ENV['SAMS_MAIL_USERNAME'] ?? getenv('SAMS_MAIL_USERNAME') ?: '',
+        'password' => $_ENV['SAMS_MAIL_PASSWORD'] ?? getenv('SAMS_MAIL_PASSWORD') ?: '',
+        'encryption' => $_ENV['SAMS_MAIL_ENCRYPTION'] ?? getenv('SAMS_MAIL_ENCRYPTION') ?: 'tls',
+        'from_email' => $_ENV['SAMS_MAIL_FROM_EMAIL'] ?? getenv('SAMS_MAIL_FROM_EMAIL') ?: '',
+        'from_name' => $_ENV['SAMS_MAIL_FROM_NAME'] ?? getenv('SAMS_MAIL_FROM_NAME') ?: 'SAMS Notifications',
+        'test_to_email' => $_ENV['SAMS_MAIL_TEST_TO_EMAIL'] ?? getenv('SAMS_MAIL_TEST_TO_EMAIL') ?: '',
     ];
 }
 
@@ -53,11 +120,12 @@ function sams_build_branded_email(
         string $message,
         string $accent = '#003087',
         ?string $ctaLabel = null,
-        ?string $ctaUrl = null
+        ?string $ctaUrl = null,
+        bool $isHtmlMessage = false
 ): string {
         $safeEyebrow = htmlspecialchars($eyebrow, ENT_QUOTES, 'UTF-8');
         $safeHeading = htmlspecialchars($heading, ENT_QUOTES, 'UTF-8');
-        $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+        $safeMessage = $isHtmlMessage ? $message : nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
         $safeCtaLabel = $ctaLabel !== null ? htmlspecialchars($ctaLabel, ENT_QUOTES, 'UTF-8') : '';
         $safeCtaUrl = $ctaUrl !== null ? htmlspecialchars($ctaUrl, ENT_QUOTES, 'UTF-8') : '';
 

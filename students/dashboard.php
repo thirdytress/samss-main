@@ -55,6 +55,7 @@ function sams_student_time_label(string $time): string
 function sams_student_schedule_status_label(string $status): string
 {
   return match ($status) {
+    'deployed' => 'Deployed',
     'accepted' => 'Accepted',
     'declined' => 'Declined',
     default => 'Pending',
@@ -275,6 +276,29 @@ if (empty($notifications)) {
 }
 
 $notificationCount = count($notifications);
+
+// Check for approved application without schedules (waiting for deployment)
+$waitingForDeployment = false;
+try {
+  if ($applicationId > 0) {
+    $checkStmt = $pdo->prepare(
+      'SELECT COUNT(*) FROM duty_schedules WHERE application_id = :aid'
+    );
+    $checkStmt->execute(['aid' => $applicationId]);
+    $hasSchedules = (int) $checkStmt->fetchColumn() > 0;
+    if (($applicationRow['application_id'] ?? 0) > 0) {
+      // load latest application status
+      $appStatusStmt = $pdo->prepare('SELECT status FROM applications WHERE application_id = :aid LIMIT 1');
+      $appStatusStmt->execute(['aid' => $applicationId]);
+      $appStatus = (string) $appStatusStmt->fetchColumn();
+      if ($appStatus === 'approved' && !$hasSchedules) {
+        $waitingForDeployment = true;
+      }
+    }
+  }
+} catch (Throwable $e) {
+  // ignore DB errors for this non-critical banner
+}
 
 // Try loading announcements and unread count from DB; if table missing, keep fallback
 $announcements = [];
@@ -1201,6 +1225,13 @@ try {
         </svg>
         My Schedule
       </a>
+      <a class="nav-item" href="fingerprint_enrollment.php">
+        <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" fill="none" />
+          <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Fingerprint Enrollment
+      </a>
       <a class="nav-item" href="#attendance">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8" />
@@ -1305,6 +1336,14 @@ try {
 
     <!-- Page content -->
     <main class="content" role="main">
+
+      <?php if (!empty($waitingForDeployment)): ?>
+        <div style="background:#fff3cd;border:1px solid #ffeeba;padding:14px;border-radius:10px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+          <strong style="color:#856404;">Notice:</strong>
+          <div style="color:#856404;">Your application has been <strong>approved</strong>, but schedules are still waiting for deployment by the admin. We will notify you once schedules are published.</div>
+          <div style="margin-left:auto"><a href="schedule.php" style="background:#fff;border:1px solid #856404;padding:8px 10px;border-radius:8px;color:#856404;text-decoration:none;font-weight:700">View schedules</a></div>
+        </div>
+      <?php endif; ?>
 
       <!-- Greeting -->
       <div>
@@ -1540,14 +1579,17 @@ try {
           <div class="card">
             <h2 class="card__heading" style="margin-bottom: var(--space-6);">Upcoming Duties</h2>
             <div class="duties-list">
-              <?php if (empty($studentSchedules)): ?>
+              <?php
+                $visibleSchedules = array_filter($studentSchedules, fn($s) => in_array($s['status'] ?? 'pending', ['accepted', 'deployed']));
+              ?>
+              <?php if (empty($visibleSchedules)): ?>
                 <div class="schedule-empty" style="padding: 0; box-shadow: none; background: transparent;">
-                  <div class="schedule-empty__title">No schedules assigned yet.</div>
-                  <div class="schedule-empty__sub">Once admin assigns your duty, it will appear here automatically.</div>
+                  <div class="schedule-empty__title">No upcoming duties yet.</div>
+                  <div class="schedule-empty__sub">Once you accept a schedule, it will appear here.</div>
                   <a class="schedule-empty__btn" href="schedule.php">Open Schedule</a>
                 </div>
               <?php else: ?>
-                <?php foreach (array_slice($studentSchedules, 0, 3) as $schedule): ?>
+                <?php foreach (array_slice($visibleSchedules, 0, 3) as $schedule): ?>
                   <div class="duty-item">
                     <div class="duty-item__left">
                       <div class="duty-item__icon">

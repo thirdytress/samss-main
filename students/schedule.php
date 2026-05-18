@@ -166,6 +166,11 @@ foreach ($studentSchedules as $schedule) {
     continue;
   }
 
+  $status = (string) ($schedule['status'] ?? 'pending');
+  if ($status !== 'accepted' && $status !== 'deployed') {
+    continue;
+  }
+
   $calendarByDay[$day][] = [
     'id' => (int) ($schedule['id'] ?? 0),
     'office_name' => (string) ($schedule['office_name'] ?? ''),
@@ -205,6 +210,11 @@ if (!empty($studentSchedules)) {
   $todayTime = strtotime(date('H:i')) ?: 0;
 
   $futureOrCurrent = array_values(array_filter($studentSchedules, static function (array $schedule) use ($todayRank, $todayTime): bool {
+    $status = (string) ($schedule['status'] ?? 'pending');
+    if ($status !== 'accepted' && $status !== 'deployed') {
+      return false;
+    }
+
     $dayRank = sams_schedule_day_rank((string) ($schedule['day_of_week'] ?? ''));
     if ($dayRank > $todayRank) {
       return true;
@@ -799,6 +809,11 @@ if (!empty($studentSchedules)) {
       white-space: nowrap;
     }
 
+    .upcoming-item__badge--deployed {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
     .upcoming-item__badge--accepted {
       background: #dcfce7;
       color: #166534;
@@ -905,8 +920,6 @@ if (!empty($studentSchedules)) {
       position: absolute;
       left: 6px;
       right: 6px;
-      background: var(--grad-primary-126);
-      border: 2px solid var(--color-gold);
       border-radius: var(--radius-sm);
       box-shadow: var(--shadow-event);
       padding: 14px 12px 12px;
@@ -916,6 +929,15 @@ if (!empty($studentSchedules)) {
       justify-items: center;
       text-align: center;
     }
+    .cal-event--pending { background: #fff1f2; border: 2px solid #fda4af; }
+    .cal-event--pending .cal-event__time, .cal-event--pending .cal-event__loc, .cal-event--pending .cal-event__recur, .cal-event--pending .cal-event__icon { color: #9f1239; }
+
+    .cal-event--accepted { background: #f0fdf4; border: 2px solid #86efac; }
+    .cal-event--accepted .cal-event__time, .cal-event--accepted .cal-event__loc, .cal-event--accepted .cal-event__recur, .cal-event--accepted .cal-event__icon { color: #166534; }
+
+    .cal-event--deployed { background: #eff6ff; border: 2px solid #93c5fd; }
+    .cal-event--deployed .cal-event__time, .cal-event--deployed .cal-event__loc, .cal-event--deployed .cal-event__recur, .cal-event--deployed .cal-event__icon { color: #1e3a8a; }
+
     .cal-event > div:first-child {
       width: 100%;
       grid-row: 2;
@@ -938,7 +960,6 @@ if (!empty($studentSchedules)) {
     .cal-event__time {
       font-size: 11px;
       font-weight: 900;
-      color: var(--color-white);
       white-space: normal;
       overflow-wrap: anywhere;
       text-align: center;
@@ -959,7 +980,6 @@ if (!empty($studentSchedules)) {
     .cal-event__loc {
       font-size: 11px;
       font-weight: 700;
-      color: var(--color-white);
       white-space: normal;
       overflow-wrap: anywhere;
       text-align: center;
@@ -968,7 +988,6 @@ if (!empty($studentSchedules)) {
     .cal-event__recur {
       font-size: var(--font-xs);
       font-weight: 900;
-      color: var(--color-gold);
       grid-row: 3;
       align-self: end;
       justify-self: center;
@@ -1250,7 +1269,7 @@ if (!empty($studentSchedules)) {
           <circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8" />
           <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        Attendance
+        Duty-Hour Report
       </a>
       <a class="nav-item" href="profile.php">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1458,7 +1477,7 @@ if (!empty($studentSchedules)) {
 
                   <?php if (!empty($calendarByDay[$calendarDay])): ?>
                     <?php foreach ($calendarByDay[$calendarDay] as $event): ?>
-                      <div class="cal-event" style="top:<?php echo (int) $event['top']; ?>px; height:<?php echo max(88, (int) $event['height']); ?>px;" aria-label="<?php echo htmlspecialchars($calendarDay . ' duty: ' . $event['start_label'] . '–' . $event['end_label'] . ' at ' . $event['office_name'], ENT_QUOTES, 'UTF-8'); ?>">
+                      <div class="cal-event cal-event--<?php echo htmlspecialchars($event['status'], ENT_QUOTES, 'UTF-8'); ?>" style="top:<?php echo (int) $event['top']; ?>px; height:<?php echo max(88, (int) $event['height']); ?>px;" aria-label="<?php echo htmlspecialchars($calendarDay . ' duty: ' . $event['start_label'] . '–' . $event['end_label'] . ' at ' . $event['office_name'], ENT_QUOTES, 'UTF-8'); ?>">
                         <div>
                           <div class="cal-event__time-row">
                               <svg class="cal-event__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1475,7 +1494,7 @@ if (!empty($studentSchedules)) {
                             <span class="cal-event__loc"><?php echo htmlspecialchars($event['office_name'], ENT_QUOTES, 'UTF-8'); ?></span>
                           </div>
                         </div>
-                        <div class="cal-event__recur"><?php echo htmlspecialchars($event['status'] === 'accepted' ? '✓' : '🔄', ENT_QUOTES, 'UTF-8'); ?></div>
+                        <div class="cal-event__recur"><?php echo htmlspecialchars(match($event['status']) { 'deployed' => '🚀', 'accepted' => '✓', default => '🔄' }, ENT_QUOTES, 'UTF-8'); ?></div>
                       </div>
                     <?php endforeach; ?>
                   <?php endif; ?>
@@ -1503,11 +1522,13 @@ if (!empty($studentSchedules)) {
                   $dayLabel = (string) ($schedule['day_of_week'] ?? '');
                   $status = (string) ($schedule['status'] ?? 'pending');
                   $badgeClass = match ($status) {
+                    'deployed' => 'upcoming-item__badge--deployed',
                     'accepted' => 'upcoming-item__badge--accepted',
                     'declined' => 'upcoming-item__badge--declined',
                     default => 'upcoming-item__badge--pending',
                   };
                   $badgeLabel = match ($status) {
+                    'deployed' => 'Deployed',
                     'accepted' => 'Accepted',
                     'declined' => 'Declined',
                     default => 'Pending',
@@ -1608,21 +1629,25 @@ if (!empty($studentSchedules)) {
                         } else {
                           // Future date - show schedule status
                           $statusColor = match((string) ($s['status'] ?? 'pending')) {
+                            'deployed' => '#dbeafe',
                             'accepted' => '#dcfce7',
                             'declined' => '#fee2e2',
                             default => '#fffbeb',
                           };
                           $statusTextColor = match((string) ($s['status'] ?? 'pending')) {
+                            'deployed' => '#1d4ed8',
                             'accepted' => '#166534',
                             'declined' => '#991b1b',
                             default => '#d97706',
                           };
                           $statusIcon = match((string) ($s['status'] ?? 'pending')) {
+                            'deployed' => '🚀',
                             'accepted' => '✓',
                             'declined' => '✕',
                             default => '⏳',
                           };
                           $statusLabel = match((string) ($s['status'] ?? 'pending')) {
+                            'deployed' => 'Deployed',
                             'accepted' => 'Accepted',
                             'declined' => 'Declined',
                             default => 'Pending',
@@ -1643,9 +1668,9 @@ if (!empty($studentSchedules)) {
                           </span>
                         </td>
                         <td class="schedule-list__cell schedule-list__cell--last">
-                          <?php if ($isTodayRow): ?>
+                          <?php if ($isTodayRow || ($displayStatus === 'schedule' && ($s['status'] ?? '') === 'deployed')): ?>
                             <span class="schedule-list__hint">Use fingerprint scanner to record attendance</span>
-                          <?php elseif ($displayStatus === 'schedule' && $s['status'] === 'pending'): ?>
+                          <?php elseif ($displayStatus === 'schedule' && ($s['status'] ?? '') === 'pending'): ?>
                             <div class="schedule-list__actions">
                               <form method="POST" action="respond_schedule.php" style="display:inline-block;">
                                 <input type="hidden" name="schedule_id" value="<?= (int) ($s['id'] ?? 0) ?>">

@@ -89,7 +89,7 @@ if ($officeName !== '' && $activeTermId > 0) {
              ORDER BY al2.log_id DESC
              LIMIT 1
          )
-         WHERE ds.status = "accepted"
+         WHERE ds.status = "deployed"
            AND ds.term_id = :term_id
            AND COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") = :office
          ORDER BY FIELD(ds.day_of_week, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"), ds.start_time ASC'
@@ -387,7 +387,7 @@ function h(?string $value): string
                         <div class="hero__next-sub"><?php echo h(trim((string) ($nextDuty['first_name'] ?? '') . ' ' . (string) ($nextDuty['last_name'] ?? ''))); ?> · <?php echo h((string) ($nextDuty['student_code'] ?? '')); ?></div>
                     <?php else: ?>
                         <div class="hero__next-main">No upcoming duty</div>
-                        <div class="hero__next-sub">All accepted schedules for this office are completed or unavailable.</div>
+                        <div class="hero__next-sub">All deployed schedules for this office are completed or unavailable.</div>
                     <?php endif; ?>
                 </div>
             </section>

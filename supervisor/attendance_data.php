@@ -55,7 +55,7 @@ $stmt = $pdo->query(
          ) lm ON lm.max_log_id = al1.log_id
      ) al ON al.application_id = a.application_id AND al.duty_id = ds.duty_id
      WHERE ds.day_of_week = '" . $currentDay . "'
-         AND ds.status = 'accepted'
+         AND ds.status = 'deployed'
          AND ds.term_id = " . $activeTermId . "
          AND COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') = " . $pdo->quote($supervisorOffice) . "
      ORDER BY ds.start_time ASC, al.log_id DESC"

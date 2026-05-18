@@ -13,6 +13,36 @@ $pdo = sams_pdo();
 $flashMessage = '';
 $flashError = '';
 
+// Check if evaluations are enabled (admin control) - safe read
+$evaluationsEnabled = true;
+try {
+  // Prefer the simpler system_flags table if present
+  $flagStmt = $pdo->prepare('SELECT enabled FROM system_flags WHERE flag_key = :k LIMIT 1');
+  $flagStmt->execute(['k' => 'evaluations_enabled']);
+  $fv = $flagStmt->fetchColumn();
+  if ($fv !== false) {
+    $evaluationsEnabled = (int)$fv === 1;
+  } else {
+    // Fallback to legacy system_settings if system_flags not present
+    $colStmt = $pdo->prepare('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table');
+    $colStmt->execute(['table' => 'system_settings']);
+    $cols = $colStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $valueCol = null;
+    foreach (['value','setting_value','val','option_value','v'] as $cand) {
+      if (in_array($cand, $cols, true)) { $valueCol = $cand; break; }
+    }
+    if ($valueCol !== null) {
+      $sql = sprintf('SELECT `%s` AS val FROM system_settings WHERE `key` = :k LIMIT 1', $valueCol);
+      $s = $pdo->prepare($sql);
+      $s->execute(['k' => 'evaluations_enabled']);
+      $r = $s->fetch(PDO::FETCH_ASSOC);
+      $evaluationsEnabled = isset($r['val']) ? ((int)$r['val'] === 1) : true;
+    }
+  }
+} catch (Throwable $e) {
+  $evaluationsEnabled = true;
+}
+
 $supervisorStatement = $pdo->prepare(
     'SELECT s.supervisor_id, s.office_name
      FROM supervisors s
@@ -150,6 +180,8 @@ if ($activeTerm && $officeName !== '') {
 }
   $eligibleCount = count($eligibleStudents);
   $canSubmitEvaluation = $activeTerm && $eligibleCount > 0;
+  // Respect admin toggle
+  $canSubmitEvaluation = $canSubmitEvaluation && $evaluationsEnabled;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -319,7 +351,11 @@ if ($activeTerm && $officeName !== '') {
       </div>
 
       <?php if (!$canSubmitEvaluation): ?>
-        <div class="notice">Evaluation submission is unavailable until there is an active term with at least one approved student in your office.</div>
+        <?php if (!$evaluationsEnabled): ?>
+          <div class="notice">Evaluation submission is currently disabled by the administrator.</div>
+        <?php else: ?>
+          <div class="notice">Evaluation submission is unavailable until there is an active term with at least one approved student in your office.</div>
+        <?php endif; ?>
       <?php endif; ?>
 
       <form method="post">

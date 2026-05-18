@@ -184,7 +184,7 @@ if ($mode === 'scheduled') {
                AND al2.application_id = a.application_id
                AND al2.created_at BETWEEN :period_start AND :period_end
          )
-         WHERE ds.status = "accepted" ' . $termFilterSql . $officeFilter['sql'] . '
+         WHERE ds.status = "deployed" ' . $termFilterSql . $officeFilter['sql'] . '
          GROUP BY s.student_id, u.user_id, a.preferred_office
          ORDER BY total DESC, name ASC
          LIMIT 200'
@@ -290,7 +290,7 @@ if ($mode === 'scheduled') {
                AND al2.application_id = a.application_id
                AND al2.created_at BETWEEN :period_start AND :period_end
          )
-         WHERE ds.status = "accepted" ' . $termFilterSql . $officeFilter['sql']
+         WHERE ds.status = "deployed" ' . $termFilterSql . $officeFilter['sql']
     );
     $attendanceSummaryStmt->execute(array_merge(['period_start' => $periodStart, 'period_end' => $periodEnd], $termParams, $officeFilter['params']));
     $attendanceSummary = $attendanceSummaryStmt->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'present' => 0, 'late' => 0, 'absent' => 0];

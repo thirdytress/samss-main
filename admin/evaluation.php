@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/bootstrap.php';
+require_once __DIR__ . '/../includes/icon.php';
 
 $user = sams_authenticated_user();
 if (!$user || ($user['role'] ?? null) !== 'admin') {
@@ -11,6 +12,61 @@ if (!$user || ($user['role'] ?? null) !== 'admin') {
 
 $pdo = sams_pdo();
 $termFilter = (int) ($_GET['term_id'] ?? 0);
+
+// Handle toggling supervisor evaluation availability
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_evaluations'])) {
+  $newVal = (int) ($_POST['value'] ?? 0);
+  // Use a simple system_flags table for this flag to avoid schema conflicts
+  try {
+    $pdo->exec(
+      'CREATE TABLE IF NOT EXISTS system_flags (
+         flag_key VARCHAR(128) NOT NULL PRIMARY KEY,
+         enabled TINYINT(1) NOT NULL DEFAULT 1,
+         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
+    $up = $pdo->prepare('INSERT INTO system_flags (flag_key, enabled) VALUES (:k, :v) ON DUPLICATE KEY UPDATE enabled = :v2');
+    $up->execute(['k' => 'evaluations_enabled', 'v' => $newVal ? 1 : 0, 'v2' => $newVal ? 1 : 0]);
+  } catch (Throwable $ex) {
+    // ignore failures to avoid blocking admin UI
+  }
+  header('Location: evaluation.php?term_id=' . $termFilter);
+  exit;
+}
+
+// Read current evaluations enabled state: prefer system_flags, fallback to legacy system_settings
+$evaluationsEnabled = true;
+try {
+  // Prefer system_flags
+  $flagStmt = $pdo->prepare('SELECT enabled FROM system_flags WHERE flag_key = :k LIMIT 1');
+  $flagStmt->execute(['k' => 'evaluations_enabled']);
+  $fv = $flagStmt->fetchColumn();
+  if ($fv !== false) {
+    $evaluationsEnabled = (int)$fv === 1;
+  } else {
+    // Fallback to legacy system_settings detection
+    $colStmt = $pdo->prepare('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table');
+    $colStmt->execute(['table' => 'system_settings']);
+    $cols = $colStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+    $valueCol = null;
+    $candidates = ['value', 'setting_value', 'val', 'option_value', 'v'];
+    foreach ($candidates as $cand) {
+      if (in_array($cand, $cols, true)) { $valueCol = $cand; break; }
+    }
+
+    if ($valueCol !== null) {
+      $sql = sprintf('SELECT `%s` AS val FROM system_settings WHERE `key` = :k LIMIT 1', $valueCol);
+      $s = $pdo->prepare($sql);
+      $s->execute(['k' => 'evaluations_enabled']);
+      $row = $s->fetch(PDO::FETCH_ASSOC);
+      $evaluationsEnabled = isset($row['val']) ? ((int)$row['val'] === 1) : true;
+    }
+  }
+} catch (Throwable $e) {
+  $evaluationsEnabled = true;
+}
 
 $termRows = $pdo->query(
     'SELECT term_id, term_name, term_year
@@ -431,13 +487,20 @@ function sams_eval_badge_class(float $score): string
                 <?php endforeach; ?>
               </select>
             </form>
-            <button class="btn-primary" type="button">Export Report</button>
+            <button class="btn-primary" type="button"><?php echo sams_icon('download',''); ?> Export Report</button>
+            <form method="post" style="display:inline-block;margin-left:12px;">
+              <input type="hidden" name="toggle_evaluations" value="1" />
+              <input type="hidden" name="value" value="<?php echo $evaluationsEnabled ? '0' : '1'; ?>" />
+              <button type="submit" class="btn--secondary" style="height:40px;padding:8px 12px;border-radius:8px;border:1px solid var(--clr-border);background:#fff;color:var(--clr-text-primary);">
+                <?php echo $evaluationsEnabled ? sams_icon('toggle-off','') . ' Disable Evaluations' : sams_icon('toggle-on','') . ' Enable Evaluations'; ?>
+              </button>
+            </form>
           </div>
         </div>
 
         <section class="stat-grid" aria-label="Evaluation summary metrics">
           <article class="stat-card stat-card--blue">
-            <div class="stat-card__icon" aria-hidden="true">◌</div>
+            <?php echo sams_icon('circle'); ?>
             <div>
               <div class="stat-card__value"><?php echo (int) $evaluationCount; ?></div>
               <div class="stat-card__label">Total Evaluations</div>
@@ -445,7 +508,7 @@ function sams_eval_badge_class(float $score): string
             </div>
           </article>
           <article class="stat-card stat-card--green">
-            <div class="stat-card__icon" aria-hidden="true">★</div>
+            <?php echo sams_icon('star'); ?>
             <div>
               <div class="stat-card__value"><?php echo number_format($overallAverage, 1); ?>/5</div>
               <div class="stat-card__label">Average Score</div>
@@ -453,7 +516,7 @@ function sams_eval_badge_class(float $score): string
             </div>
           </article>
           <article class="stat-card stat-card--purple">
-            <div class="stat-card__icon" aria-hidden="true">⌁</div>
+            <?php echo sams_icon('building'); ?>
             <div>
               <div class="stat-card__value"><?php echo h((string) $topOffice); ?></div>
               <div class="stat-card__label">Top Office</div>
@@ -461,7 +524,7 @@ function sams_eval_badge_class(float $score): string
             </div>
           </article>
           <article class="stat-card stat-card--orange">
-            <div class="stat-card__icon" aria-hidden="true">⏱</div>
+            <?php echo sams_icon('clock'); ?>
             <div>
               <div class="stat-card__value"><?php echo $latestSubmittedAt ? h(date('M j', strtotime($latestSubmittedAt))) : '—'; ?></div>
               <div class="stat-card__label">Latest Submission</div>
@@ -489,6 +552,7 @@ function sams_eval_badge_class(float $score): string
                     <th>Ratings</th>
                     <th>Comments</th>
                     <th>Submitted</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -511,6 +575,7 @@ function sams_eval_badge_class(float $score): string
                       </td>
                       <td><?php echo nl2br(h((string) ($evaluation['comments'] ?? ''))); ?></td>
                       <td><?php echo h((string) ($evaluation['submitted_at'] ?? '')); ?></td>
+                      <td><a class="btn btn--secondary" href="evaluation_detail.php?evaluation_id=<?php echo (int) ($evaluation['evaluation_id'] ?? 0); ?>"><?php echo sams_icon('eye',''); ?> View</a></td>
                     </tr>
                   <?php endforeach; ?>
                 </tbody>

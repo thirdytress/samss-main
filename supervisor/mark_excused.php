@@ -48,7 +48,7 @@ $scheduleStmt = $pdo->prepare(
      INNER JOIN applications a ON a.application_id = ds.application_id
      WHERE ds.application_id = :application_id
        AND ds.duty_id = :duty_id
-       AND ds.status = "accepted"
+       AND ds.status = "deployed"
        AND (COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), "")) = :supervisor_office OR a.preferred_office = :supervisor_office)
      LIMIT 1'
 );

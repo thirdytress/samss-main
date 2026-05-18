@@ -860,8 +860,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <form method="POST" autocomplete="off">
           <input type="hidden" name="action" value="verify_otp" />
-          <div class="otp-modal__otp">
-            <input type="text" name="otp" maxlength="6" inputmode="numeric" pattern="[0-9]*" aria-label="One time password" autofocus />
+          <div class="otp-modal__otp" id="otpSlots">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 1" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 2" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 3" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 4" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 5" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 6" />
+            <input type="hidden" name="otp" id="otpHidden" />
           </div>
           <div class="otp-modal__actions">
             <button class="otp-modal__btn otp-modal__btn--primary" type="submit">Verify OTP</button>
@@ -898,6 +904,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           iconEyeOff.style.display = isPassword ? ''      : 'none';
           toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
         });
+      }
+
+      // ---- OTP 6-slot logic ----
+      var otpSlots = document.querySelectorAll('.otp-slot');
+      var otpHidden = document.getElementById('otpHidden');
+      if (otpSlots.length === 6 && otpHidden) {
+        otpSlots[0].focus();
+        otpSlots.forEach(function(input, idx) {
+          input.addEventListener('input', function(e) {
+            var v = input.value.replace(/\D/g, '');
+            input.value = v;
+            if (v && idx < 5) otpSlots[idx+1].focus();
+            updateOtpHidden();
+          });
+          input.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && !input.value && idx > 0) {
+              otpSlots[idx-1].focus();
+            }
+          });
+        });
+        function updateOtpHidden() {
+          var code = Array.from(otpSlots).map(function(i){return i.value;}).join('');
+          otpHidden.value = code;
+        }
+        // On form submit, combine digits
+        var otpForm = otpHidden.closest('form');
+        if (otpForm) {
+          otpForm.addEventListener('submit', function() {
+            updateOtpHidden();
+          });
+        }
       }
 
       var otpModal = document.getElementById('otpModal');

@@ -50,16 +50,12 @@ $step3 = $registration['step3'] ?? [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $work_location = trim($_POST['work_location'] ?? '');
-    $work_schedule = trim($_POST['work_schedule'] ?? '');
     $skills        = trim($_POST['skills'] ?? '');
     $agree_terms   = isset($_POST['agree_terms']);
     $agree_privacy = isset($_POST['agree_privacy']);
 
     if ($work_location === '') {
         $errors['work_location'] = 'Preferred Work Location is required.';
-    }
-    if ($work_schedule === '') {
-        $errors['work_schedule'] = 'Preferred Work Schedule is required.';
     }
     if (!$agree_terms) {
         $errors['agree_terms'] = 'You must agree to the Terms and Conditions.';
@@ -328,7 +324,6 @@ if (!empty($errors)) {
 }
 
 $val_location = htmlspecialchars($_POST['work_location'] ?? '');
-$val_schedule = htmlspecialchars($_POST['work_schedule'] ?? '');
 $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
 ?>
 <!DOCTYPE html>
@@ -1041,26 +1036,7 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                         <?php endif; ?>
                     </div>
 
-                    <!-- Preferred Work Schedule -->
-                    <div class="field">
-                        <label class="field__label" for="work_schedule">Preferred Work Schedule *</label>
-                        <select
-                            class="field__select<?= !empty($errors['work_schedule']) ? ' field__select--error' : '' ?>"
-                            id="work_schedule"
-                            name="work_schedule"
-                            aria-required="true"
-                            aria-describedby="<?= !empty($errors['work_schedule']) ? 'work-schedule-error' : '' ?>"
-                        >
-                            <option value="" <?= $val_schedule === '' ? 'selected' : '' ?>>Select schedule...</option>
-                            <option value="morning"   <?= $val_schedule === 'morning'   ? 'selected' : '' ?>>Morning (7AM – 12PM)</option>
-                            <option value="afternoon" <?= $val_schedule === 'afternoon' ? 'selected' : '' ?>>Afternoon (12PM – 5PM)</option>
-                            <option value="evening"   <?= $val_schedule === 'evening'   ? 'selected' : '' ?>>Evening (5PM – 9PM)</option>
-                            <option value="flexible"  <?= $val_schedule === 'flexible'  ? 'selected' : '' ?>>Flexible</option>
-                        </select>
-                        <?php if (!empty($errors['work_schedule'])): ?>
-                            <span class="field__error" id="work-schedule-error" role="alert"><?= htmlspecialchars($errors['work_schedule']) ?></span>
-                        <?php endif; ?>
-                    </div>
+                    <!-- Preferred Work Schedule removed per request -->
 
                     <!-- Special Skills or Talents -->
                     <div class="field">

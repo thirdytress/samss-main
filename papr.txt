@@ -1,0 +1,277 @@
+
+SAMS: A Student Assistant Management System with Automated Recommendation and Biometric-Based Attendance Monitoring
+
+A Capstone Project
+
+Submitted to the Faculty of
+National University – College of Computing and Information Technologies
+
+In Partial Fulfillment of the Requirements for the Degree
+Bachelor of Science in Information Technology
+with Specialization in Mobile and Web Application
+BY:
+John Clarenz Dimazana
+Niel Malleon
+Luke Aron Magpantay
+Martyn Joseph Seloterio
+Jaime III Garcia
+
+Jeanne Pauline Calvez
+Capstone Adviser
+January 2026
+ 
+CHAPTER 1
+INTRODUCTION
+Information systems have become essential in modern education because they improve efficiency, transparency, and accessibility in school operations. Many higher education institutions adopt digital platforms to streamline processes such as enrollment, attendance tracking, and student services. In the Philippine context, the shift toward paperless workflows is reinforced by national policy recognizing electronic documents and digital signatures as valid for official transactions when supported by proper authentication and security mechanisms [1].
+One area where digital systems can provide significant benefits is the management of student employment programs, particularly student assistantships. Student assistants support administrative offices and campus activities, but handling applications, schedules, and attendance often requires substantial administrative effort when processes remain manual. Biometric-based attendance systems, particularly those utilizing fingerprint recognition, have been shown to improve accuracy, accountability, and tamper resistance compared to traditional manual logging and QR-based methods [2]. However, the literature also emphasizes that biometric systems must be paired with secure backend validation and clearly defined access controls to ensure data integrity and prevent unauthorized manipulation [3]. Multi-factor authentication (MFA), including role-based access controls, is widely recommended to reduce the risk of unauthorized access by introducing layered verification [4], [5].
+At NU Lipa, the Student Assistant Program is still managed through manual processes. Applicants submit printed requirements, wait for evaluation, and once accepted, record daily time-in and time-out entries on paper. These practices can lead to delays, errors, and challenges in monitoring attendance, performance, and duty-hour reporting. While existing attendance solutions improve logging efficiency, many systems remain focused only on attendance and do not integrate duty scheduling, document handling, supervisor management, and monitoring tools into a unified platform [2]. This gap highlights the need for an integrated system that supports end-to-end student assistant management.
+To address these limitations, the researchers propose an Automated Student Assistant Management System with a Web-Based Administrative Dashboard, hereafter referred to as the Student Assistant Management System (SAMS). The system provides a mobile and web application that allows students to apply for the program, indicate their preferred available time windows (morning or afternoon, Monday through Saturday) as part of the application, or skip the section entirely. The SDAO administrator reviews all declared preferences against the submitted COR class schedule, which serves as the authoritative basis for determining actual duty availability. The SDAO administrator finalizes each student’s duty schedule based on the COR and approved availability preferences. The schedule is fixed for the entire term, with actual duty durations shorter than the full declared window. In exceptional cases, a supervisor may request a shuffle through daily reports if an SA demonstrates conduct or attendance concerns, and Ma’am Zai will carry out the reassignment. Students can view their assigned duties and record attendance digitally through fingerprint verification. The web-based administrative dashboard is designed for the Student Development and Activities Office (SDAO) and office heads, featuring detailed dashboards, comprehensive schedule management, attendance audit logs, evaluation tools, and consolidated duty-hour reports.
+
+1.1 Project Context
+The Student Assistant Program at NU Lipa plays an important role in supporting administrative offices and campus operations. However, the program is currently managed using largely manual procedures, including printed application forms, paper-based attendance logbooks, and handwritten duty schedules. These practices require considerable administrative effort for requirement verification, duty assignment, and attendance consolidation, making the overall process time-consuming and prone to human error.
+For student assistants, manual attendance recording and schedule monitoring often result in inconsistencies, delayed validation of rendered hours, and limited visibility of their performance records. For administrators, consolidating attendance logs and duty reports across multiple offices becomes increasingly difficult as the number of student assistants grows.
+In response to these conditions, there is a need for an integrated platform that consolidates student assistant application management, scheduling, attendance monitoring, supervisor oversight, and reporting in a single system. The proposed SAMS addresses these needs by providing a web- and mobile-based solution that supports secure digital application submission, availability declaration, structured duty assignment, and real-time biometric attendance recording.
+The development of SAMS aligns with three United Nations Sustainable Development Goals. SDG 4 (Quality Education) is supported by standardizing the student assistant application process, reducing administrative bias through skill-based automated recommendations, and enabling transparent performance monitoring — ensuring equitable access to assistantship opportunities for all qualified students. SDG 8 (Decent Work and Economic Growth) is addressed by digitizing duty scheduling, biometric attendance recording, and duty-hour computation, promoting fair and accountable work arrangements that ensure students receive proper recognition for rendered service hours. SDG 9 (Industry, Innovation, and Infrastructure) is reflected in the system’s replacement of paper-based institutional workflows with a secure, integrated digital platform that strengthens operational efficiency and data accuracy within the university’s Student Assistant Program.
+
+
+
+1.2 Objectives
+General Objective
+To design and develop a mobile and web-based system that automates the application, scheduling, attendance monitoring, and performance evaluation of student assistants at NU Lipa.
+
+Specific Objectives
+To achieve the general objective, the study pursues the following:
+1.	To develop an automated mobile and web-based platform for student assistants that supports online application submission, availability declaration, duty schedule viewing, attendance tracking, and duty-hour monitoring.
+1.1 A React Native mobile application (Android/iOS) providing student assistants access to their dashboard, duty schedules, attendance records, and profile. Application submission is available on the web portal only.
+1.2 A student web portal providing access to duty schedules, real-time attendance records, weekly duty-hour progress tracking, and notifications for schedule and status updates.
+1.3 A duty schedule view displaying the student’s fixed, term-wide duty assignments as finalized by the SDAO administrator based on the submitted COR and approved availability.
+2.	To implement an assisted scheduling and assignment module that validates duty assignments against COR-derived free hours and supports fair, skill-based deployment decisions through automated recommendation, conflict checking, and weekly duty-hour tracking.
+2.1 An Automated Recommendation feature that ranks applicants by skill match, COR-derived schedule compatibility, and workload balance, displaying an office fit note per applicant in the admin dashboard to support faster, bias-reduced assignment decisions while preserving full administrative control.
+2.2 Automated conflict checking against COR class hours, and weekly duty-hour tracking dynamically based on each student’s assigned duties for the week.
+2.3 A shuffle and reassignment history log that records exception-based duty reassignments — initiated by supervisor reports flagging conduct or attendance concerns — with the date, originating office, destination office, and reason for each change.
+3.	To design and implement a secure biometric attendance monitoring system using fingerprint-based verification to ensure accurate, tamper-resistant recording of time-in and time-out transactions with automated audit logging.
+3.1 A centralized thumbmark scanner at the SDAO office linking every time-in and time-out transaction to a verified student identity, eliminating proxy attendance.
+3.2 Automated attendance status classification (Active, Late, Absent) visible in real time to the SDAO administrator and assigned supervisor, with a full audit log for accountability and dispute resolution.
+4.	To develop a web-based administrative dashboard for SDAO administrators that streamlines application management, duty scheduling, attendance monitoring, duty-hour reporting, and end-of-term performance evaluation.
+4.1 A centralized application management module with status- and term-based filtering, displaying a system-generated office fit recommendation note per applicant based on skill alignment, enabling faster and more informed assignment decisions.
+4.2 Consolidated duty-hour computation per student assistant with PDF report exports filterable by day, week, month, or term, supporting transparent and auditable record-keeping.
+4.3 An end-of-term performance evaluation module using a 1–5 rating scale across five criteria (Punctuality, Work Quality, Attitude, Attendance, and Productivity), accessible to SDAO administrators and, when enabled, to supervisors during the designated evaluation period.
+5.	To implement a dedicated Supervisor portal that allows office supervisors to monitor assigned student assistants, generate daily attendance and duty reports, and submit performance evaluations during the SDAO-opened end-of-term evaluation period.
+5.1 A supervisor attendance view scoped to the supervisor’s assigned office, allowing confirmation of whether each student physically reported for duty after scanning at the SDAO thumbmark station.
+5.2 Daily PDF report generation for attendance and duty records scoped to the supervisor’s office, supporting office-level accountability and SDAO-wide reporting.
+6.	To evaluate the system using the ISO/IEC 25010 Product Quality Model across the dimensions of functional suitability, usability, performance efficiency, reliability, and security.
+
+1.3 Scope and Delimitation
+Scope of the Project
+The study focuses on the design and development of a mobile and web-based Student Assistant Management System intended for use at NU Lipa under the supervision of the Student Development and Activities Office (SDAO). The system is designed to support the core operational processes of the Student Assistant Program, particularly those currently handled through manual and paper-based procedures.
+Specifically, the scope of the project includes: digital student assistant application and requirement submission with an optional time availability preference declaration (Monday–Saturday, morning and afternoon windows) with a per-day note option; SDAO administrator review of declared preferences against the submitted COR class schedule, which serves as the authoritative basis for all duty scheduling; approval or reassignment of declared slots at the administrator’s discretion; and actual duty assignment within approved time windows at durations shorter than the full window; duty scheduling and assignment with assisted conflict checking; weekly duty-hour progress tracking dynamically based on scheduled duties per week; fingerprint-based biometric attendance monitoring with automated audit logging; reassignment and shuffle history logging; duty-hour computation; and performance monitoring and evaluation. Each student assistant is assigned to exactly one office for the entire term by the SDAO administrator.
+
+Delimitation of the Project
+This study is limited to the operational management of the Student Assistant Program under NU Lipa's Student Development and Activities Office (SDAO). The system does not include payroll processing, allowance computation, or financial disbursement, as these functions are handled by the university's accounting and finance offices.
+Integration with other institutional systems such as enrollment platforms, grading systems, or learning management systems is also excluded. The proposed system operates as a standalone support tool focused solely on student assistantship management. The fingerprint hardware component is subject to procurement timelines; during development and testing, a placeholder interface is used to simulate biometric input.
+ 
+CHAPTER 2
+REVIEW OF RELATED LITERATURE, STUDIES AND SYSTEMS
+
+2.1 Related Literature and Studies
+Digital Transformation in Higher Education and Paperless Administrative Workflows
+The increasing reliance of higher education institutions on information systems reflects a global shift toward operational efficiency, transparency, and improved accessibility of academic and administrative services. Universities adopt digital platforms to streamline processes such as enrollment, monitoring, and student support services, primarily to reduce administrative workload and improve data accuracy and consistency. In the Philippine context, this transformation is reinforced by national policies recognizing electronic documents and digital signatures as valid for official transactions, provided that authentication and security mechanisms are properly implemented [1].
+This policy environment strengthens the justification for digitizing administrative processes that were traditionally paper-based, particularly for student support programs that require document submission, verification, and record retention. Paperless workflows enable faster application processing, reduce the risk of document loss, and provide traceable and auditable records [2]. In line with these developments, SAMS supports digital document workflows such as digital application submissions and standardized PDF report outputs, consistent with recognized electronic documentation practices.
+
+Operational Challenges in Manual Student Assistant Program Management
+Student assistantship programs play a vital role in supporting administrative offices and campus operations. However, when these programs rely on manual processes, they introduce significant administrative challenges. At NU Lipa, the student assistant program remains largely paper-based: applicants submit printed requirements, undergo manual evaluation, and record daily time-in and time-out entries using attendance logbooks. Such practices are prone to delays, human error, and inconsistencies, making it difficult to monitor attendance, performance, and accumulated duty hours accurately [2], [4].
+This operational context highlights the need for an integrated platform that supports end-to-end student assistant management — from application intake and requirement verification to duty scheduling, attendance monitoring, and report generation. The proposed SAMS directly addresses these challenges by integrating these functions into a unified web- and mobile-based system accessible to students, supervisors, and administrators.
+
+Biometric Attendance Systems: Accuracy, Integrity, and Accountability
+Attendance monitoring is a critical component of student assistant programs because it directly affects accountability and duty-hour computation. Biometric-based attendance systems, particularly those employing fingerprint recognition, have been widely adopted in educational and institutional settings due to their superior accuracy, resistance to proxy attendance, and elimination of manual encoding errors [5], [6]. Unlike code-based or card-based systems, fingerprint authentication links attendance records directly to verified identities, significantly reducing the risk of fraudulent entries.
+Literature highlights that biometric systems improve both operational efficiency and data integrity when integrated with secure backend validation and role-based access controls [6], [7]. In the context of SAMS, a thumbmark scanner stationed at the SDAO office serves as the centralized attendance logging point for all student assistants. The same attendance log is shared in real time with the SDAO administrator and the assigned supervisor, with the system automatically flagging Late, Absent, and Active statuses for administrative review.
+
+Multi-Factor Authentication and Role-Based Access Control for Secure Systems
+Systems that handle attendance data, scheduling assignments, and identity-linked records are especially vulnerable to unauthorized access and impersonation. Multi-factor authentication (MFA) is widely recommended as a best practice for reducing account compromise by requiring multiple layers of verification beyond a single credential [8]. Role-based access control (RBAC) further strengthens system security by ensuring that users can only access data and functions relevant to their designated role, preventing unauthorized operations across system boundaries [9].
+In SAMS, the role hierarchy — Student Assistant, Supervisor, Office Head, and SDAO Administrator — defines distinct access boundaries. Supervisors can only view and evaluate student assistants assigned to their office, while SDAO administrators have full system oversight.
+
+Assisted Scheduling and Assignment: Fairness, Constraints, and Human-Centered Design
+Beyond attendance monitoring, duty scheduling and student assistant assignment present complex challenges due to the need to satisfy multiple constraints, including student availability, class schedule conflicts, office requirements, and workload balance. Literature on assisted scheduling demonstrates that fairness can be treated as an explicit objective while maintaining operational efficiency and improving workload distribution [10], [11].
+Studies emphasize the ethical and human-centered implications of scheduling systems, particularly when scheduling decisions affect student well-being, time allocation, and academic balance [11]. As such, scheduling support systems should function as decision-support tools rather than fully autonomous decision-makers. The design of SAMS follows this principle: the Automated Recommendation feature produces a ranked list of recommended assignments while preserving administrative control over final decisions.
+
+2.2 Related Systems
+This section presents a review of existing systems and applications related to attendance monitoring, scheduling, and system security — core functional areas relevant to the implementation of a student assistantship management platform.
+
+
+
+
+Table 1. Gap Analysis of Related Systems and Applications
+Features	DepEd EDocs (2022)	Smart Attendance (2023)	MMSU Scheduler (2024)	SAMS (Proposed)
+Country	Philippines	Philippines	Philippines	Philippines
+Application Type	Web-based	Mobile / Web	Web-based	Mobile / Web
+Attendance Monitoring	✗	✓	✗	✓
+Scheduling	✗	✗	✓	✓
+Document Management	✓	✗	✗	✗
+Evaluation Module	✗	✗	✗	✓
+Mobile Integration	✗	✓	✗	✓
+Fingerprint / Biometric Security	✗	✗	✗	✓
+Schedule Approval Workflow	✗	✗	✗	✓
+Supervisor Role & Portal	✗	✗	✗	✓
+Minimum Hours Tracking	✗	✗	✗	✓
+Audit Log (Late/Absent/Active)	✗	✗	✗	✓
+PDF Report Export	✗	✗	✗	✓
+
+Discussion of Related Systems
+The DepEd E-Docs System (2022) is designed to support paperless administrative workflows through electronic document processing and digital signatures. Its main strength lies in improving document authenticity and reducing paper dependency. However, the system is focused exclusively on document management and does not address operational workflows specific to student assistantship programs, lacking modules for attendance monitoring, duty scheduling, biometric authentication, or performance evaluation.
+The Smart Attendance System (2023) introduces QR code-based attendance logging and real-time notifications, demonstrating improved efficiency and accuracy compared to traditional manual attendance methods. Despite these advantages, the system is primarily attendance-centered and does not include integrated features for duty scheduling, supervisor management, or student assistant evaluation.
+The MMSU Scheduler (2024) focuses on algorithm-driven scheduling to improve fairness and reduce conflicts in academic timetabling. While effective in addressing scheduling challenges, it is designed specifically for academic class scheduling and does not support biometric attendance validation, mobile integration, supervisor roles, or administrative workflows.
+In contrast to these existing systems, the proposed SAMS integrates fingerprint-based attendance monitoring, duty scheduling with availability validation, supervisor role management, performance evaluation, audit logging, and consolidated PDF reporting into a unified platform.
+
+2.3 Synthesis
+The reviewed literature and related systems collectively indicate that although digital solutions have been increasingly adopted in educational institutions, most existing systems remain functionally fragmented. Attendance monitoring solutions primarily focus on logging efficiency but commonly lack integrated scheduling, supervisor management, and performance evaluation capabilities. Scheduling systems often operate independently and do not incorporate secure attendance validation or real-time monitoring features.
+Studies on algorithm-driven scheduling underscore the importance of fairness, workload balance, and human-centered decision support in environments where assignments affect individuals' time and responsibilities. The proposed SAMS adopts a recommendation-assisted assignment approach where the system ranks candidates based on skills selected from a predefined list matched against each office’s preferred skill set, availability derived from the submitted COR, and workload balance, while the SDAO administrator retains full control over final decisions.
+Based on these insights, the proposed SAMS directly addresses the identified gaps by integrating mobile and web technologies, secure biometric attendance validation, role-based access control with a dedicated Supervisor portal, term-based application management, recommendation-assisted office assignment, performance evaluation tools, and comprehensive PDF reporting within a unified platform.
+ 
+CHAPTER 3
+TECHNICAL BACKGROUND
+
+This chapter presents the technologies, components, and architecture used in the development of the proposed Student Assistant Management System. It includes detailed discussions on software, hardware, network, and peopleware requirements, as well as the system's technical design and special features.
+
+3.1 Details of the Technology to be Used
+
+Software and Hardware Requirements
+SAMS is implemented as a web- and mobile-based platform, requiring tools that support cross-platform mobile development, web dashboard development, API services, secure authentication, fingerprint biometric attendance integration, and automated PDF report generation. The software stack is selected to balance feasibility, scalability, maintainability, and ease of deployment.
+Table 2 presents the software tools and frameworks used in the development of SAMS. Each tool is selected based on its compatibility with the system's technical requirements, including cross-platform mobile development, secure backend API services, biometric integration, and PDF report generation.
+
+
+
+
+
+
+Table 2. Software Requirements for System Development
+Software Classification	Software Name	Description / Purpose
+IDE	Visual Studio Code, Android Studio / Xcode	Primary coding, debugging, and build environments for mobile (React Native) and web/admin dashboard modules.
+Programming Languages / Frameworks	React Native (JavaScript/TypeScript), PHP, Node.js, HTML, CSS	React Native for cross-platform mobile (Android/iOS); PHP/Node.js for backend APIs; HTML/CSS for admin dashboard UI.
+Database	MySQL	Relational storage for user accounts, schedules, attendance logs, audit records, evaluation results, and generated reports.
+Third-Party Libraries	Fingerprint SDK, PDF Generation Library, Firebase Auth	Fingerprint SDK for biometric attendance integration; PDF library for report exports; Firebase Auth for authentication support.
+Version Control / Collaboration	GitHub	Source control, team collaboration, and release management throughout development.
+
+
+
+
+Table 3 presents the hardware components required to develop, test, and deploy SAMS. These include development machines, mobile test devices, server infrastructure for hosting the system, and the biometric fingerprint scanner used for attendance recording.
+
+Table 3. Hardware Requirements for System Development
+Hardware Component	Technical Specifications	Description / Purpose
+Development Laptop / Workstation	Intel Core i5, 8GB RAM, 256GB SSD	Primary device for coding, testing, and building mobile and web modules.
+Smartphone Devices	Android 6+, iOS 13+	Used for testing mobile application features including fingerprint integration.
+Server Hosting	Cloud-based VPS, 2 vCPU, 4GB RAM, 50GB SSD	Hosts backend services, REST APIs, and the MySQL database for deployment.
+Fingerprint / Thumbmark Scanner	USB or network-connected biometric scanner	Captures fingerprint data for time-in and time-out attendance logging. Placeholder interface used while hardware is procured.
+
+Network Requirements
+A stable internet connection is required for system operations involving real-time synchronization between the mobile application, the web dashboard, and the supervisor portal. Communication is performed through RESTful APIs secured using HTTPS to ensure the confidentiality and integrity of all data transmissions. The thumbmark scanner, stationed at the SDAO office, communicates with the PHP backend over the local network to log attendance transactions in real time.
+
+Peopleware Requirements
+The development and deployment of SAMS involves a team of individuals with defined roles and responsibilities. Table 4 presents the project team members, their respective roles in the development of SAMS, and their contact details. The proponents are responsible for system design, development, testing, and documentation. The SDAO Head and Program Chair serve as the primary client stakeholders, providing domain requirements, approval, and validation throughout the development process.
+
+Table 4. Project Team Members, Roles, and Contact Details
+Name	Role	Contact Details
+Niel Malleon	UI/UX Designer & Documentation Lead	nmalleon1014@gmail.com
+John Clarenz Dimazana	Documentation & Backend Developer	dimazanajc10@gmail.com
+Jaime III Garcia	Backend Developer	jgarvia9@gmail.com
+Luke Aron Magpantay	UI/UX Designer	magpantaylukearon@gmail.com
+Martyn Joseph Seloterio	Backend Developer	seloteriomartyn@students.nulipa.edu.ph
+Zaira Joy S. Enayo	SDAO Head	zsenayo@nu-lipa.edu.ph
+Joseph Michael E. Aramil	Program Chair	jearamil@nu-lipa.edu.ph
+
+3.2 Project Technical Description
+SAMS is a mobile and web-based platform designed to streamline student assistant operations through integrated modules covering application processing, term-based availability management, fixed term-wide schedule assignment based on COR and SDAO-approved availability, secure biometric attendance monitoring, supervisor management, duty-hour computation, and performance evaluation.
+
+Special Features of the System
+The system introduces several key features that distinguish it from existing solutions. Fingerprint-based biometric attendance replaces manual and code-based methods, ensuring that time-in and time-out records are directly linked to verified student identities, eliminating proxy attendance and encoding errors. The thumbmark scanner is stationed at the SDAO office and serves as the centralized attendance logging point for all student assistants.
+During the application process, students complete an optional time availability declaration covering Monday through Saturday. For each day, they may indicate their preferred free time window — morning (8:00 AM–12:00 NN) or afternoon (12:00 NN–5:00 PM) — to express when they are generally available for duty. An optional “Add a Note” feature is available per day, allowing students to flag any personal commitment or task they may have on that day; these notes are visible to the SDAO administrator for review during evaluation. Students who prefer not to declare availability may click “Skip.” Regardless of whether a student declares availability or skips, the SDAO administrator always bases the final scheduling decision on the free time blocks derived from the student’s submitted COR class schedule, which is the authoritative reference for actual availability. Declared preferences serve only as supplementary input; Ma’am Zai retains full authority to approve or decline any declared slot. When a preference is approved, the assigned duty falls within that declared time window but does not span the full window — individual duty durations vary (e.g., 2 hours within a morning window). If a declared preference is declined, the student is reassigned to a different duty slot based on the free hours identified in their COR. Once the SDAO administrator finalizes the duty schedule based on the COR and approved availability preferences, the schedule is fixed for the entire term and is immediately visible to the student on both the web portal and mobile application.
+The Automated Recommendation feature standardizes office assignment by ranking applicants based on skills, schedule compatibility, and workload balance, reducing bias and improving administrative efficiency while retaining full human control over final decisions. During the web application form, applicants select their skills by clicking on skill buttons from a predefined list of twenty skills: Data Encoding; Record-Keeping and Filing; Communication Skills; Attention to Detail; Basic Accounting and Bookkeeping; Basic Computer Troubleshooting; Hardware and Software Knowledge; Networking Basics; Graphic Design; Social Media Management; Photography and Videography; Event Organizing and Coordination; Inventory and Stock Management; Research Skills; Basic First Aid Knowledge; People Handling and Customer Service; Documentation; Physical Fitness; Equipment Handling; and Confidentiality and Discretion. Each office has a set of skills most relevant to its operations, and the system uses the degree of match between an applicant’s selected skills and the target office’s preferred skill set as the primary ranking criterion. The ranking results surface directly inside the Applications section of the admin dashboard, where each applicant entry displays an office fit recommendation note indicating which office they are best suited for. This allows the SDAO administrator to filter and compare applicants per office at a glance, making the review process significantly less time-consuming. Each student assistant is assigned to exactly one office for the entire term by the SDAO administrator, who retains full authority over the final decision.
+A dedicated Supervisor portal allows office supervisors to independently monitor their assigned student assistants, generate daily office-level reports, and submit performance evaluations only during the end-of-term evaluation period opened by the SDAO administrator. All data transmissions between system components are secured using HTTPS protocols.
+
+System Architecture
+The proposed system adopts a four-layer architecture to ensure clear separation of responsibilities and organized interaction among system components, as illustrated in Figure 1.
+
+ 
+
+Figure 1. System Architecture of SAMS
+
+Figure 1 illustrates how each layer interacts within the system, from the end users at the top to the data storage at the foundation. The User Layer consists of four role-based actors: Student Assistants, Supervisors, Office Heads, and SDAO Administrators. Each actor is assigned a distinct set of access permissions following the role hierarchy: Student Assistant → Supervisor → Office Head → SDAO Administrator.
+These users interact with the system through the Presentation Layer, which consists of three interfaces: (1) a React Native Mobile Application used exclusively by Student Assistants; (2) a Web-Based Administrative Dashboard used by SDAO Administrators and Office Heads; and (3) a Web-Based Supervisor Portal used by office Supervisors. All three interfaces are accessible via standard web browsers or Android/iOS mobile devices.
+All requests from all interfaces are routed through an HTTPS REST API, which serves as the system's secure communication gateway and connects the presentation components to the backend services. Behind the API is the Logic Layer, where the system's core business services are executed, including availability validation, Automated Recommendation, scheduling and conflict checking, biometric fingerprint validation and attendance logging, supervisor attendance confirmation, weekly duty-hour progress tracking based on scheduled duties, audit log management, performance evaluation processing, shuffle history logging, and PDF report generation.
+At the foundation is the Data Layer, which includes a MySQL database for storing structured records such as user credentials, availability declarations, attendance logs, duty schedules, evaluation results, audit logs, and shuffle history records, alongside a dedicated file storage component for generated PDF reports.
+
+System Modules
+Table 5 presents all system modules grouped by platform. Each module is identified with a unique code, name, and functional description.
+
+Table 5. System Modules of the Project
+Module No.	Module Name	Description
+WEB APPLICATION MODULES (MWA)
+MWA-01	Admin Authentication & Access Control	Allows SDAO administrators and office heads to securely log in. Ensures only authorized personnel can access administrative features.
+MWA-02	Administrative Dashboard & Monitoring	Displays real-time statistics segmented into four status categories: (1) Pending — applicants awaiting review; (2) Accepted — applicants approved but not yet assigned to any duty; (3) Active — student assistants with confirmed duty assignments deployed by the SDAO administrator; and (4) Declined — applicants whose applications were not approved. The distinction between Accepted and Active reflects the operational reality that approval does not immediately result in duty deployment; student assistants wait for the SDAO administrator to finalize and assign their duty schedule before they are considered operationally active. Provides a centralized alerts and reminders panel.
+MWA-03	Student Application Management	Accessible from the admin dashboard under the Applications section. Displays all student assistant applicants with filtering by status, term, and submitted requirements. Each applicant entry includes the skills they selected during the application form and a system-generated office fit recommendation note indicating which office they are best matched for based on skill alignment with each office’s preferred skill set. This allows the SDAO administrator to filter and assess applicants per office with less effort, as the ranking provides an immediate reference for suitability. The administrator reviews the recommendation alongside the submitted COR and declared time window preferences (Mon–Sat, morning/afternoon), and any optional per-day notes, before making the final approval or assignment decision.
+MWA-04	Duty Scheduling & Assignment Management	Allows the SDAO administrator to assign each student assistant to exactly one office for the entire term and create duty time slots. Assigns duty slots within SDAO-approved time windows, always validated against the free hours in the student’s submitted COR class schedule. Actual duty durations are shorter than the declared window (e.g., a 2-hour duty within a morning window). If a declared preference is declined, the system supports reassignment to an alternate COR-based slot. Once finalized, the duty schedule is fixed for the entire term. Tracks shuffle and reassignment history for cases where a supervisor requests an SA reassignment through daily reports due to conduct or attendance concerns.
+MWA-05	Attendance Monitoring	Displays live attendance data scoped to the current day. Student assistants are grouped into two views: On Duty Today — those with a scheduled duty for the current day — and No Duty Today — those with no assigned duty for that day. Only On Duty Today students appear as active entries with time-in and time-out records. The fingerprint scanner validates each scan against the day's duty schedule before accepting a time-in; student assistants with no duty scheduled for that day are rejected at the scanner and no attendance record is created. Shows Late, Absent, and Active status per student with timestamps.
+MWA-06	Reporting & Duty-Hour Management	Displays computed duty-hour totals per student assistant with weekly progress tracking based on the total hours of duties scheduled for that week, allowing SAs to monitor how many of their assigned weekly duty hours have been completed. Supports individual and consolidated PDF report exports filterable by day, week, month, or term. Supervisors receive automated daily reports for their assigned office.
+MWA-07	Shuffle & Reassignment History	Logs shuffle and reassignment events, which occur on an exception basis when a supervisor flags an SA through daily reports due to concerns such as attitude, behaviour, or excessive absences. Each log entry records the date, originating office, destination office, and reason for the reassignment, accessible by both administrators and student assistants for transparency and accountability.
+MWA-08	Student Authentication & Portal Access	Allows student assistants to securely log in to the web portal using registered credentials to access schedules, attendance records, and reports.
+MWA-09	Student Dashboard (Web)	Aggregates key information including current assignment details (office, supervisor name, schedule, and term), rendered duty hours, attendance summaries, and pending notifications.
+MWA-10	User Profile & Account Management	Displays student assistant personal and account information including name, ID, assigned role, and skills selected during the application form.
+MWA-11	Duty Schedule & Assignment Viewing	Displays the student’s fixed term-wide duty schedule in a tabular format as assigned by the SDAO administrator. The schedule is set for the entire term and is view-only for the student.
+MWA-12	Supervisor Authentication & Dashboard	Provides a separate login and landing page for supervisors. Dashboard displays their assigned office, number of active SAs, students on duty today, and pending evaluation count.
+MWA-13	Supervisor Attendance View	Allows supervisors to view attendance log records scoped to student assistants assigned to their office only. Supervisors confirm whether each student physically reported to their office after scanning at SDAO.
+MWA-14	Supervisor Evaluation Module	Allows supervisors to submit evaluation forms for student assistants only during the end-of-term evaluation period opened by the SDAO administrator. Criteria include Punctuality, Work Quality, Attitude, Attendance, and Productivity rated on a 1-5 scale, with an overall comments field for additional remarks. The evaluation form is locked and inaccessible outside the designated evaluation period.
+MWA-15	Supervisor Reports	Enables supervisors to generate and export daily attendance and duty reports for their office only. Reports are scoped exclusively to student assistants under the supervisor’s assigned office and are generated on a per-day basis to support daily monitoring.
+MWA-16	Admin Evaluation Module	Allows SDAO administrators to open the end-of-term evaluation period and submit standardized evaluations for any student assistant using the same criteria, rating system, and overall comments field as the supervisor evaluation module. The admin controls when the evaluation period opens and closes, and may grant supervisors access to evaluate during this period to assess the overall performance of each student assistant.
+
+MWA-17	Announcements — Allows the SDAO administrator to create and publish announcements to student assistants and supervisors. Student assistants and supervisors can view active announcements within their respective portals. Announcements may include updates on scheduling, evaluation periods, upcoming events, or general SDAO notices.	Enables supervisors to generate and export daily attendance and duty reports for their office only. Reports are scoped exclusively to student assistants under the supervisor’s assigned office and are generated on a per-day basis to support daily monitoring.
+MWA-18	Supervisor Student Assistant List — Allows supervisors to view a roster of student assistants assigned to their office for the current term. The list is scoped exclusively to the supervisor's assigned office and includes each SA's name, student ID, program, year level, duty schedule, attendance summary, and evaluation status. Supervisors may open individual SA profiles for detailed records.	Enables supervisors to generate and export daily attendance and duty reports for their office only. Reports are scoped exclusively to student assistants under the supervisor’s assigned office and are generated on a per-day basis to support daily monitoring.
+MOBILE APPLICATION MODULES (MAA)
+MAA-01	Landing Page	Entry point of the mobile application. Introduces the Student Assistant Program and provides quick access to the login function.
+MAA-02	Student Login Page	Primary authentication interface of the mobile application. Validates registered credentials to prevent unauthorized access.
+MAA-03	Student Dashboard	Central hub of the mobile application, accessible immediately after login. Provides a consolidated overview of the student assistant’s current assignment, rendered duty hours versus total scheduled duty hours for the current week, attendance records summary, and pending notifications. The student application form is exclusively available on the web portal and is not accessible through the mobile application.
+MAA-04	Student Schedule	Displays the student’s fixed term-wide duty schedule in the mobile application. Allows students to view their assigned duty shifts for the entire term. The schedule is finalized by the SDAO administrator and is view-only.
+MAA-05	Student Schedule	Displays the student’s fixed term-wide duty schedule. Allows students to view their assigned duty shifts for the entire term. The schedule is finalized by the SDAO administrator and is view-only.
+MAA-06	Student Attendance Records	Displays the student assistant's personal attendance records logged by the SDAO-stationed thumbmark scanner. Shows time-in and time-out entries, attendance status, and a summary of attendance counts.
+MAA-07	User Profile (Mobile)	Displays personal information, assigned office, contact details, and student assistant records. Allows limited profile editing while maintaining administrative oversight.
+
+Table 5 presents all system modules of SAMS organized by platform. The system is composed of eighteen Web Application Modules (MWA-01 to MWA-18) and six Mobile Application Modules (MAA-01 to MAA-06), each assigned a unique module code, name, and functional description. Together, these modules cover the complete operational scope of the Student Assistant Program, from application intake and duty scheduling to biometric attendance recording, supervisor management, end-of-term performance evaluation, and report generation. The separation of modules by platform reflects the distinct roles of each interface: the web application serves administrators, supervisors, and student applicants who require comprehensive tools for application submission and system management, while the mobile application is dedicated to active student assistants who need a streamlined interface for monitoring their schedules, attendance, and duty-hour progress after logging in directly to the dashboard.
+
+Web Application Modules (MWA)
+The web application contains sixteen modules grouped across three role-based portals: the SDAO Administrator portal, the Student portal, and the Supervisor portal. The SDAO Administrator portal serves as the primary management interface of the system. MWA-01 handles secure login and role-based access control, ensuring that only authorized SDAO administrators and office heads can access administrative functions. MWA-02 provides the Administrative Dashboard, which displays real-time operational statistics including the number of pending applications, approved student assistants, unassigned students, and students currently on duty, alongside a centralized alerts and reminders panel for quick administrative action.
+MWA-03 manages the student application pipeline within the Applications section of the admin dashboard. The SDAO administrator can filter applicants by status, term, and submitted requirements, and each applicant entry displays the skills they selected during the application form alongside a system-generated office fit recommendation note that indicates which office the applicant is most suited for. This ranking is based on the match between the applicant’s selected skills and each office’s preferred skill set, reducing the effort required to manually assess every application and helping Ma’am Zai make faster, more informed assignment decisions. MWA-04 supports duty scheduling and assignment, allowing the SDAO to assign each student assistant to exactly one office per term, create duty time slots, assign duty slots within SDAO-approved time windows, always validated against the COR-derived free hours from the submitted COR class schedule, with actual duty durations shorter than the full declared window, and reassign to alternate COR-based slots when a declared preference is declined, and track shuffle and reassignment history for exception-based reassignments initiated by supervisor reports. MWA-05 provides live attendance monitoring through the SDAO-stationed fingerprint scanner. The attendance view filters student assistants into two groups for that day: On Duty Today, showing only those with a scheduled duty, and No Duty Today, for those with no assigned duty. The scanner validates each time-in attempt against the duty schedule — student assistants with no duty for that day are rejected at the scanner and no attendance record is created. Active entries display time-in and time-out records alongside Late, Absent, and Active statuses with timestamps. MWA-06 handles reporting and duty-hour management, computing accumulated duty hours per student and supporting individual and consolidated PDF exports filterable by day, week, month, or term. MWA-07 maintains a complete shuffle and reassignment history log, recording the date, originating office, destination office, and reason for every schedule change, accessible by both administrators and student assistants. MWA-16 extends evaluation capabilities to SDAO administrators, allowing them to submit performance assessments for any student assistant using the same standardized five-criteria rating system.
+The Student portal within the web application provides student assistants with browser-based access to their program records. MWA-08 handles student authentication, while MWA-09 presents the Student Dashboard, which aggregates the student’s current assignment details, rendered duty hours, attendance summary, and pending notifications in a single view. MWA-10 allows students to view and manage their profile information, and MWA-11 presents the student’s fixed term-wide duty schedule in a tabular format, which is view-only as the schedule is finalized by the SDAO administrator for the entire term.
+The Supervisor portal provides a dedicated and scoped interface for office supervisors. MWA-12 handles supervisor authentication and displays a landing dashboard showing the supervisor’s assigned office, the number of active student assistants, students on duty for the current day, and pending evaluation tasks. MWA-13 allows supervisors to view attendance records restricted to student assistants under their office, and to confirm whether each student physically reported after scanning at the SDAO thumbmark station. MWA-14 enables supervisors to submit standardized performance evaluations per student assistant, rated across five criteria: Punctuality, Work Quality, Attitude, Attendance, and Productivity on a 1–5 scale with an overall comments field for additional remarks, but only during the end-of-term evaluation period that the SDAO administrator opens and controls. Outside this period, the evaluation module is locked and inaccessible to supervisors. MWA-15 allows supervisors to generate and export daily attendance and duty reports scoped exclusively to their assigned office.
+
+Mobile Application Modules (MAA)
+The mobile application is developed using React Native and is accessible on both Android and iOS devices. It is designed exclusively for student assistants and serves as their primary interface for interacting with the Student Assistant Program throughout the term. The application consists of seven modules spanning the full student lifecycle within the program, from initial onboarding to ongoing attendance and schedule monitoring.
+MAA-01 serves as the landing page, introducing the Student Assistant Program and providing direct access to the login function. MAA-02 is the authentication module, validating student credentials to prevent unauthorized access. Upon successful login, students are immediately directed to the Student Dashboard (MAA-03), the central hub of the mobile application. The student application form is exclusively available through the web portal and is not accessible within the mobile application.
+MAA-04 presents the student’s fixed term-wide duty schedule, allowing them to view their assigned duty shifts. The schedule is finalized by the SDAO administrator for the entire term and is view-only for the student. MAA-05 displays the student’s personal attendance records as logged by the SDAO-stationed thumbmark scanner, including individual time-in and time-out entries, attendance status (Active, Late, or Absent), and a running summary of total attendance counts. MAA-06 allows students to view their profile, including personal details, assigned office, contact information, and student assistant records, with limited editing permitted under administrative oversight. The mobile application flow mirrors the student web portal experience — login proceeds directly to the dashboard, with the same core features available to the student user on both platforms, except that the application form remains exclusively on the web.
+
+ 
+SUPPORTING DIAGRAMS
+SD.1 UML (Unified Modeling Language) Diagram of SAMS
+SD.2 Data-Flow-Diagram of SAMS
+SD.3 Mobile User Flow (Student Assistant)
+SD.4 Mobile User Flow (Attendance – Own Device)
+SD.5 Web User Flow (Student Portal)
+SD.6 Web User Flow (SDAO Admin + Office Head)
+SD.7 Web User Flow (Supervisor)
+ 
+REFERENCES
+[1] Department of Education (DepEd), Schools Division Office of Catanduanes, "Adoption of Electronic Documents and Digital Signatures in Government Transactions with DepEd," Division Memorandum DM No. 161, s. 2022, Mar. 30, 2022.
+[2] B. C. Bondoc, "Web-based smart attendance monitoring system using QR code and GSM module for SMS notification," World Journal of Advanced Research and Reviews, vol. 20, no. 3, pp. 1843-1849, 2023, doi: 10.30574/wjarr.2023.20.3.2644.
+[3] R. Sarmiento and M. L. Espinosa, "Digital attendance management with quick response code integration," Global Scientific Journal, vol. 12, no. 4, Apr. 2024.
+[4] D. Temoshok, "NIST Update: Multi-Factor Authentication and SP 800-63 Digital Identity Guidelines," Federal Cybersecurity & Privacy Professionals Forum, Feb. 15, 2022.
+[5] Cybersecurity and Infrastructure Security Agency (CISA), "Multifactor Authentication," CISA, n.d. [Online]. Available: https://www.cisa.gov/topics/cybersecurity-best-practices/multifactor-authentication
+[6] D. U. Balasta et al., "Enhancement of Time-Based One-Time Password for 2-Factor Authentication," International Journal of Innovative Science and Research Technology (IJISRT), vol. 7, no. 6, Jun. 2022.
+[7] International Organization for Standardization, "ISO/IEC 25010:2023 — Systems and Software Quality Requirements and Evaluation (SQuaRE) — Product Quality Model," ISO, 2023.
+[8] F. Li, W. J. Tan, and W. Cai, "Multi-objective optimization of clustering-based scheduling for multi-workflow on clouds considering fairness," arXiv:2205.11173, May 2022.
+[9] C. F. Unruh et al., "Algorithmic Scheduling in Industry: Technical and Ethical Aspects," Institute for Ethics in Artificial Intelligence, Technical University of Munich, Research Brief, Jun. 2022.
+[10] S. K. Saw et al., "Adaptive Scheduler: AI Optimization of Academic Timetable," IJSDR, vol. 10, no. 4, Apr. 2025.
+[11] G. L. Contillo and N. Cacanindin, "Development of Automated Class Scheduling System," Research Directorate, Mariano Marcos State University (MMSU), Jan. 2023 - Jan. 2024.
+[12] International Organization for Standardization, "ISO/IEC 25010:2023 — Product Quality Model," ISO, 2023.
+[13] United Nations, "Transforming our world: the 2030 Agenda for Sustainable Development," United Nations General Assembly Resolution A/RES/70/1, 2015. [Online]. Available: https://sdgs.un.org/2030agenda
+[14] A. K. Jain, A. Ross, and S. Pankanti, "Biometrics: A tool for information security," IEEE Transactions on Information Forensics and Security, vol. 1, no. 2, pp. 125–143, Jun. 2006, doi: 10.1109/TIFS.2006.873653.
+[15] R. S. Sandhu and P. Samarati, "Access control: Principles and practice," IEEE Communications Magazine, vol. 32, no. 9, pp. 40–48, Sep. 1994, doi: 10.1109/35.312842.
+[16] M. A. Ramos and J. T. Rivera, "Mobile application development using React Native for cross-platform deployment: A practical review," International Journal of Advanced Computer Science and Applications, vol. 13, no. 5, pp. 210–218, 2022, doi: 10.14569/IJACSA.2022.0130527.
+[17] Commission on Higher Education (CHED), "CHED Memorandum Order No. 9, s. 2013: Enhanced Policies and Guidelines on Student Affairs and Services," Republic of the Philippines, 2013. [Online]. Available: https://www.ched.gov.ph

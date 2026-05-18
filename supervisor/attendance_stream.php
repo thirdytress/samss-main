@@ -66,7 +66,7 @@ $checkStmt = $pdo->prepare(
          INNER JOIN applications a ON a.application_id = ds.application_id
          LEFT JOIN attendance_logs al ON al.application_id = a.application_id AND al.duty_id = ds.duty_id
          WHERE ds.day_of_week = :day
-        AND ds.status = "accepted"
+        AND ds.status = "deployed"
              AND ds.term_id = :term
         AND COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") = :office'
 );
@@ -86,7 +86,7 @@ $fetchStmt = $pdo->prepare(
              LIMIT 1
      )
      WHERE ds.day_of_week = :day
-          AND ds.status = 'accepted'
+          AND ds.status = 'deployed'
          AND ds.term_id = :term
           AND COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') = :office
      ORDER BY ds.start_time ASC, al.log_id DESC"

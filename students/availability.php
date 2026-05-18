@@ -227,6 +227,25 @@ $days = [
             font: inherit;
         }
 
+        .time-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .time-wrapper input[type="time"] {
+            flex: 1;
+            margin: 0;
+        }
+
+        .time-ampm {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--color-muted);
+            min-width: 32px;
+            text-align: center;
+        }
+
         .availability-table input[type="checkbox"] {
             width: 18px;
             height: 18px;
@@ -274,9 +293,15 @@ $days = [
         }
 
         .error {
-            margin-top: 16px;
-            color: #b91c1c;
+            padding: 16px;
+            margin: 0 0 24px 0;
+            color: #7f1d1d;
+            background-color: #fee2e2;
+            border: 2px solid #b91c1c;
+            border-radius: var(--radius-md);
             font-weight: 700;
+            font-size: 14px;
+            line-height: 1.6;
         }
 
         @media (max-width: 768px) {
@@ -335,6 +360,8 @@ $days = [
                 <div class="notice"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
 
+            <div id="error-box" class="error" hidden></div>
+
             <div class="meta">
                 <div class="meta__item">
                     <span class="meta__label">Application ID</span>
@@ -357,9 +384,12 @@ $days = [
                     <thead>
                         <tr>
                             <th>Day</th>
-                            <th>Available</th>
-                            <th>Start Time</th>
-                            <th>End Time</th>
+                            <th>Available (Morning)</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Available (Afternoon)</th>
+                            <th>Start</th>
+                            <th>End</th>
                         </tr>
                     </thead>
 
@@ -367,14 +397,37 @@ $days = [
                         <?php foreach ($days as $dayIndex => $day): ?>
                             <tr data-index="<?= (int) $dayIndex ?>" data-day="<?= htmlspecialchars($day) ?>">
                                 <td><?= htmlspecialchars($day) ?></td>
+                                <!-- Morning Slot (8am-12pm) -->
                                 <td>
-                                    <input type="checkbox" class="availability-enabled" data-index="<?= (int) $dayIndex ?>" checked />
+                                    <input type="checkbox" class="availability-enabled-morning" data-index="<?= (int) $dayIndex ?>" checked />
                                 </td>
                                 <td>
-                                    <input type="time" class="availability-start" data-index="<?= (int) $dayIndex ?>" value="08:00" />
+                                    <div class="time-wrapper">
+                                        <input type="time" class="availability-start-morning" data-index="<?= (int) $dayIndex ?>" value="08:00" />
+                                        <span class="time-ampm">AM</span>
+                                    </div>
                                 </td>
                                 <td>
-                                    <input type="time" class="availability-end" data-index="<?= (int) $dayIndex ?>" value="17:00" />
+                                    <div class="time-wrapper">
+                                        <input type="time" class="availability-end-morning" data-index="<?= (int) $dayIndex ?>" value="12:00" />
+                                        <span class="time-ampm">PM</span>
+                                    </div>
+                                </td>
+                                <!-- Afternoon Slot (1pm-8pm) -->
+                                <td>
+                                    <input type="checkbox" class="availability-enabled-afternoon" data-index="<?= (int) $dayIndex ?>" />
+                                </td>
+                                <td>
+                                    <div class="time-wrapper">
+                                        <input type="time" class="availability-start-afternoon" data-index="<?= (int) $dayIndex ?>" value="13:00" />
+                                        <span class="time-ampm">PM</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="time-wrapper">
+                                        <input type="time" class="availability-end-afternoon" data-index="<?= (int) $dayIndex ?>" value="20:00" />
+                                        <span class="time-ampm">PM</span>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -386,8 +439,21 @@ $days = [
                     <button class="btn" type="submit">Save Availability</button>
                 </div>
 
-                <p class="helper">At least one active day is required. You can edit this later once your schedule is finalized.</p>
-                <div id="error-box" class="error" hidden></div>
+                <p class="helper">Set your available hours for morning (8am-12pm) and/or afternoon (1pm-8pm). You can enable/disable each slot and adjust times as needed. Each schedule assigned will be minimum 2 hours.</p>
+
+                <!-- Notes -->
+                <div class="card" style="margin-top: 24px; border-top: 2px solid var(--color-primary);">
+                    <h3 style="margin-top: 0; color: var(--color-primary);">Additional Notes <span style="font-size: 14px; color: var(--color-muted); font-weight: 400;">(Optional)</span></h3>
+                    <p style="font-size: 14px; color: var(--color-muted); margin-bottom: 12px;">
+                        Please explain your time availability (e.g., "10am-12pm available because I have 8-10am class", "Only free after 1pm due to morning schedule"). Miss Zai will check your Class Schedule (COR) to validate.
+                    </p>
+                    <textarea 
+                        id="availability-notes" 
+                        name="notes" 
+                        placeholder="Explain your availability constraints and class schedule..."
+                        style="width: 100%; min-height: 100px; padding: 12px; border: 1px solid var(--color-border); border-radius: 12px; font-family: inherit; font-size: 14px; resize: vertical;">
+                    </textarea>
+                </div>
             </form>
         </section>
     </main>
@@ -430,24 +496,37 @@ $days = [
                     var index = row.getAttribute('data-index');
                     var day = row.getAttribute('data-day');
 
-                    var enabled = document.querySelector('.availability-enabled[data-index="' + index + '"]');
-                    var start = document.querySelector('.availability-start[data-index="' + index + '"]');
-                    var end = document.querySelector('.availability-end[data-index="' + index + '"]');
+                    // Morning slot
+                    var enabledMorning = document.querySelector('.availability-enabled-morning[data-index="' + index + '"]');
+                    var startMorning = document.querySelector('.availability-start-morning[data-index="' + index + '"]');
+                    var endMorning = document.querySelector('.availability-end-morning[data-index="' + index + '"]');
 
-                    if (!enabled || !start || !end || !enabled.checked) {
-                        return;
+                    if (enabledMorning && enabledMorning.checked && startMorning && endMorning) {
+                        entries.push({
+                            day_of_week: day,
+                            time_start: startMorning.value,
+                            time_end: endMorning.value,
+                            is_available: 1
+                        });
                     }
 
-                    entries.push({
-                        day_of_week: day,
-                        time_start: start.value,
-                        time_end: end.value,
-                        is_available: 1
-                    });
+                    // Afternoon slot
+                    var enabledAfternoon = document.querySelector('.availability-enabled-afternoon[data-index="' + index + '"]');
+                    var startAfternoon = document.querySelector('.availability-start-afternoon[data-index="' + index + '"]');
+                    var endAfternoon = document.querySelector('.availability-end-afternoon[data-index="' + index + '"]');
+
+                    if (enabledAfternoon && enabledAfternoon.checked && startAfternoon && endAfternoon) {
+                        entries.push({
+                            day_of_week: day,
+                            time_start: startAfternoon.value,
+                            time_end: endAfternoon.value,
+                            is_available: 1
+                        });
+                    }
                 });
 
                 if (entries.length === 0) {
-                    showError('Please choose at least one availability day.');
+                    showError('Please choose at least one availability slot.');
                     return;
                 }
 
@@ -461,6 +540,7 @@ $days = [
                         application_id: applicationId,
                         student_id: studentId,
                         term_id: termId,
+                        notes: document.getElementById('availability-notes').value.trim(),
                         availability: entries
                     })
                 })

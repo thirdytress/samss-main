@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/bootstrap.php';
 
 $user = sams_authenticated_user();
+
 if (!$user || (($user['role'] ?? null) !== 'supervisor')) {
     header('Location: ../login.php');
     exit;
@@ -74,8 +75,7 @@ $reportsStmt = $pdo->prepare(
      LEFT JOIN users u ON u.user_id = sr.reporter_id
      LEFT JOIN applications a ON a.application_id = sr.application_id
      WHERE a.preferred_office = :office
-     ORDER BY sr.created_at DESC
-     LIMIT 10'
+     ORDER BY sr.created_at DESC'
 );
 $reportsStmt->execute(['office' => $supervisorOffice]);
 $reports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -235,10 +235,10 @@ foreach ($reports as $reportRow) {
                     </div>
                 </section>
 
-                <section id="historySection" class="tab-panel hidden">
-                    <div class="report-title mt-4">Recent Reports</div>
+                <section id="historySection" class="tab-panel" style="display:none;">
+                    <div class="report-title mt-4">Recent Reports (<?php echo count($reports); ?> found)</div>
                     <div class="recent-list" id="recentList">
-                        <?php foreach ($reports as $r): ?>
+                        <?php if (!empty($reports)): foreach ($reports as $r): ?>
                             <a href="../admin/report_detail.php?report_id=<?php echo (int)($r['report_id'] ?? 0); ?>" class="no-decor">
                                 <div class="report-item">
                                     <div class="flex-between">
@@ -250,7 +250,19 @@ foreach ($reports as $reportRow) {
                                 </div>
                             </a>
                         <?php endforeach; ?>
-                        <?php if (empty($reports)): ?><div class="card">No recent reports.</div><?php endif; ?>
+                        <?php else: ?><div class="card">No recent reports.</div><?php endif; ?>
+                        <?php if (!empty($debugReports)): ?>
+                        <div class="card" style="margin-top:16px;background:#fffbe6;color:#b26d00">
+                            <strong>Debug: Your 10 Most Recent Reports (regardless of office)</strong>
+                            <ul style="font-size:13px;line-height:1.5;margin-top:8px">
+                                <?php foreach ($debugReports as $dr): ?>
+                                <li>
+                                    <b><?php echo htmlspecialchars((string)($dr['title'] ?? '-')); ?></b> — Student: <?php echo htmlspecialchars((string)($dr['student_code'] ?? '-')); ?> — Office: <?php echo htmlspecialchars((string)($dr['preferred_office'] ?? '-')); ?> — Created: <?php echo htmlspecialchars((string)($dr['created_at'] ?? '')) ?>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </section>
             </main>

@@ -1,0 +1,16 @@
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\bin\Debug\net10.0\CaptureHelper.exe
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\bin\Debug\net10.0\CaptureHelper.deps.json
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\bin\Debug\net10.0\CaptureHelper.runtimeconfig.json
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\bin\Debug\net10.0\CaptureHelper.dll
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\bin\Debug\net10.0\CaptureHelper.pdb
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.GeneratedMSBuildEditorConfig.editorconfig
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.AssemblyInfoInputs.cache
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.AssemblyInfo.cs
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.csproj.CoreCompileInputs.cache
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.sourcelink.json
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.dll
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\refint\CaptureHelper.dll
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.pdb
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.genruntimeconfig.cache
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\ref\CaptureHelper.dll
+C:\xampp\htdocs\samss-main\tools\fingerprint-bridge\capture-helper\obj\Debug\net10.0\CaptureHelper.csproj.AssemblyReference.cache

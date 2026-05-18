@@ -20,7 +20,8 @@ if (!$user) {
 
 $scheduleId = (int) ($_POST['schedule_id'] ?? 0);
 $action = (string) ($_POST['action'] ?? '');
-$fingerprint = (string) ($_POST['fingerprint_verified'] ?? '0');
+
+$fingerprintTemplate = isset($_POST['fingerprint_template']) ? (string) $_POST['fingerprint_template'] : null;
 
 if (!sams_attendance_clocking_enabled()) {
   http_response_code(503);
@@ -34,10 +35,37 @@ if ($scheduleId <= 0 || ($action !== 'in' && $action !== 'out')) {
   exit;
 }
 
-// Require fingerprint verification for clocking
-if (!in_array($fingerprint, ['1', 'true', 'yes'], true)) {
+
+// Require fingerprint template for clocking
+if (!$fingerprintTemplate || strlen($fingerprintTemplate) < 20) {
   http_response_code(403);
-  echo json_encode(['success' => false, 'message' => 'Fingerprint verification required']);
+  echo json_encode(['success' => false, 'message' => 'Fingerprint scan required.']);
+  exit;
+}
+
+// Load all enrolled templates for this student
+$stmt = $pdo->prepare('SELECT template, finger FROM student_fingerprints WHERE student_id = (SELECT student_id FROM students WHERE user_id = :user_id LIMIT 1)');
+$stmt->execute(['user_id' => $user['user_id'] ?? $user['id']]);
+$enrolled = $stmt->fetchAll(PDO::FETCH_ASSOC);
+if (!$enrolled || count($enrolled) === 0) {
+  http_response_code(403);
+  echo json_encode(['success' => false, 'message' => 'No enrolled fingerprints found. Please enroll first.']);
+  exit;
+}
+
+// Use the bridge to verify the template against all enrolled templates
+$matchFound = false;
+foreach ($enrolled as $row) {
+  // Call the bridge for verification (simulate for now)
+  // In production, you would call a local service or use the SDK for real matching
+  if ($fingerprintTemplate === $row['template']) { // Mock: exact match
+    $matchFound = true;
+    break;
+  }
+}
+if (!$matchFound) {
+  http_response_code(403);
+  echo json_encode(['success' => false, 'message' => 'Fingerprint not recognized.']);
   exit;
 }
 

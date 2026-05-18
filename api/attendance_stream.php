@@ -63,7 +63,7 @@ while (!connection_aborted()) {
                              LIMIT 1
                          )
                          WHERE ds.day_of_week = :day
-                           AND ds.status = "accepted"
+                           AND ds.status = "deployed"
                            AND ds.term_id = :term_id
                          ORDER BY ds.start_time ASC, al.log_id DESC'
                     );

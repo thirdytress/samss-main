@@ -154,13 +154,12 @@ function sams_attendance_normalize_student_logs(PDO $pdo, int $applicationId, ?i
                                  INNER JOIN applications a ON a.application_id = ds.application_id
                                  WHERE ds.application_id = :application_id
                                      AND ds.term_id = :term_id
-                                     AND ds.status = :accepted_status
+                                     AND ds.status = "deployed"
                                  ORDER BY FIELD(ds.day_of_week, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"), ds.start_time ASC'
                         );
         $scheduleStmt->execute([
             'application_id' => $applicationId,
             'term_id' => $termId,
-            'accepted_status' => 'accepted',
         ]);
         $scheduleRows = $scheduleStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 

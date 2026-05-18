@@ -231,6 +231,24 @@ try {
     );
     $recentAttendanceStmt->execute(['student_id' => $studentId]);
     $latestAttendance = $recentAttendanceStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    // Fetch student availability with notes
+    $availabilityStmt = $pdo->prepare(
+        'SELECT a.day_of_week, a.start_time, a.end_time, a.notes
+         FROM availability a
+         WHERE a.application_id = (SELECT application_id FROM applications WHERE student_id = :student_id ORDER BY application_id DESC LIMIT 1)
+         ORDER BY FIELD(a.day_of_week, \'Monday\',\'Tuesday\',\'Wednesday\',\'Thursday\',\'Friday\',\'Saturday\'), a.start_time ASC'
+    );
+    $availabilityStmt->execute(['student_id' => $studentId]);
+    $availabilityRecords = $availabilityStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    // Extract notes from first availability record
+    $availabilityNotes = null;
+    foreach ($availabilityRecords as $av) {
+        if (!empty($av['notes'])) {
+            $availabilityNotes = $av['notes'];
+            break;
+        }
+    }
 
     $data = [
         'student_id' => (int) $row['student_id'],
@@ -255,6 +273,8 @@ try {
         'total_schedules' => $totalSchedules,
         'attendance_rate' => $attendanceRate,
         'latest_attendance' => $latestAttendance,
+            'availability_records' => $availabilityRecords,
+            'availability_notes' => $availabilityNotes,
         'email' => (string) ($row['email'] ?? ''),
         'phone' => 'Not provided',
     ];

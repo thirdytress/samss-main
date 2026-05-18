@@ -70,6 +70,19 @@ try {
         throw new RuntimeException('Application record not found.');
     }
 
+    // Ensure notes column exists
+    $checkColumn = $pdo->prepare(
+        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() 
+         AND TABLE_NAME = 'availability' 
+         AND COLUMN_NAME = 'notes'"
+    );
+    $checkColumn->execute();
+
+    if ((int) $checkColumn->fetchColumn() === 0) {
+        $pdo->exec('ALTER TABLE availability ADD COLUMN notes TEXT DEFAULT NULL');
+    }
+
     $pdo->beginTransaction();
 
     $deleteStatement = $pdo->prepare(
@@ -82,10 +95,15 @@ try {
 
     $insertStatement = $pdo->prepare(
         'INSERT INTO availability 
-            (application_id, term_id, day_of_week, start_time, end_time)
+            (application_id, term_id, day_of_week, start_time, end_time, notes)
          VALUES 
-            (:application_id, :term_id, :day_of_week, :time_start, :time_end)'
+            (:application_id, :term_id, :day_of_week, :time_start, :time_end, :notes)'
     );
+
+    $notes = trim((string) ($data['notes'] ?? ''));
+    if ($notes === '') {
+        $notes = null;
+    }
 
     foreach ($entries as $entry) {
         $day = normalize_day_of_week((string) ($entry['day_of_week'] ?? ''));
@@ -100,12 +118,23 @@ try {
             continue;
         }
 
+        // Validate that time slot is at least 2 hours
+        $startTime = new DateTime('1970-01-01 ' . $timeStart);
+        $endTime = new DateTime('1970-01-01 ' . $timeEnd);
+        $diff = $endTime->diff($startTime);
+        $hours = $diff->h + ($diff->i / 60);
+
+        if ($hours < 2) {
+            throw new RuntimeException(sprintf('Each availability slot must be at least 2 hours. %s slot is %.1f hours.', $day, $hours));
+        }
+
         $insertStatement->execute([
             'application_id' => $applicationId,
             'term_id' => $termId,
             'day_of_week' => $day,
             'time_start' => $timeStart,
             'time_end' => $timeEnd,
+            'notes' => $notes,
         ]);
     }
 

@@ -86,8 +86,9 @@ if (!$currentUser || ($currentUser['role'] ?? null) !== 'student') {
 }
 
 $pdo = sams_pdo();
+$userPhoneColumn = sams_column_exists($pdo, 'users', 'phone_number') ? 'u.phone_number' : 'NULL AS phone_number';
 $studentStmt = $pdo->prepare(
-    'SELECT s.student_id AS student_db_id, s.student_id_number, s.program, s.year_level, s.current_gpa, s.is_enrolled, s.is_good_standing, s.created_at AS student_created_at, u.user_id AS user_db_id, u.email, u.first_name, u.last_name, NULL AS phone_number, NULL AS profile_photo, u.created_at AS user_created_at
+    'SELECT s.student_id AS student_db_id, s.student_id_number, s.program, s.year_level, s.current_gpa, s.is_enrolled, s.is_good_standing, s.created_at AS student_created_at, u.user_id AS user_db_id, u.email, u.first_name, u.last_name, ' . $userPhoneColumn . ', NULL AS profile_photo, u.created_at AS user_created_at
      FROM students s
      INNER JOIN users u ON u.user_id = s.user_id
      WHERE s.user_id = :user_id
@@ -100,6 +101,8 @@ if (!$student) {
     header('Location: ../login.php');
     exit;
 }
+
+// No need to fetch phone_number separately; now included in main query
 
 $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($student['last_name'] ?? ''));
 if ($studentName === '') {
@@ -1194,7 +1197,7 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
                                 <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </span>
-                        <span class="nav__label">Attendance</span>
+                        <span class="nav__label">Duty-Hour Report</span>
                     </a>
                 </li>
                 <li class="nav__item">

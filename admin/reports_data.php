@@ -108,7 +108,7 @@ try {
                AND MONTH(al.created_at) = :month
                AND al.clock_in_time IS NOT NULL
                AND al.clock_out_time IS NOT NULL
-               AND (ds.status = "accepted" OR ds.duty_id IS NULL)' . $officeFilter['sql']
+               AND (ds.status = "deployed" OR ds.duty_id IS NULL)' . $officeFilter['sql']
         );
         $stmt->execute(array_merge(['month' => $month], $officeFilter['params']));
         $hours = (float) $stmt->fetchColumn();
@@ -124,7 +124,7 @@ try {
          LEFT JOIN applications a ON a.application_id = al.application_id
          LEFT JOIN duty_schedules ds ON ds.duty_id = al.duty_id
          WHERE al.created_at BETWEEN :period_start AND :period_end
-           AND (ds.status = "accepted" OR ds.duty_id IS NULL)' . $officeFilter['sql'] . '
+           AND (ds.status = "deployed" OR ds.duty_id IS NULL)' . $officeFilter['sql'] . '
          GROUP BY COALESCE(a.preferred_office, "Unassigned")
          ORDER BY count DESC'
     );

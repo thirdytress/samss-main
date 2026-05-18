@@ -47,7 +47,7 @@ if ($supervisorOffice !== '' && $activeTermId > 0) {
              LIMIT 1
          )
          WHERE ds.day_of_week = :day
-                     AND ds.status = "accepted"
+                     AND ds.status = "deployed"
            AND ds.term_id = :term_id
                      AND COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") = :office
          ORDER BY ds.start_time ASC, al.log_id DESC'
@@ -338,7 +338,7 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
                                 </tr>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <tr><td colspan="6" class="empty">No accepted schedules found for this office today.</td></tr>
+                            <tr><td colspan="6" class="empty">No deployed schedules found for this office today.</td></tr>
                         <?php endif; ?>
                         </tbody>
                     </table>

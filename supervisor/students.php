@@ -31,7 +31,7 @@ if ($termLabel === '') {
 $search = trim((string) ($_GET['q'] ?? ''));
 
 $where = [
-    'ds.status = "accepted"',
+    'ds.status = "deployed"',
     '(ds.office_name = :office_ds OR a.preferred_office = :office_app)',
 ];
 $params = [
@@ -70,7 +70,7 @@ $sql =
         COALESCE(u.first_name, "") AS first_name,
         COALESCE(u.last_name, "") AS last_name,
         COALESCE(NULLIF(TRIM(a.preferred_office), ""), NULLIF(TRIM(ds.office_name), ""), "Unassigned") AS office_name,
-        COUNT(DISTINCT ds.duty_id) AS accepted_schedule_count,
+        COUNT(DISTINCT ds.duty_id) AS deployed_schedule_count,
         COALESCE((
             SELECT SUM(TIMESTAMPDIFF(SECOND, l.clock_in_time, l.clock_out_time) / 3600)
             FROM attendance_logs l
@@ -282,7 +282,7 @@ function h(?string $value): string
                                 <td><?php echo h((string) ($studentRow['student_id_number'] ?? '')); ?></td>
                                 <td><?php echo h((string) ($studentRow['program'] ?? '-')); ?></td>
                                 <td><span class="pill"><?php echo h((string) ($studentRow['office_name'] ?? 'Unassigned')); ?></span></td>
-                                <td><?php echo (int) ($studentRow['accepted_schedule_count'] ?? 0); ?></td>
+                                <td><?php echo (int) ($studentRow['deployed_schedule_count'] ?? 0); ?></td>
                                 <td><?php echo number_format((float) ($studentRow['rendered_hours'] ?? 0), 1); ?>h</td>
                                 <td><?php echo $rating > 0 ? number_format($rating, 1) . '/5' : 'N/A'; ?></td>
                                 <td><span class="pill pill--active">Active</span></td>
@@ -290,7 +290,7 @@ function h(?string $value): string
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr><td class="empty" colspan="9">No accepted students found for this office.</td></tr>
+                        <tr><td class="empty" colspan="9">No deployed students found for this office.</td></tr>
                     <?php endif; ?>
                     </tbody>
                 </table>
