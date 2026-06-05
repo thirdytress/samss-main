@@ -3,6 +3,20 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/bootstrap.php';
 
+if (empty($_SESSION['sams_registration']['step1'])) {
+    header('Location: register.php');
+    exit;
+}
+if (empty($_SESSION['sams_registration']['step2'])) {
+    header('Location: register1.php');
+    exit;
+}
+
+$step1_link = 'register.php';
+$step2_link = 'register1.php';
+$step3_link = 'register2.php';
+$step4_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2']) && !empty($_SESSION['sams_registration']['step3'])) ? 'register3.php' : '#';
+
 $errors = [];
 $success = false;
 
@@ -801,10 +815,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </button>
             <ul id="nav-menu" class="nav__menu" role="list">
                 <li><a href="index.php"      class="nav__item">Home</a></li>
-                <li><a href="register.php"   class="nav__item">Personal Info</a></li>
-                <li><a href="register1.php"  class="nav__item">Academic Info</a></li>
-                <li><a href="register2.php"  class="nav__item nav__item--active" aria-current="page">Requirements</a></li>
-                <li><a href="register3.php"  class="nav__item">Assessment</a></li>
+                <li><a href="<?= $step1_link ?>"   class="nav__item">Personal Info</a></li>
+                <li><a href="<?= $step2_link ?>"  class="nav__item">Academic Info</a></li>
+                <li><a href="<?= $step3_link ?>"  class="nav__item nav__item--active" aria-current="page">Requirements</a></li>
+                <li><a href="<?= $step4_link ?>"  class="nav__item">Assessment</a></li>
             </ul>
         </nav>
     </div>
@@ -847,7 +861,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <!-- Step tabs -->
             <div class="steps" role="list">
                 <!-- Step 1 – Personal Info (completed) -->
-                <a href="register.php" class="step step--active" role="listitem">
+                <a href="<?= $step1_link ?>" class="step step--active" role="listitem">
                     <svg class="step__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M20.59 22C20.59 18.13 16.74 15 12 15C7.26 15 3.41 18.13 3.41 22" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -856,7 +870,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </a>
 
                 <!-- Step 2 – Academic Info (completed) -->
-                <a href="register1.php" class="step step--active" role="listitem">
+                <a href="<?= $step2_link ?>" class="step step--active" role="listitem">
                     <svg class="step__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M4 19.5V4.5C4 3.4 4.9 2.5 6 2.5H18C19.1 2.5 20 3.4 20 4.5V19.5L12 15.5L4 19.5Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
@@ -876,7 +890,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <!-- Step 4 – Assessment (upcoming) -->
-                <a href="register3.php" class="step step--inactive" role="listitem">
+                <a href="<?= $step4_link ?>" class="step step--inactive" role="listitem">
                     <svg class="step__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <rect x="3" y="3" width="18" height="18" rx="2" stroke="#99a1af" stroke-width="2"/>
                         <path d="M9 9H15" stroke="#99a1af" stroke-width="2" stroke-linecap="round"/>

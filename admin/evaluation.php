@@ -236,12 +236,13 @@ function sams_eval_badge_class(float $score): string
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
     body {
       font-family: 'Inter', Arial, sans-serif;
       background: var(--clr-bg);
       color: var(--clr-text-primary);
       -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
     }
     a { color: inherit; text-decoration: none; }
     button, select { font: inherit; }
@@ -259,6 +260,10 @@ function sams_eval_badge_class(float $score): string
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
     }
     .sidebar__header {
       height: var(--topbar-height);
@@ -315,6 +320,9 @@ function sams_eval_badge_class(float $score): string
       justify-content: space-between;
       gap: 16px;
       flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
     .topbar__title { font-size: var(--fs-lg); font-weight: 800; color: var(--clr-text-primary); line-height: 32px; }
     .topbar__sub { font-size: var(--fs-sm); color: var(--clr-text-muted); }

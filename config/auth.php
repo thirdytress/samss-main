@@ -121,17 +121,15 @@ function sams_authenticate(string $identifier, string $password): array
             LEFT JOIN students s ON u.{$userIdColumn} = s.user_id
             LEFT JOIN supervisors sp ON u.{$userIdColumn} = sp.user_id
             WHERE u.email = :identifier_email
-                OR s.student_id_number = :identifier_student
             LIMIT 1"
      );
     $statement->execute([
         'identifier_email' => $identifier,
-        'identifier_student' => $identifier,
     ]);
     $user = $statement->fetch(PDO::FETCH_ASSOC);
 
     if (!$user) {
-        throw new RuntimeException('Invalid email or student ID.');
+        throw new RuntimeException('Invalid email.');
     }
 
     if (!password_verify($password, (string) ($user['password_stored'] ?? ''))) {

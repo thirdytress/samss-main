@@ -18,9 +18,11 @@ $adminName = (string) ($currentUser['name'] ?? 'Admin');
 $flashMessage = '';
 $flashError = '';
 
-function h(string $value): string
-{
-    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+if (!function_exists('h')) {
+    function h(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -44,6 +46,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $startAt = DateTimeImmutable::createFromFormat('Y-m-d H:i', $meetingDate . ' ' . $startTime);
             if (!$startAt) {
                 throw new RuntimeException('Invalid date/time format.');
+            }
+
+            $now = new DateTimeImmutable();
+            if ($startAt < $now) {
+                throw new RuntimeException('Cannot schedule a meeting in the past.');
+            }
+
+            $maxDate = $now->modify('+1 month');
+            if ($startAt > $maxDate) {
+                throw new RuntimeException('Cannot schedule a meeting more than a month in the future.');
             }
 
             if ($endTime !== '') {
@@ -101,6 +113,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $startAt = DateTimeImmutable::createFromFormat('Y-m-d H:i', $meetingDate . ' ' . $startTime);
             if (!$startAt) {
                 throw new RuntimeException('Invalid date/time format.');
+            }
+
+            // Check if rescheduled date/time is in the past or exceeds 1 month
+            $stmt = $pdo->prepare('SELECT meeting_date, start_time FROM admin_meetings WHERE meeting_id = :id AND admin_user_id = :admin_id LIMIT 1');
+            $stmt->execute(['id' => $meetingId, 'admin_id' => $adminUserId]);
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($existing) {
+                $existingStartAt = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $existing['meeting_date'] . ' ' . $existing['start_time']);
+                if (!$existingStartAt) {
+                    $existingStartAt = DateTimeImmutable::createFromFormat('Y-m-d H:i', $existing['meeting_date'] . ' ' . substr($existing['start_time'], 0, 5));
+                }
+                if ($existingStartAt && $existingStartAt->getTimestamp() !== $startAt->getTimestamp()) {
+                    $now = new DateTimeImmutable();
+                    if ($startAt < $now) {
+                        throw new RuntimeException('Cannot reschedule a meeting to a past date/time.');
+                    }
+                    $maxDate = $now->modify('+1 month');
+                    if ($startAt > $maxDate) {
+                        throw new RuntimeException('Cannot reschedule a meeting to a date more than a month in the future.');
+                    }
+                }
             }
 
             if ($endTime !== '') {
@@ -208,7 +241,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 sams_admin_meetings_generate_notifications($pdo, $adminUserId);
 
-$upcomingMeetingsStmt = $pdo->prepare(
+// Week selection calculations
+$weekOffset = (int) ($_GET['week_offset'] ?? 0);
+$today = new DateTimeImmutable('today');
+$dayOfWeek = (int) $today->format('N'); // 1 (Mon) to 7 (Sun)
+$currentMonday = $today->modify('-' . ($dayOfWeek - 1) . ' days');
+
+$meetingIdQuery = (int) ($_GET['meeting_id'] ?? 0);
+if ($meetingIdQuery > 0) {
+    $mQueryStmt = $pdo->prepare("SELECT meeting_date FROM admin_meetings WHERE meeting_id = :id AND admin_user_id = :admin_id LIMIT 1");
+    $mQueryStmt->execute(['id' => $meetingIdQuery, 'admin_id' => $adminUserId]);
+    $mQueryRow = $mQueryStmt->fetch(PDO::FETCH_ASSOC);
+    if ($mQueryRow) {
+        $mDateObj = new DateTimeImmutable($mQueryRow['meeting_date']);
+        $mDayOfWeek = (int) $mDateObj->format('N');
+        $meetingMonday = $mDateObj->modify('-' . ($mDayOfWeek - 1) . ' days');
+        
+        $diff = $currentMonday->diff($meetingMonday);
+        $weeksDiff = (int) round(((int)$diff->format('%r%a')) / 7);
+        $weekOffset = $weeksDiff;
+    }
+}
+
+$monday = $currentMonday;
+if ($weekOffset !== 0) {
+    $monday = $monday->modify(($weekOffset > 0 ? '+' : '') . $weekOffset . ' weeks');
+}
+$sunday = $monday->modify('+6 days');
+
+$startDate = $monday->format('Y-m-d');
+$endDate = $sunday->format('Y-m-d');
+
+// Fetch meetings for the selected week
+$weeklyMeetingsStmt = $pdo->prepare(
     "SELECT
         meeting_id,
         title,
@@ -223,11 +288,15 @@ $upcomingMeetingsStmt = $pdo->prepare(
         TIMESTAMP(meeting_date, start_time) AS starts_at
      FROM admin_meetings
      WHERE admin_user_id = :admin_user_id
-     ORDER BY meeting_date ASC, start_time ASC
-     LIMIT 25"
+       AND meeting_date BETWEEN :start_date AND :end_date
+     ORDER BY meeting_date ASC, start_time ASC"
 );
-$upcomingMeetingsStmt->execute(['admin_user_id' => $adminUserId]);
-$meetings = $upcomingMeetingsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$weeklyMeetingsStmt->execute([
+    'admin_user_id' => $adminUserId,
+    'start_date' => $startDate,
+    'end_date' => $endDate
+]);
+$meetings = $weeklyMeetingsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $todayCountStmt = $pdo->prepare(
     'SELECT COUNT(*) FROM admin_meetings WHERE admin_user_id = :admin_user_id AND meeting_date = CURDATE() AND status = :status'
@@ -260,14 +329,92 @@ if ($editMeetingId > 0) {
     $editMeeting = $editStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-$nextMeeting = null;
-foreach ($meetings as $row) {
-    if (($row['status'] ?? '') !== 'scheduled') {
-        continue;
+// Fetch actual next upcoming meeting globally
+$nextMeetingStmt = $pdo->prepare(
+    "SELECT title, meeting_date, start_time, TIMESTAMP(meeting_date, start_time) AS starts_at
+     FROM admin_meetings
+     WHERE admin_user_id = :admin_user_id
+       AND status = 'scheduled'
+       AND TIMESTAMP(meeting_date, start_time) >= NOW()
+     ORDER BY meeting_date ASC, start_time ASC
+     LIMIT 1"
+);
+$nextMeetingStmt->execute(['admin_user_id' => $adminUserId]);
+$nextMeeting = $nextMeetingStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+// Dynamically determine calendar hours for the selected week
+$calendarStartHour = 8;
+$calendarEndHour = 17; // 5 PM
+foreach ($meetings as $m) {
+    $startParts = explode(':', $m['start_time']);
+    $startHour = (int) $startParts[0];
+    if ($startHour < $calendarStartHour) {
+        $calendarStartHour = $startHour;
     }
-    if (strtotime((string) ($row['starts_at'] ?? '')) >= time()) {
-        $nextMeeting = $row;
-        break;
+    
+    $endTimeStr = !empty($m['end_time']) ? $m['end_time'] : null;
+    if ($endTimeStr) {
+        $endParts = explode(':', $endTimeStr);
+        $endHour = (int) ceil(((int)$endParts[0]) + ((int)$endParts[1] / 60));
+        if ($endHour > $calendarEndHour) {
+            $calendarEndHour = $endHour;
+        }
+    } else {
+        if ($startHour + 1 > $calendarEndHour) {
+            $calendarEndHour = $startHour + 1;
+        }
+    }
+}
+$hours = range($calendarStartHour, $calendarEndHour);
+
+// Group meetings by day of the week
+$daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+$meetingsByDay = [];
+foreach ($daysOfWeek as $d) {
+    $meetingsByDay[$d] = [];
+}
+foreach ($meetings as $m) {
+    $dayName = date('l', strtotime($m['meeting_date']));
+    if (isset($meetingsByDay[$dayName])) {
+        $meetingsByDay[$dayName][] = $m;
+    }
+}
+
+// Calculate label/data for each day of the week
+$dayDates = [];
+for ($i = 0; $i < 7; $i++) {
+    $d = $monday->modify('+' . $i . ' days');
+    $dayDates[$daysOfWeek[$i]] = [
+        'label' => $d->format('D'),
+        'num' => $d->format('M d'),
+        'is_today' => $d->format('Y-m-d') === $today->format('Y-m-d')
+    ];
+}
+
+// Style generator helper for positioning blocks
+if (!function_exists('meeting_block_style')) {
+    function meeting_block_style(string $start, ?string $end, int $calendarStartHour): string
+    {
+        $slotHeight = 40; // 40px per hour for a very compact view
+        $calendarStartMinutes = $calendarStartHour * 60;
+        
+        $parts = explode(':', $start);
+        $startMinutes = ((int)($parts[0] ?? 0)) * 60 + ((int)($parts[1] ?? 0));
+        
+        if (!empty($end)) {
+            $partsEnd = explode(':', $end);
+            $endMinutes = ((int)($partsEnd[0] ?? 0)) * 60 + ((int)($partsEnd[1] ?? 0));
+        } else {
+            $endMinutes = $startMinutes + 60; // default 1hr duration
+        }
+        
+        $top = (($startMinutes - $calendarStartMinutes) / 60) * $slotHeight;
+        $height = (($endMinutes - $startMinutes) / 60) * $slotHeight;
+        
+        $top = max(0, $top);
+        $height = max(22, $height); // Capped at 22px minimum to ensure vertically centered text remains visible
+        
+        return sprintf('top:%dpx;height:%dpx;', (int)round($top), (int)round($height));
     }
 }
 ?>
@@ -405,6 +552,265 @@ foreach ($meetings as $row) {
             .stats { grid-template-columns: 1fr; }
             .meetings-header { align-items: flex-start; flex-direction: column; }
         }
+
+        /* Weekly calendar layout */
+        .meeting-calendar-card {
+            background: var(--color-white);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-card);
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        .meeting-cal-days {
+            display: grid;
+            grid-template-columns: 60px repeat(7, 1fr);
+            border-bottom: 2px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .meeting-cal-days__day {
+            padding: 8px 4px;
+            text-align: center;
+            border-left: 1px solid #e2e8f0;
+        }
+        .meeting-cal-days__day-name {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--color-muted);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            margin-bottom: 2px;
+        }
+        .meeting-cal-days__day-num {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--color-heading);
+        }
+        .meeting-cal-days__day--today {
+            background: #f0f9ff;
+            border-bottom: 2px solid var(--color-primary);
+        }
+        .meeting-cal-days__day--today .meeting-cal-days__day-num {
+            color: var(--color-primary);
+            font-weight: 800;
+        }
+
+        .meeting-cal-body {
+            display: grid;
+            grid-template-columns: 60px repeat(7, 1fr);
+            background: #fff;
+        }
+        .meeting-cal-time-col {
+            display: flex;
+            flex-direction: column;
+            background: #f8fafc;
+            border-right: 1px solid #e2e8f0;
+        }
+        .meeting-cal-time-slot {
+            height: 40px;
+            padding: 2px 6px 0 0;
+            text-align: right;
+            font-size: 10.5px;
+            font-weight: 500;
+            color: var(--color-muted);
+            border-bottom: 1px solid #f1f5f9;
+            flex-shrink: 0;
+        }
+        .meeting-cal-day-col {
+            border-left: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: #fff;
+        }
+        .meeting-cal-day-col--today {
+            background: rgba(240, 249, 255, 0.4) !important;
+        }
+        .meeting-cal-day-col__slot {
+            height: 40px;
+            flex-shrink: 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .meeting-cal-day-col__slot:last-child {
+            border-bottom: none;
+        }
+
+        /* Meeting Block Styling */
+        .meeting-block {
+            position: absolute;
+            left: 2px;
+            right: 2px;
+            border-radius: 4px;
+            padding: 1px 4px;
+            overflow: hidden;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, z-index 0.15s ease;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0px;
+            border: 1px solid transparent;
+            z-index: 2;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+        .meeting-block:hover {
+            transform: translateY(-1px) scale(1.02);
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.12);
+            z-index: 10;
+        }
+        .meeting-block__title {
+            font-size: 10.5px;
+            font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .meeting-block__time {
+            font-size: 9px;
+            line-height: 1.1;
+            opacity: 0.9;
+        }
+        .meeting-block__loc {
+            font-size: 8.5px;
+            line-height: 1.1;
+            opacity: 0.85;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 0px;
+        }
+
+        /* Pastel Categories styling - Modern Tailwind Palette */
+        .meeting-block--personal {
+            background-color: #dbeafe;
+            border: 1px solid #bfdbfe;
+            border-left: 4px solid #1d4ed8;
+            color: #1e40af;
+        }
+        .meeting-block--office {
+            background-color: #dcfce7;
+            border: 1px solid #bbf7d0;
+            border-left: 4px solid #16a34a;
+            color: #14532d;
+        }
+        .meeting-block--sa {
+            background-color: #f3e8ff;
+            border: 1px solid #e9d5ff;
+            border-left: 4px solid #7c3aed;
+            color: #5b21b6;
+        }
+        .meeting-block--external {
+            background-color: #fef3c7;
+            border: 1px solid #fde68a;
+            border-left: 4px solid #d97706;
+            color: #78350f;
+        }
+        .meeting-block--default {
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid #4b5563;
+            color: #1f2937;
+        }
+
+        /* Mobile responsive container scroll */
+        @media (max-width: 768px) {
+            .meeting-calendar-card {
+                overflow-x: auto;
+            }
+            .meeting-cal-days, .meeting-cal-body {
+                min-width: 800px;
+            }
+        }
+
+        /* Modal Backdrop and Wrapper */
+        .meeting-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(16, 24, 40, 0.4);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        .meeting-modal-overlay--visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .meeting-modal {
+            background: var(--color-white);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-card);
+            width: 90%;
+            max-width: 480px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(16, 24, 40, 0.15);
+            transform: scale(0.95);
+            transition: transform 0.2s ease;
+            position: relative;
+        }
+        .meeting-modal-overlay--visible .meeting-modal {
+            transform: scale(1);
+        }
+        .meeting-modal__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 10px;
+        }
+        .meeting-modal__title {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--color-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .meeting-modal__close {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--color-muted);
+            border: none;
+            background: none;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.15s ease;
+        }
+        .meeting-modal__close:hover {
+            color: var(--color-heading);
+        }
+        .meeting-modal__body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .meeting-modal__section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .meeting-modal__label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--color-muted);
+            letter-spacing: 0.5px;
+        }
+        .meeting-modal__val {
+            font-size: var(--font-sm);
+            color: var(--color-body);
+            line-height: 1.4;
+        }
+        .badge--sa-style { background: #faf5ff; color: #5b21b6; border-color: #e9d5ff; }
+        .badge--external-style { background: #fffbeb; color: #92400e; border-color: #fde68a; }
     </style>
 </head>
 <body>
@@ -613,6 +1019,105 @@ foreach ($meetings as $row) {
                         </article>
                     </section>
 
+                    <!-- Week Navigation Header -->
+                    <div class="week-navigation" style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:16px 24px; border:1px solid var(--color-border); border-radius:16px; box-shadow:0 1px 2px rgba(16,24,40,0.04); margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+                        <div style="display:flex; gap:8px;">
+                            <a class="btn btn--small" href="meetings.php?week_offset=<?php echo $weekOffset - 1; ?><?php echo $editMeeting ? '&edit_id=' . $editMeetingId : ''; ?>">&larr; Prev Week</a>
+                            <?php if ($weekOffset !== 0): ?>
+                                <a class="btn btn--small" href="meetings.php?week_offset=0<?php echo $editMeeting ? '&edit_id=' . $editMeetingId : ''; ?>">Today</a>
+                            <?php endif; ?>
+                            <a class="btn btn--small" href="meetings.php?week_offset=<?php echo $weekOffset + 1; ?><?php echo $editMeeting ? '&edit_id=' . $editMeetingId : ''; ?>">Next Week &rarr;</a>
+                        </div>
+                        <div style="font-weight:700; color:var(--color-heading); font-size:16px;">
+                            Week of <?php echo $monday->format('M d, Y'); ?> &ndash; <?php echo $sunday->format('M d, Y'); ?>
+                        </div>
+                        <div class="meeting-legend" style="display:flex; gap:12px; font-size:11px; color:var(--color-body); flex-wrap:wrap; font-weight:600;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; border-radius:50%; background-color:#dbeafe; display:inline-block; border:1.5px solid #1d4ed8;"></span>
+                                <span>Admin Personal</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; border-radius:50%; background-color:#dcfce7; display:inline-block; border:1.5px solid #16a34a;"></span>
+                                <span>Office Meeting</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; border-radius:50%; background-color:#f3e8ff; display:inline-block; border:1.5px solid #7c3aed;"></span>
+                                <span>S.A. Related</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; border-radius:50%; background-color:#fef3c7; display:inline-block; border:1.5px solid #d97706;"></span>
+                                <span>External</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Weekly Calendar Grid -->
+                    <section class="meeting-calendar-card" aria-label="Weekly meetings schedule grid">
+                        <div class="meeting-cal-days" role="row">
+                            <div class="meeting-cal-time-gutter" aria-hidden="true" style="width:60px;"></div>
+                            <?php foreach ($daysOfWeek as $day): ?>
+                                <?php 
+                                $isToday = $dayDates[$day]['is_today'];
+                                $todayClass = $isToday ? 'meeting-cal-days__day--today' : '';
+                                ?>
+                                <div class="meeting-cal-days__day <?php echo $todayClass; ?>">
+                                    <div class="meeting-cal-days__day-name"><?php echo h($dayDates[$day]['label']); ?></div>
+                                    <div class="meeting-cal-days__day-num"><?php echo h($dayDates[$day]['num']); ?></div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="meeting-cal-body" role="grid" aria-label="Calendar hours grid" style="min-height: <?php echo count($hours) * 40; ?>px;">
+                            <div class="meeting-cal-time-col" aria-hidden="true">
+                                <?php foreach ($hours as $hour): ?>
+                                    <div class="meeting-cal-time-slot"><?php echo date('g A', strtotime(sprintf('%02d:00:00', $hour))); ?></div>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php foreach ($daysOfWeek as $day): ?>
+                                <?php 
+                                $isTodayCol = $dayDates[$day]['is_today'];
+                                $todayColClass = $isTodayCol ? 'meeting-cal-day-col--today' : '';
+                                ?>
+                                <div class="meeting-cal-day-col <?php echo $todayColClass; ?>" role="gridcell" aria-label="<?php echo h($day); ?>">
+                                    <?php foreach ($hours as $_): ?>
+                                        <div class="meeting-cal-day-col__slot"></div>
+                                    <?php endforeach; ?>
+                                    
+                                    <?php foreach ($meetingsByDay[$day] as $meeting): ?>
+                                        <?php
+                                        $mId = (int) $meeting['meeting_id'];
+                                        $mTitle = (string) $meeting['title'];
+                                        $mCategory = (string) $meeting['category'];
+                                        $mStart = date('g:i A', strtotime($meeting['start_time']));
+                                        $mEnd = !empty($meeting['end_time']) ? date('g:i A', strtotime($meeting['end_time'])) : '';
+                                        $mLoc = (string) $meeting['location'];
+                                        $mStatus = (string) $meeting['status'];
+                                        
+                                        $titleStyle = $mStatus === 'cancelled' ? 'text-decoration: line-through; opacity: 0.6;' : '';
+                                        
+                                        $classMap = [
+                                            'admin_personal' => 'meeting-block--personal',
+                                            'office_meeting' => 'meeting-block--office',
+                                            'sa_related' => 'meeting-block--sa',
+                                            'external' => 'meeting-block--external'
+                                        ];
+                                        $blockClass = $classMap[$mCategory] ?? 'meeting-block--default';
+                                        ?>
+                                        <a href="javascript:void(0);" onclick="openMeetingModal(<?php echo $mId; ?>)" 
+                                           class="meeting-block <?php echo $blockClass; ?>" 
+                                           style="<?php echo meeting_block_style($meeting['start_time'], $meeting['end_time'] ?? null, $calendarStartHour); ?>"
+                                           title="<?php echo h($mTitle . ($mLoc !== '' ? ' @ ' . $mLoc : '') . ' (' . ucfirst($mStatus) . ')'); ?>">
+                                            <div class="meeting-block__title" style="<?php echo $titleStyle; ?>"><?php echo h($mTitle); ?></div>
+                                            <div class="meeting-block__time"><?php echo h($mStart . ($mEnd !== '' ? ' - ' . $mEnd : '')); ?></div>
+                                            <?php if ($mLoc !== ''): ?>
+                                                <div class="meeting-block__loc"><?php echo h($mLoc); ?></div>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+
                     <section class="layout">
                         <article class="card">
                             <h2 class="meeting-form-title"><?php echo $editMeeting ? 'Edit Meeting' : 'Create Meeting'; ?></h2>
@@ -637,7 +1142,10 @@ foreach ($meetings as $row) {
                     <div class="grid2" style="margin-bottom:10px;">
                         <div>
                             <label for="meeting_date">Date</label>
-                            <input id="meeting_date" type="date" name="meeting_date" required value="<?php echo h((string) ($editMeeting['meeting_date'] ?? '')); ?>">
+                            <input id="meeting_date" type="date" name="meeting_date" required 
+                                   min="<?php echo ($editMeeting && ($editMeeting['meeting_date'] < date('Y-m-d'))) ? $editMeeting['meeting_date'] : date('Y-m-d'); ?>" 
+                                   max="<?php echo ($editMeeting && ($editMeeting['meeting_date'] > date('Y-m-d', strtotime('+1 month')))) ? $editMeeting['meeting_date'] : date('Y-m-d', strtotime('+1 month')); ?>" 
+                                   value="<?php echo h((string) ($editMeeting['meeting_date'] ?? '')); ?>">
                         </div>
                         <div>
                             <label for="category">Category</label>
@@ -680,7 +1188,7 @@ foreach ($meetings as $row) {
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn--brand" type="submit"><?php echo $editMeeting ? 'Update Meeting' : 'Save Meeting'; ?></button>
                         <?php if ($editMeeting): ?>
-                            <a class="btn" href="meetings.php">Cancel Edit</a>
+                            <a class="btn" href="meetings.php?week_offset=<?php echo $weekOffset; ?>">Cancel Edit</a>
                         <?php endif; ?>
                     </div>
                 </form>
@@ -731,7 +1239,7 @@ foreach ($meetings as $row) {
                             </div>
 
                             <div class="meeting__actions">
-                                <a class="btn btn--small" href="meetings.php?edit_id=<?php echo (int) ($meeting['meeting_id'] ?? 0); ?>">Edit</a>
+                                <a class="btn btn--small" href="meetings.php?week_offset=<?php echo $weekOffset; ?>&edit_id=<?php echo (int) ($meeting['meeting_id'] ?? 0); ?>">Edit</a>
                                 <?php if ($status !== 'completed'): ?>
                                     <form method="post">
                                         <input type="hidden" name="action" value="set_status">
@@ -774,6 +1282,241 @@ foreach ($meetings as $row) {
             </div>
         </div>
 
+    <!-- Meeting Details Modal -->
+    <div class="meeting-modal-overlay" id="meetingModalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="meeting-modal">
+            <div class="meeting-modal__header">
+                <h3 class="meeting-modal__title" id="modalTitle">Meeting Details</h3>
+                <button class="meeting-modal__close" onclick="closeMeetingModal()">&times;</button>
+            </div>
+            <div class="meeting-modal__body">
+                <div style="font-size: 20px; font-weight: 700; color: var(--color-heading); margin-bottom: 8px;" id="modalMeetingTitle">Title</div>
+                <div class="meeting-modal__row" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <span class="badge" id="modalCategory">Category</span>
+                    <span class="badge" id="modalStatus">Status</span>
+                </div>
+                <div class="meeting-modal__section">
+                    <div class="meeting-modal__label">When</div>
+                    <div class="meeting-modal__val" id="modalWhen">Date & Time</div>
+                </div>
+                <div class="meeting-modal__section" id="modalLocSection">
+                    <div class="meeting-modal__label">Location / Link</div>
+                    <div class="meeting-modal__val" id="modalLocation">Location Link</div>
+                </div>
+                <div class="meeting-modal__section" id="modalNotesSection">
+                    <div class="meeting-modal__label">Notes / Agenda</div>
+                    <div class="meeting-modal__val" id="modalNotes" style="white-space: pre-wrap;">Notes text</div>
+                </div>
+                <div class="meeting-modal__section" id="modalReminderSection">
+                    <div class="meeting-modal__label">Reminder</div>
+                    <div class="meeting-modal__val" id="modalReminder">30 minutes before</div>
+                </div>
+            </div>
+            <div class="meeting-modal__footer" style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; flex-wrap: wrap;">
+                <button class="btn btn--small btn--brand" id="modalEditBtn">Edit Details</button>
+                <form method="post" id="modalStatusForm" style="display:inline;">
+                    <input type="hidden" name="action" value="set_status">
+                    <input type="hidden" name="meeting_id" id="modalStatusMeetingId">
+                    <input type="hidden" name="status" id="modalStatusVal">
+                    <button type="submit" class="btn btn--small" id="modalStatusBtn">Mark Status</button>
+                </form>
+                <form method="post" id="modalDeleteForm" style="display:inline;" onsubmit="return confirm('Delete this meeting permanently?');">
+                    <input type="hidden" name="action" value="delete_meeting">
+                    <input type="hidden" name="meeting_id" id="modalDeleteMeetingId">
+                    <button type="submit" class="btn btn--small btn--danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const weeklyMeetings = <?php echo json_encode($meetings, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
+        function openMeetingModal(meetingId) {
+            const meeting = weeklyMeetings.find(m => parseInt(m.meeting_id) === parseInt(meetingId));
+            if (!meeting) return;
+
+            document.getElementById('modalMeetingTitle').textContent = meeting.title;
+            
+            // Set category
+            const catEl = document.getElementById('modalCategory');
+            const catClean = meeting.category.replace('_', ' ');
+            catEl.textContent = catClean.charAt(0).toUpperCase() + catClean.slice(1);
+            catEl.className = 'badge'; // reset
+            if (meeting.category === 'admin_personal') catEl.classList.add('badge--scheduled');
+            else if (meeting.category === 'office_meeting') catEl.classList.add('badge--completed');
+            else if (meeting.category === 'sa_related') catEl.classList.add('badge--sa-style');
+            else if (meeting.category === 'external') catEl.classList.add('badge--external-style');
+            else catEl.classList.add('badge--scheduled');
+
+            // Set Status
+            const statusEl = document.getElementById('modalStatus');
+            statusEl.textContent = meeting.status.charAt(0).toUpperCase() + meeting.status.slice(1);
+            statusEl.className = 'badge';
+            if (meeting.status === 'scheduled') statusEl.classList.add('badge--scheduled');
+            else if (meeting.status === 'completed') statusEl.classList.add('badge--completed');
+            else if (meeting.status === 'cancelled') statusEl.classList.add('badge--cancelled');
+
+            // Date & Time
+            const mDate = new Date(meeting.meeting_date);
+            const dateFormatted = mDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const formatTime = (timeStr) => {
+                if (!timeStr) return '';
+                const parts = timeStr.split(':');
+                const d = new Date();
+                d.setHours(parseInt(parts[0]), parseInt(parts[1]));
+                return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            };
+            const tStart = formatTime(meeting.start_time);
+            const tEnd = formatTime(meeting.end_time);
+            document.getElementById('modalWhen').textContent = `${dateFormatted} at ${tStart}` + (tEnd ? ` - ${tEnd}` : '');
+
+            // Location
+            const locSection = document.getElementById('modalLocSection');
+            const locEl = document.getElementById('modalLocation');
+            if (meeting.location) {
+                locSection.style.display = 'block';
+                if (meeting.location.startsWith('http://') || meeting.location.startsWith('https://')) {
+                    locEl.innerHTML = `<a href="${meeting.location}" target="_blank" style="color: var(--color-primary); text-decoration: underline;">${meeting.location}</a>`;
+                } else {
+                    locEl.textContent = meeting.location;
+                }
+            } else {
+                locSection.style.display = 'none';
+            }
+
+            // Notes
+            const notesSection = document.getElementById('modalNotesSection');
+            const notesEl = document.getElementById('modalNotes');
+            if (meeting.notes) {
+                notesSection.style.display = 'block';
+                notesEl.textContent = meeting.notes;
+            } else {
+                notesSection.style.display = 'none';
+            }
+
+            // Reminder
+            const reminderMinutes = parseInt(meeting.reminder_minutes) || 0;
+            document.getElementById('modalReminder').textContent = reminderMinutes > 0 ? `${reminderMinutes} minutes before` : 'No reminder';
+
+            // Set form fields for delete and status transitions
+            document.getElementById('modalDeleteMeetingId').value = meeting.meeting_id;
+            document.getElementById('modalStatusMeetingId').value = meeting.meeting_id;
+
+            // Status action buttons:
+            const statusBtn = document.getElementById('modalStatusBtn');
+            const statusVal = document.getElementById('modalStatusVal');
+            const statusForm = document.getElementById('modalStatusForm');
+            
+            if (meeting.status === 'scheduled') {
+                statusForm.style.display = 'inline-block';
+                statusBtn.textContent = 'Mark Completed';
+                statusBtn.style.borderColor = '#bbf7d0';
+                statusBtn.style.color = '#166534';
+                statusBtn.style.backgroundColor = '#ecfdf3';
+                statusVal.value = 'completed';
+            } else if (meeting.status === 'completed' || meeting.status === 'cancelled') {
+                statusForm.style.display = 'inline-block';
+                statusBtn.textContent = 'Re-schedule';
+                statusBtn.style.borderColor = '#bfdbfe';
+                statusBtn.style.color = '#1d4ed8';
+                statusBtn.style.backgroundColor = '#eff6ff';
+                statusVal.value = 'scheduled';
+            } else {
+                statusForm.style.display = 'none';
+            }
+
+            // Connect Edit details button
+            document.getElementById('modalEditBtn').onclick = function() {
+                closeMeetingModal();
+                
+                document.getElementById('title').value = meeting.title;
+                const dateInput = document.getElementById('meeting_date');
+                dateInput.value = meeting.meeting_date;
+                
+                // Timezone-safe today string
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                const todayStr = `${year}-${month}-${day}`;
+                dateInput.min = meeting.meeting_date < todayStr ? meeting.meeting_date : todayStr;
+
+                // Timezone-safe max string (+1 month)
+                const dMax = new Date();
+                dMax.setMonth(dMax.getMonth() + 1);
+                const yMax = dMax.getFullYear();
+                const mMax = String(dMax.getMonth() + 1).padStart(2, '0');
+                const dayMax = String(dMax.getDate()).padStart(2, '0');
+                const maxStr = `${yMax}-${mMax}-${dayMax}`;
+                dateInput.max = meeting.meeting_date > maxStr ? meeting.meeting_date : maxStr;
+                
+                document.getElementById('category').value = meeting.category;
+                document.getElementById('start_time').value = meeting.start_time.substring(0, 5);
+                document.getElementById('end_time').value = meeting.end_time ? meeting.end_time.substring(0, 5) : '';
+                document.getElementById('location').value = meeting.location || '';
+                document.getElementById('reminder_minutes').value = meeting.reminder_minutes;
+                document.getElementById('notes').value = meeting.notes || '';
+                
+                const actionInput = document.querySelector('form input[name="action"]');
+                if (actionInput) actionInput.value = 'edit_meeting';
+                
+                const submitBtn = document.querySelector('form button[type="submit"]');
+                if (submitBtn) submitBtn.textContent = 'Update Meeting';
+                
+                let editIdInput = document.getElementById('formEditMeetingId');
+                if (!editIdInput) {
+                    editIdInput = document.createElement('input');
+                    editIdInput.type = 'hidden';
+                    editIdInput.name = 'meeting_id';
+                    editIdInput.id = 'formEditMeetingId';
+                    document.querySelector('form').appendChild(editIdInput);
+                }
+                editIdInput.value = meeting.meeting_id;
+
+                let cancelBtn = document.getElementById('formCancelEditBtn');
+                if (!cancelBtn) {
+                    cancelBtn = document.createElement('a');
+                    cancelBtn.className = 'btn';
+                    cancelBtn.id = 'formCancelEditBtn';
+                    cancelBtn.textContent = 'Cancel Edit';
+                    cancelBtn.href = `meetings.php?week_offset=${<?php echo $weekOffset; ?>}`;
+                    cancelBtn.style.marginLeft = '8px';
+                    document.querySelector('form button[type="submit"]').parentNode.appendChild(cancelBtn);
+                }
+
+                document.querySelector('.meeting-form-title').scrollIntoView({ behavior: 'smooth' });
+            };
+
+            const overlay = document.getElementById('meetingModalOverlay');
+            overlay.classList.add('meeting-modal-overlay--visible');
+        }
+
+        function closeMeetingModal() {
+            const overlay = document.getElementById('meetingModalOverlay');
+            if (overlay) overlay.classList.remove('meeting-modal-overlay--visible');
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeMeetingModal();
+            }
+        });
+
+        document.getElementById('meetingModalOverlay').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeMeetingModal();
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const meetingIdParam = urlParams.get('meeting_id');
+            if (meetingIdParam) {
+                openMeetingModal(meetingIdParam);
+            }
+        });
+    </script>
     <script src="../assets/js/admin-notifications.js"></script>
 </body>
 </html>

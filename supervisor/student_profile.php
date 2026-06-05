@@ -88,6 +88,68 @@ $schedulesStmt->execute([
 ]);
 $schedules = $schedulesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+// Group schedules by day of the week
+$groupedSchedules = [];
+$daysOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+foreach ($daysOrder as $d) {
+    $groupedSchedules[$d] = [
+        'morning' => null,
+        'afternoon' => null,
+        'offices' => [],
+        'statuses' => []
+    ];
+}
+
+foreach ($schedules as $sch) {
+    $day = $sch['day_of_week'] ?? '';
+    if (!isset($groupedSchedules[$day])) {
+        $groupedSchedules[$day] = [
+            'morning' => null,
+            'afternoon' => null,
+            'offices' => [],
+            'statuses' => []
+        ];
+    }
+    
+    $startTime = $sch['start_time'] ?? '';
+    $startHour = 12;
+    if ($startTime !== '') {
+        $parts = explode(':', $startTime);
+        $startHour = (int)$parts[0];
+    }
+    
+    if ($startHour < 12) {
+        $groupedSchedules[$day]['morning'] = $sch;
+    } else {
+        $groupedSchedules[$day]['afternoon'] = $sch;
+    }
+    
+    $office = trim((string)($sch['office_name'] ?? 'Unassigned'));
+    if ($office !== '') {
+        $groupedSchedules[$day]['offices'][$office] = true;
+    }
+    
+    $status = trim((string)($sch['status'] ?? 'accepted'));
+    if ($status !== '') {
+        $groupedSchedules[$day]['statuses'][$status] = true;
+    }
+}
+
+foreach ($groupedSchedules as $day => $data) {
+    if (empty($data['morning']) && empty($data['afternoon'])) {
+        unset($groupedSchedules[$day]);
+    }
+}
+
+if (!function_exists('formatTimeRange')) {
+    function formatTimeRange(?string $start, ?string $end): string {
+        if (!$start || !$end) return '—';
+        $startFormatted = date("h:i A", strtotime($start));
+        $endFormatted = date("h:i A", strtotime($end));
+        return $startFormatted . ' - ' . $endFormatted;
+    }
+}
+
 $allowedDutyIds = [];
 $resolvedOfficeSet = [];
 foreach ($schedules as $schedule) {
@@ -242,21 +304,43 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
             <thead>
                 <tr>
                     <th>Day</th>
-                    <th>Start</th>
-                    <th>End</th>
+                    <th>Morning Shift (AM)</th>
+                    <th>Afternoon Shift (PM)</th>
                     <th>Office</th>
                     <th>Status</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (!empty($schedules)): ?>
-                    <?php foreach ($schedules as $schedule): ?>
+                <?php if (!empty($groupedSchedules)): ?>
+                    <?php foreach ($groupedSchedules as $dayName => $data): ?>
+                        <?php
+                            $officeText = implode(', ', array_keys($data['offices']));
+                            if ($officeText === '') {
+                                $officeText = 'Unassigned';
+                            }
+                            $statusText = implode(', ', array_keys($data['statuses']));
+                            if ($statusText === '') {
+                                $statusText = 'accepted';
+                            }
+                        ?>
                         <tr>
-                            <td><?php echo h((string) ($schedule['day_of_week'] ?? '')); ?></td>
-                            <td><?php echo h((string) ($schedule['start_time'] ?? '-')); ?></td>
-                            <td><?php echo h((string) ($schedule['end_time'] ?? '-')); ?></td>
-                            <td><?php echo h((string) ($schedule['office_name'] ?? 'Unassigned')); ?></td>
-                            <td><span class="badge badge--present"><?php echo h((string) ($schedule['status'] ?? 'accepted')); ?></span></td>
+                            <td><strong><?php echo h($dayName); ?></strong></td>
+                            <td>
+                                <?php if ($data['morning']): ?>
+                                    <span style="font-weight: 500; color: #1e293b;"><?php echo h(formatTimeRange($data['morning']['start_time'], $data['morning']['end_time'])); ?></span>
+                                <?php else: ?>
+                                    <span style="color: #94a3b8;">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if ($data['afternoon']): ?>
+                                    <span style="font-weight: 500; color: #1e293b;"><?php echo h(formatTimeRange($data['afternoon']['start_time'], $data['afternoon']['end_time'])); ?></span>
+                                <?php else: ?>
+                                    <span style="color: #94a3b8;">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo h($officeText); ?></td>
+                            <td><span class="badge badge--present"><?php echo h(ucfirst($statusText)); ?></span></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>

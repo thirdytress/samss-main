@@ -48,7 +48,6 @@ function sams_save_availability(int $applicationId, int $termId, array $entries,
             'thursday', 'thu' => 'Thursday',
             'friday', 'fri' => 'Friday',
             'saturday', 'sat' => 'Saturday',
-            'sunday', 'sun' => 'Sunday',
             default => $normalized,
         };
     };

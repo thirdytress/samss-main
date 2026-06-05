@@ -80,7 +80,7 @@ try {
         'status' => $statusVal,
         'title' => 'Application Status',
         'sub' => 'Updated application status',
-        'show_availability' => true,
+        'show_availability' => ($statusVal === 'DRAFT'),
     ];
 
     echo json_encode(['success' => true, 'item' => $item]);

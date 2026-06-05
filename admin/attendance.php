@@ -294,8 +294,8 @@ $currentDateLabel = date('l, F j, Y');
 
         .sidebar__header {
             height: 89px;
-            border-bottom: 1px solid var(--clr-border);
-            padding: var(--sp-24) var(--sp-24) 0;
+            border-bottom: none;
+            padding: 0;
             flex-shrink: 0;
         }
 
@@ -303,7 +303,8 @@ $currentDateLabel = date('l, F j, Y');
             display: flex;
             align-items: center;
             gap: var(--sp-12);
-            height: 40px;
+            padding: var(--sp-24) var(--sp-24) 20px;
+            border-bottom: 1px solid var(--clr-border);
         }
 
         .sidebar__logo {
@@ -419,6 +420,9 @@ $currentDateLabel = date('l, F j, Y');
             align-items: center;
             justify-content: space-between;
             flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            z-index: 50;
         }
 
         .topbar__left { display: flex; align-items: center; gap: var(--sp-12); }

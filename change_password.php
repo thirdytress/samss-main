@@ -15,6 +15,11 @@ if (!$user) {
 }
 
 $error = '';
+$isFirstLogin = (int) ($user['must_change_password'] ?? 0) === 1;
+$cancelUrl = '';
+if (!$isFirstLogin) {
+    $cancelUrl = $user['role'] === 'student' ? 'students/profile.php' : sams_dashboard_for_role((string)$user['role']);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $currentPassword = trim($_POST['current_password'] ?? '');
@@ -59,9 +64,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $_SESSION['sams_user']['must_change_password'] = 0;
 
-                header('Location: ' . sams_dashboard_for_role((string) ($user['role'] ?? '')));
+                $redirectUrl = $isFirstLogin 
+                    ? sams_dashboard_for_role((string) ($user['role'] ?? ''))
+                    : ($user['role'] === 'student' ? 'students/profile.php' : sams_dashboard_for_role((string) ($user['role'] ?? '')));
+                header('Location: ' . $redirectUrl);
                 exit;
-        }
+            }
         }
     }
 }
@@ -147,13 +155,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom: 18px;
             font-weight: 600;
         }
+
+        .btn-cancel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 52px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            background: white;
+            color: #4b5563;
+            font-size: 16px;
+            font-weight: 700;
+            text-decoration: none;
+            margin-top: 12px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-cancel:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+        }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h1>Change Password</h1>
-    <p>For security, please change your default password before accessing your dashboard.</p>
+    <?php if ($isFirstLogin): ?>
+        <p>For security, please change your default password before accessing your dashboard.</p>
+    <?php else: ?>
+        <p>Update your account password to keep your account secure.</p>
+    <?php endif; ?>
 
     <?php if ($error !== ''): ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
@@ -161,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <form method="POST">
         <label>Current Password</label>
-        <input type="password" name="current_password" placeholder="Enter your Student ID" required>
+        <input type="password" name="current_password" placeholder="<?= $isFirstLogin ? 'Enter your Student ID' : 'Enter current password' ?>" required>
 
         <label>New Password</label>
         <input type="password" name="new_password" placeholder="Enter new password" required>
@@ -170,6 +203,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input type="password" name="confirm_password" placeholder="Confirm new password" required>
 
         <button type="submit">Update Password</button>
+        <?php if (!$isFirstLogin): ?>
+            <a href="<?= htmlspecialchars($cancelUrl) ?>" class="btn-cancel">Cancel</a>
+        <?php endif; ?>
     </form>
 </div>
 

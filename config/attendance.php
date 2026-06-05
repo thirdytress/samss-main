@@ -6,11 +6,6 @@ function sams_attendance_clocking_enabled(): bool
     return false;
 }
 
-function sams_fingerprint_office(): string
-{
-    return 'Admin';
-}
-
 function sams_current_term(PDO $pdo): array
 {
     $termStatement = $pdo->query(

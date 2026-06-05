@@ -1318,7 +1318,7 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
                             </svg>
                             View Profile
                         </button>
-                        <button class="btn-change-pin" type="button" onclick="window.location.href='change_password.php'">
+                        <button class="btn-change-pin" type="button" onclick="window.location.href='../change_password.php'">
                             <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <rect x="4" y="9" width="12" height="9" rx="2" stroke="#003087" stroke-width="1.5"/>
                                 <path d="M7 9V6a3 3 0 016 0v3" stroke="#003087" stroke-width="1.5" stroke-linecap="round"/>

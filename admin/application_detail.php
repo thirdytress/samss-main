@@ -104,6 +104,10 @@ try {
         throw new RuntimeException('Application not found.');
     }
 
+    if ($application['status'] === 'draft') {
+        throw new RuntimeException('Application is incomplete and not yet submitted.');
+    }
+
     $documents = [];
     if (sams_admin_column_exists($pdo, 'document_uploads', 'application_id')) {
         $docColumns = [];
@@ -127,6 +131,7 @@ try {
     if (sams_admin_column_exists($pdo, 'availability', 'application_id')) {
         $timeStartColumn = sams_admin_first_existing_column($pdo, 'availability', ['time_start', 'start_time']);
         $timeEndColumn = sams_admin_first_existing_column($pdo, 'availability', ['time_end', 'end_time']);
+        $notesSelect = sams_admin_column_exists($pdo, 'availability', 'notes') ? 'notes' : 'NULL AS notes';
 
         if ($timeStartColumn !== null && $timeEndColumn !== null && sams_admin_column_exists($pdo, 'availability', 'day_of_week')) {
             $availableColumn = sams_admin_column_exists($pdo, 'availability', 'is_available') ? 'is_available' : '1 AS is_available';
@@ -135,6 +140,7 @@ try {
                     day_of_week,
                     {$timeStartColumn} AS time_start,
                     {$timeEndColumn} AS time_end,
+                    {$notesSelect},
                     {$availableColumn}
                  FROM availability
                  WHERE application_id = :application_id

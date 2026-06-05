@@ -3,6 +3,19 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/bootstrap.php';
 
+if (empty($_SESSION['sams_registration']['step1'])) {
+    header('Location: register.php');
+    exit;
+}
+if (empty($_SESSION['sams_registration']['step2'])) {
+    header('Location: register1.php');
+    exit;
+}
+if (empty($_SESSION['sams_registration']['step3'])) {
+    header('Location: register2.php');
+    exit;
+}
+
 function sams_split_full_name(string $fullName): array
 {
     $parts = preg_split('/\s+/', trim($fullName)) ?: [];
@@ -160,10 +173,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $studentStatement = $pdo->prepare(
                 "INSERT INTO students (
                     user_id, student_id_number, program, year_level, current_gpa,
-                    is_enrolled, is_good_standing, fingerprint_id
+                    is_enrolled, is_good_standing
                  ) VALUES (
                     :user_id, :student_code, :program, :year_level, :current_gpa,
-                    :is_enrolled, :is_good_standing, :fingerprint_id
+                    :is_enrolled, :is_good_standing
                  )"
             );
             $studentStatement->execute([
@@ -174,7 +187,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'current_gpa' => $gpa !== '' ? $gpa : null,
                 'is_enrolled' => 1,
                 'is_good_standing' => 1,
-                'fingerprint_id' => null,
             ]);
 
             $studentId = (int) $pdo->lastInsertId();
@@ -189,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $applicationStatement->execute([
                 'student_id' => $studentId,
                 'term_id' => (int) $activeTermId,
-                'status' => 'pending',
+                'status' => 'draft',
                 'preferred_office' => $work_location,
                 'skills' => $skills,
             ]);
@@ -294,7 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             unset($_SESSION['sams_registration']);
             $_SESSION['registration_submission'] = [
                 'success' => true,
-                'message' => 'Your application has been submitted successfully. Your account is pending review, and you can set your availability next.',
+                'message' => 'Your application information has been saved. Please complete your weekly time availability below to submit your application.',
                 'application_id' => $applicationId,
                 'student_id' => $studentId,
                 'term_id' => (int) $activeTermId,
@@ -303,7 +315,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'course' => $course,
                 'year_level' => $yearLevel,
                 'date_submitted' => date('F j, Y'),
-                'status' => 'PENDING',
+                'status' => 'DRAFT',
             ];
 
             header('Location: students/availability.php');
@@ -653,6 +665,51 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
         .field__textarea::placeholder {
             color: var(--color-placeholder);
             font-weight: 500;
+        }
+
+        /* =============================================
+           SKILL TAGS SELECTOR
+         ============================================= */
+        .skills-hint {
+            font-size: var(--font-xs);
+            color: var(--color-muted);
+            margin-bottom: 12px;
+        }
+        .skill-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .skill-tag {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            font-size: var(--font-sm);
+            font-weight: 700;
+            color: var(--color-label);
+            background: var(--color-white);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-pill);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            user-select: none;
+        }
+        .skill-tag:hover {
+            color: var(--color-primary);
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 48, 135, 0.08);
+        }
+        .skill-tag:active {
+            transform: translateY(0) scale(0.96);
+        }
+        .skill-tag--active {
+            color: var(--color-white) !important;
+            background: var(--gradient-primary) !important;
+            border-color: var(--color-primary) !important;
+            box-shadow: 0 4px 12px rgba(0, 48, 135, 0.2) !important;
         }
 
         .field__error {
@@ -1040,14 +1097,41 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
 
                     <!-- Special Skills or Talents -->
                     <div class="field">
-                        <label class="field__label" for="skills">Special Skills or Talents</label>
-                        <textarea
-                            class="field__textarea"
-                            id="skills"
-                            name="skills"
-                            placeholder="e.g., Event planning, graphic design, public speaking..."
-                            aria-label="Special skills or talents"
-                        ><?= $val_skills ?></textarea>
+                        <label class="field__label">Special Skills or Talents</label>
+                        <div class="skills-hint">Select the skills that apply to you:</div>
+                        <input type="hidden" name="skills" id="skills" value="<?= $val_skills ?>">
+                        <div class="skill-tags" role="group" aria-label="Skills selector">
+                            <?php
+                            $available_skills = [
+                                'Time Management',
+                                'Teamwork',
+                                'Leadership',
+                                'Problem Solving',
+                                'Adaptability',
+                                'Attention to Detail',
+                                'Multitasking',
+                                'Organization'
+                            ];
+                            
+                            // Parse currently selected skills
+                            $selected_skills = [];
+                            if ($val_skills !== '') {
+                                $selected_skills = array_map('trim', explode(',', $val_skills));
+                            }
+                            
+                            foreach ($available_skills as $skill):
+                                $isActive = in_array($skill, $selected_skills, true);
+                            ?>
+                                <button 
+                                    type="button" 
+                                    class="skill-tag<?= $isActive ? ' skill-tag--active' : '' ?>" 
+                                    data-skill="<?= htmlspecialchars($skill, ENT_QUOTES, 'UTF-8') ?>"
+                                    aria-pressed="<?= $isActive ? 'true' : 'false' ?>"
+                                >
+                                    <?= htmlspecialchars($skill, ENT_QUOTES, 'UTF-8') ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
 
                     <!-- Checkboxes -->
@@ -1118,12 +1202,10 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                     </a>
 
                     <button type="submit" class="btn-submit">
-                        <!-- Checkmark-circle icon matching Figma imgIcon2 -->
+                        Next
                         <svg class="btn-submit__icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <circle cx="10" cy="10" r="8" stroke="#003087" stroke-width="1.67"/>
-                            <path d="M6.5 10.5L8.5 12.5L13.5 7.5" stroke="#003087" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M4.16667 10H15.8333M15.8333 10L10 4.16667M15.8333 10L10 15.8333" stroke="#003087" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        Submit Application
                     </button>
                 </div>
 
@@ -1154,6 +1236,27 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                 hamburger.setAttribute('aria-expanded', 'false');
                 navMenu.classList.remove('nav__menu--open');
             }
+        });
+    }
+
+    /* ── Skill Tags Toggle ── */
+    var skillInput = document.getElementById('skills');
+    var skillTags  = document.querySelectorAll('.skill-tag');
+
+    if (skillInput && skillTags.length > 0) {
+        skillTags.forEach(function (tag) {
+            tag.addEventListener('click', function () {
+                var isPressed = this.getAttribute('aria-pressed') === 'true';
+                this.setAttribute('aria-pressed', String(!isPressed));
+                this.classList.toggle('skill-tag--active', !isPressed);
+
+                // Update hidden input value
+                var selected = [];
+                document.querySelectorAll('.skill-tag--active').forEach(function (activeTag) {
+                    selected.push(activeTag.getAttribute('data-skill'));
+                });
+                skillInput.value = selected.join(', ');
+            });
         });
     }
 

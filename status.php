@@ -17,7 +17,11 @@ $status_title   = '⏳ Application Under Review';
 $status_sub     = 'Your application is currently being reviewed by Miss Zai. This typically takes 1-3 business days.';
 $showAvailabilityCta = !empty($submission['success']);
 
-if (!empty($submission['success'])) {
+if ($status === 'DRAFT') {
+    $status_title = '📝 Application Saved as Draft';
+    $status_sub = (string) ($submission['message'] ?? 'Your application has been saved as a draft. Please complete your weekly time availability to submit your application.');
+    $showAvailabilityCta = true;
+} elseif (!empty($submission['success'])) {
     $status_title = '✅ Application Submitted Successfully';
     $status_sub = (string) ($submission['message'] ?? 'Your application has been submitted and is now in the review queue.');
 }

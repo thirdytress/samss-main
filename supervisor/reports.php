@@ -202,8 +202,8 @@ foreach ($reports as $reportRow) {
             <main class="dashboard">
                 <section class="stats" aria-label="Reports summary">
                     <article class="stat"><div class="stat__label">Students in Office</div><div class="stat__value"><?php echo (int) $studentsCount; ?></div></article>
-                    <article class="stat"><div class="stat__label">Recent Reports</div><div class="stat__value"><?php echo (int) $recentReportsCount; ?></div></article>
-                    <article class="stat"><div class="stat__label">Open Reports</div><div class="stat__value"><?php echo (int) $openReportsCount; ?></div></article>
+                    <article class="stat"><div class="stat__label">Recent Reports</div><div class="stat__value" id="statRecentCount"><?php echo (int) $recentReportsCount; ?></div></article>
+                    <article class="stat"><div class="stat__label">Open Reports</div><div class="stat__value" id="statOpenCount"><?php echo (int) $openReportsCount; ?></div></article>
                 </section>
 
                 <div class="tabs" role="tablist" aria-label="Reports tabs">
@@ -236,7 +236,7 @@ foreach ($reports as $reportRow) {
                 </section>
 
                 <section id="historySection" class="tab-panel" style="display:none;">
-                    <div class="report-title mt-4">Recent Reports (<?php echo count($reports); ?> found)</div>
+                    <div class="report-title mt-4" id="historyHeader">Recent Reports (<?php echo count($reports); ?> found)</div>
                     <div class="recent-list" id="recentList">
                         <?php if (!empty($reports)): foreach ($reports as $r): ?>
                             <a href="../admin/report_detail.php?report_id=<?php echo (int)($r['report_id'] ?? 0); ?>" class="no-decor">
@@ -250,7 +250,7 @@ foreach ($reports as $reportRow) {
                                 </div>
                             </a>
                         <?php endforeach; ?>
-                        <?php else: ?><div class="card">No recent reports.</div><?php endif; ?>
+                        <?php else: ?><div class="card" id="noReportsCard">No recent reports.</div><?php endif; ?>
                         <?php if (!empty($debugReports)): ?>
                         <div class="card" style="margin-top:16px;background:#fffbe6;color:#b26d00">
                             <strong>Debug: Your 10 Most Recent Reports (regardless of office)</strong>
@@ -278,6 +278,9 @@ foreach ($reports as $reportRow) {
             var recent = document.getElementById('recentList');
             var csrf = '<?php echo htmlspecialchars(sams_csrf_token(), ENT_QUOTES); ?>';
             var prefillApplicationId = <?php echo (int) $prefillApplicationId; ?>;
+
+            var reportsCount = <?php echo count($reports); ?>;
+            var openReportsCount = <?php echo $openReportsCount; ?>;
 
             if (prefillApplicationId > 0) {
                 for (var i = 0; i < student.options.length; i++) {
@@ -326,11 +329,38 @@ foreach ($reports as $reportRow) {
                 }).then(function(r){ return r.json(); }).then(function(d){
                     if (d && d.success) {
                         alert('Report submitted');
+                        
+                        // Increment counts
+                        reportsCount++;
+                        openReportsCount++;
+                        
+                        // Update UI Header
+                        var header = document.getElementById('historyHeader');
+                        if (header) {
+                            header.textContent = 'Recent Reports (' + reportsCount + ' found)';
+                        }
+                        
+                        // Update UI Stats Cards
+                        var statRecent = document.getElementById('statRecentCount');
+                        if (statRecent) statRecent.textContent = reportsCount;
+                        var statOpen = document.getElementById('statOpenCount');
+                        if (statOpen) statOpen.textContent = openReportsCount;
+                        
+                        // Hide "No recent reports." card if visible
+                        var noReportsCard = document.getElementById('noReportsCard');
+                        if (noReportsCard) {
+                            noReportsCard.remove();
+                        }
+                        
                         // switch to history tab after successful submit
                         showTab('history');
-                        // prepend to recent list
-                        var node = document.createElement('div'); node.className='report-item';
-                        node.innerHTML = '<div class="flex-between"><strong>'+escapeHtml(t)+'</strong><div class="meta">just now</div></div><div class="meta mt-6">Student: '+escapeHtml(studentCode || st)+'</div><div class="mt-8 pre-wrap">'+escapeHtml(n)+'</div>';
+                        
+                        // prepend clickable node to recent list
+                        var node = document.createElement('a'); 
+                        node.className = 'no-decor';
+                        node.href = '../admin/report_detail.php?report_id=' + (d.report_id || 0);
+                        node.innerHTML = '<div class="report-item"><div class="flex-between"><strong>'+escapeHtml(t)+'</strong><div class="meta">just now</div></div><div class="meta mt-6">Student: '+escapeHtml(studentCode || st)+' — Reporter: '+escapeHtml('<?php echo htmlspecialchars($user["name"] ?? "", ENT_QUOTES); ?>')+'</div><div class="mt-8 pre-wrap muted-desc">'+escapeHtml(n)+'</div></div>';
+                        
                         recent.insertBefore(node, recent.firstChild);
                         title.value=''; notes.value=''; student.selectedIndex=0;
                     } else {

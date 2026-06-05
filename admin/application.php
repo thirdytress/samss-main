@@ -27,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'SELECT
           a.application_id AS application_id,
           a.status,
+          a.term_id,
+          a.preferred_office,
           u.email,
           u.first_name,
           u.last_name
@@ -68,6 +70,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         $activateStatement->execute(['application_id' => $applicationId]);
+
+        // Automatically populate duty_schedules based on student's availability
+        $availStmt = $pdo->prepare(
+            "SELECT day_of_week, start_time AS time_start, end_time AS time_end
+             FROM availability
+             WHERE application_id = :application_id
+               AND term_id = :term_id"
+        );
+        $availStmt->execute([
+            'application_id' => $applicationId,
+            'term_id' => (int) $application['term_id']
+        ]);
+        $availRows = $availStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($availRows)) {
+            $hasOfficeColumn = sams_column_exists($pdo, 'duty_schedules', 'office_name');
+            if ($hasOfficeColumn) {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, office_name, term_id, day_of_week, start_time, end_time, status) 
+                     VALUES (:application_id, :office_name, :term_id, :day_of_week, :time_start, :time_end, "assigned")'
+                );
+            } else {
+                $insertAppStmt = $pdo->prepare(
+                    'INSERT INTO duty_schedules (application_id, term_id, day_of_week, start_time, end_time, status) 
+                     VALUES (:application_id, :term_id, :day_of_week, :time_start, :time_end, "assigned")'
+                );
+            }
+
+            foreach ($availRows as $arow) {
+                $day = trim((string) $arow['day_of_week']);
+                $normalizedDay = match (strtolower($day)) {
+                    'monday', 'mon' => 'Monday',
+                    'tuesday', 'tue' => 'Tuesday',
+                    'wednesday', 'wed' => 'Wednesday',
+                    'thursday', 'thu' => 'Thursday',
+                    'friday', 'fri' => 'Friday',
+                    'saturday', 'sat' => 'Saturday',
+                    default => $day,
+                };
+
+                $insertParams = [
+                    'application_id' => $applicationId,
+                    'term_id' => (int) $application['term_id'],
+                    'day_of_week' => $normalizedDay,
+                    'time_start' => (string) $arow['time_start'],
+                    'time_end' => (string) $arow['time_end'],
+                ];
+
+                if ($hasOfficeColumn) {
+                    $insertParams['office_name'] = $application['preferred_office'];
+                }
+
+                $insertAppStmt->execute($insertParams);
+            }
+        }
       }
 
       try {
@@ -175,7 +232,7 @@ foreach ($applicationCounts as $status => $count) {
 }
 
 $applicationsStatement = $pdo->query(
-  'SELECT
+  "SELECT
     a.application_id AS application_id,
     a.status,
     a.preferred_office,
@@ -196,12 +253,28 @@ $applicationsStatement = $pdo->query(
   INNER JOIN students s ON s.student_id = a.student_id
   INNER JOIN users u ON u.user_id = s.user_id
   INNER JOIN terms t ON t.term_id = a.term_id
-  ORDER BY a.submitted_at DESC, a.application_id DESC'
+  WHERE a.status <> 'draft'
+  ORDER BY a.submitted_at DESC, a.application_id DESC"
 );
 
 $applications = $applicationsStatement->fetchAll();
 
 // --- RECOMMENDATION LOGIC ---
+$selectedSkills = isset($_GET['filter_skills']) ? array_filter(array_map('trim', explode(',', (string)$_GET['filter_skills']))) : [];
+
+// If skills are filtered, filter the original application list to only show applicants with matching skills
+if (!empty($selectedSkills)) {
+    $filteredApps = [];
+    foreach ($applications as $app) {
+        $appSkills = sams_application_skill_tags($app['skills'] ?? null);
+        $matches = array_intersect($appSkills, $selectedSkills);
+        if (count($matches) > 0) {
+            $filteredApps[] = $app;
+        }
+    }
+    $applications = $filteredApps;
+}
+
 $recommendedIds = [];
 $eligibleApps = [];
 foreach ($applications as $app) {
@@ -209,15 +282,35 @@ foreach ($applications as $app) {
         $eligibleApps[] = $app;
     }
 }
-usort($eligibleApps, function($a, $b) {
-    $hoursA = (float)($a['total_available_hours'] ?? 0);
-    $hoursB = (float)($b['total_available_hours'] ?? 0);
-    return $hoursB <=> $hoursA;
-});
+
+if (!empty($selectedSkills)) {
+    usort($eligibleApps, function($a, $b) use ($selectedSkills) {
+        $skillsA = sams_application_skill_tags($a['skills'] ?? null);
+        $skillsB = sams_application_skill_tags($b['skills'] ?? null);
+        $matchA = count(array_intersect($skillsA, $selectedSkills));
+        $matchB = count(array_intersect($skillsB, $selectedSkills));
+        
+        if ($matchA !== $matchB) {
+            return $matchB <=> $matchA; // higher skill match count first
+        }
+        
+        $hoursA = (float)($a['total_available_hours'] ?? 0);
+        $hoursB = (float)($b['total_available_hours'] ?? 0);
+        return $hoursB <=> $hoursA; // then higher available hours
+    });
+} else {
+    usort($eligibleApps, function($a, $b) {
+        $hoursA = (float)($a['total_available_hours'] ?? 0);
+        $hoursB = (float)($b['total_available_hours'] ?? 0);
+        return $hoursB <=> $hoursA;
+    });
+}
+
 $top5 = array_slice($eligibleApps, 0, 5);
 foreach ($top5 as $app) {
     $recommendedIds[$app['application_id']] = true;
 }
+
 $recommendedAppsList = [];
 $otherAppsList = [];
 foreach ($applications as $app) {
@@ -229,11 +322,30 @@ foreach ($applications as $app) {
         $otherAppsList[] = $app;
     }
 }
-usort($recommendedAppsList, function($a, $b) {
-    $hoursA = (float)($a['total_available_hours'] ?? 0);
-    $hoursB = (float)($b['total_available_hours'] ?? 0);
-    return $hoursB <=> $hoursA;
-});
+
+if (!empty($selectedSkills)) {
+    usort($recommendedAppsList, function($a, $b) use ($selectedSkills) {
+        $skillsA = sams_application_skill_tags($a['skills'] ?? null);
+        $skillsB = sams_application_skill_tags($b['skills'] ?? null);
+        $matchA = count(array_intersect($skillsA, $selectedSkills));
+        $matchB = count(array_intersect($skillsB, $selectedSkills));
+        
+        if ($matchA !== $matchB) {
+            return $matchB <=> $matchA;
+        }
+        
+        $hoursA = (float)($a['total_available_hours'] ?? 0);
+        $hoursB = (float)($b['total_available_hours'] ?? 0);
+        return $hoursB <=> $hoursA;
+    });
+} else {
+    usort($recommendedAppsList, function($a, $b) {
+        $hoursA = (float)($a['total_available_hours'] ?? 0);
+        $hoursB = (float)($b['total_available_hours'] ?? 0);
+        return $hoursB <=> $hoursA;
+    });
+}
+
 $applications = array_merge($recommendedAppsList, $otherAppsList);
 // ----------------------------
 
@@ -1111,6 +1223,19 @@ $pendingApplications = (int) $applicationCounts['pending'];
       .modal__close { flex-shrink: 0; }
       .card-auto__stats { grid-template-columns: 1fr; }
     }
+    
+    /* Skill recommendation filter styles */
+    .skills-filter-tag:hover {
+      background-color: #2563eb !important;
+      color: #ffffff !important;
+      border-color: #2563eb !important;
+      box-shadow: 0 4px 6px rgba(37, 99, 235, 0.15) !important;
+      transform: translateY(-1px) !important;
+    }
+    .tr-recommended {
+      background-color: #f0f6ff !important;
+      border-left: 4px solid #3b82f6 !important;
+    }
   </style>
 <link rel="stylesheet" href="../assets/css/sams-shell.css" />
 <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
@@ -1160,6 +1285,83 @@ $pendingApplications = (int) $applicationCounts['pending'];
       <?php if ($flashError !== ''): ?>
         <div class="page-alert page-alert--error" role="alert"><?= htmlspecialchars($flashError) ?></div>
       <?php endif; ?>
+
+      <!-- ---- Skills Filter Tag Bar ---- -->
+      <div class="skills-filter-card" style="
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      ">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="font-size: 15px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 6px;">
+              🔍 Skill-based Recommendation Filter
+            </h3>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+              Select skills to filter applications and dynamically prioritize top candidates for Miss Zai.
+            </div>
+          </div>
+          <?php if (!empty($selectedSkills)): ?>
+            <a href="application.php" style="
+              font-size: 13px;
+              color: #dc2626;
+              font-weight: 600;
+              text-decoration: none;
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+            ">
+              ✕ Clear Filter
+            </a>
+          <?php endif; ?>
+        </div>
+        <div class="skills-filter-tags" style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <?php
+          $all_available_skills = [
+              'Time Management',
+              'Teamwork',
+              'Leadership',
+              'Problem Solving',
+              'Adaptability',
+              'Attention to Detail',
+              'Multitasking',
+              'Organization'
+          ];
+          foreach ($all_available_skills as $skill):
+              $isActive = in_array($skill, $selectedSkills, true);
+              
+              // Build query string toggling this skill
+              $tempSkills = $selectedSkills;
+              if ($isActive) {
+                  $tempSkills = array_diff($tempSkills, [$skill]);
+              } else {
+                  $tempSkills[] = $skill;
+              }
+              $queryString = !empty($tempSkills) ? '?filter_skills=' . urlencode(implode(',', $tempSkills)) : 'application.php';
+          ?>
+            <a href="<?= $queryString ?>" class="skills-filter-tag" style="
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              padding: 8px 14px;
+              font-size: 13px;
+              font-weight: 600;
+              color: <?= $isActive ? '#ffffff' : '#4b5563' ?>;
+              background: <?= $isActive ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' : '#f3f4f6' ?>;
+              border: 1px solid <?= $isActive ? '#2563eb' : '#e5e7eb' ?>;
+              border-radius: 9999px;
+              text-decoration: none;
+              transition: all 0.2s ease;
+              cursor: pointer;
+            ">
+              <?= htmlspecialchars($skill) ?>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
 
       <!-- ---- Toolbar ---- -->
       <div class="toolbar">
@@ -1235,7 +1437,15 @@ $pendingApplications = (int) $applicationCounts['pending'];
                       <div class="applicant__name">
                         <?= htmlspecialchars($fullName !== '' ? $fullName : 'Unnamed Applicant') ?>
                         <?php if (!empty($application['is_recommended'])): ?>
-                          <span class="badge badge--recommended" title="This student has the highest available hours (<?= htmlspecialchars((string) round((float)($application['total_available_hours'] ?? 0), 1)) ?> hrs/week)">🌟 Top Recommended</span>
+                          <?php 
+                            $recTitle = "This student has the highest available hours (" . round((float)($application['total_available_hours'] ?? 0), 1) . " hrs/week)";
+                            if (!empty($selectedSkills)) {
+                              $appSkills = sams_application_skill_tags($application['skills'] ?? null);
+                              $matches = array_intersect($appSkills, $selectedSkills);
+                              $recTitle = "Matches " . count($matches) . " selected skill(s): " . implode(', ', $matches);
+                            }
+                          ?>
+                          <span class="badge badge--recommended" title="<?= htmlspecialchars($recTitle) ?>">🌟 Top Recommended</span>
                         <?php endif; ?>
                       </div>
                       <div class="applicant__date">Applied <?= htmlspecialchars($submittedAt) ?></div>
@@ -1259,25 +1469,16 @@ $pendingApplications = (int) $applicationCounts['pending'];
                 <td data-label="Status"><span class="badge <?= htmlspecialchars(sams_application_status_class($status)) ?>"><?= htmlspecialchars(sams_application_status_label($status)) ?></span></td>
                 <td data-label="Actions">
                   <div class="actions">
-                    <button
-                      class="action-btn action-btn--view"
-                      type="button"
-                      title="View application"
-                      aria-label="View <?= htmlspecialchars($fullName !== '' ? $fullName : 'applicant') ?>"
-                      data-application-id="<?= (int) $application['application_id'] ?>"
-                      data-name="<?= htmlspecialchars($fullName !== '' ? $fullName : 'Unnamed Applicant') ?>"
-                      data-email="<?= htmlspecialchars((string) ($application['email'] ?? '')) ?>"
-                      data-student-id="<?= htmlspecialchars((string) ($application['student_id_number'] ?? '')) ?>"
-                      data-program="<?= htmlspecialchars((string) ($application['program'] ?? '')) ?>"
-                      data-year-level="<?= htmlspecialchars((string) ($application['year_level'] ?? '')) ?>"
-                      data-office="<?= htmlspecialchars((string) ($application['preferred_office'] ?? '')) ?>"
-                      data-status="<?= htmlspecialchars(sams_application_status_label($status)) ?>"
-                      data-submitted-at="<?= htmlspecialchars($submittedAt) ?>"
-                      data-skills="<?= htmlspecialchars($skillsText !== '' ? $skillsText : 'No skills listed') ?>"
-                      data-avatar="<?= htmlspecialchars($avatar) ?>"
+                    <a
+                      class="action-btn action-btn--open"
+                      href="application_view.php?application_id=<?= (int) $application['application_id'] ?>"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="View application in new tab"
+                      aria-label="View <?= htmlspecialchars($fullName !== '' ? $fullName : 'applicant') ?> in new tab"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                    </button>
+                    </a>
                     <form class="action-form" method="post">
                       <input type="hidden" name="application_id" value="<?= (int) $application['application_id'] ?>" />
                       <input type="hidden" name="review_action" value="approve" />

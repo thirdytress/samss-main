@@ -1669,7 +1669,7 @@ if (!empty($studentSchedules)) {
                         </td>
                         <td class="schedule-list__cell schedule-list__cell--last">
                           <?php if ($isTodayRow || ($displayStatus === 'schedule' && ($s['status'] ?? '') === 'deployed')): ?>
-                            <span class="schedule-list__hint">Use fingerprint scanner to record attendance</span>
+                            <span class="schedule-list__hint">Attendance will be recorded by admin</span>
                           <?php elseif ($displayStatus === 'schedule' && ($s['status'] ?? '') === 'pending'): ?>
                             <div class="schedule-list__actions">
                               <form method="POST" action="respond_schedule.php" style="display:inline-block;">

@@ -213,7 +213,6 @@ function sams_admin_dashboard_attendance_dot(string $status): string
            RESET & BASE
         ============================================= */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
         body {
             font-family: 'Inter', sans-serif;
             background: var(--color-bg-app);

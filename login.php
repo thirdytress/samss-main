@@ -740,7 +740,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <section class="login-card" aria-labelledby="login-heading">
 
         <h2 class="login-card__heading" id="login-heading">Login</h2>
-          <p class="login-card__tagline">Enter your email or student ID to access SAMS</p>
+          <p class="login-card__tagline">Enter your email to access SAMS</p>
 
         <?php if ($error): ?>
           <div class="login-card__alert" role="alert"><?php echo htmlspecialchars($error); ?></div>
@@ -748,15 +748,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <form class="login-form" method="POST" action="" novalidate>
 
-          <!-- Email / Student ID -->
+          <!-- Email -->
           <div class="login-form__group">
-            <label class="login-form__label" for="identifier">Email or Student ID</label>
+            <label class="login-form__label" for="identifier">Email</label>
             <input
               class="login-form__input"
               type="text"
               id="identifier"
               name="identifier"
-              placeholder="student@nu-lipa.edu.ph or 2021-12345"
+              placeholder="student@nu-lipa.edu.ph"
               autocomplete="username"
               value="<?php echo htmlspecialchars($identifier); ?>"
               required
@@ -772,7 +772,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 type="password"
                 id="password"
                 name="password"
-                placeholder="student123"
+                placeholder="password"
                 autocomplete="current-password"
                 required
               />
@@ -904,6 +904,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           iconEyeOff.style.display = isPassword ? ''      : 'none';
           toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
         });
+      }
+
+      /* ---- Dynamic Student ID Password Label Check ---- */
+      var identifierInput = document.getElementById('identifier');
+      var passwordLabel = document.querySelector('label[for="password"]');
+
+      if (identifierInput && passwordLabel && pwInput) {
+        var lastCheckedVal = '';
+        var checkTimeout = null;
+
+        function checkFirstLoginStatus() {
+          var val = identifierInput.value.trim();
+          if (val === lastCheckedVal) return;
+          lastCheckedVal = val;
+
+          if (val === '') {
+            passwordLabel.textContent = 'Password';
+            pwInput.placeholder = 'password';
+            return;
+          }
+
+          fetch('check_first_login.php?identifier=' + encodeURIComponent(val))
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d && d.is_first_login) {
+                passwordLabel.textContent = 'Student ID';
+                pwInput.placeholder = 'Enter Student ID';
+              } else {
+                passwordLabel.textContent = 'Password';
+                pwInput.placeholder = 'password';
+              }
+            })
+            .catch(function() {
+              passwordLabel.textContent = 'Password';
+              pwInput.placeholder = 'password';
+            });
+        }
+
+        identifierInput.addEventListener('blur', checkFirstLoginStatus);
+
+        identifierInput.addEventListener('input', function() {
+          clearTimeout(checkTimeout);
+          checkTimeout = setTimeout(checkFirstLoginStatus, 500);
+        });
+
+        // Run once on load to handle autofill or remembered values
+        setTimeout(checkFirstLoginStatus, 300);
       }
 
       // ---- OTP 6-slot logic ----

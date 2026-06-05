@@ -3,6 +3,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/bootstrap.php';
 
+if (empty($_SESSION['sams_registration']['step1'])) {
+    header('Location: register.php');
+    exit;
+}
+
+$step1_link = 'register.php';
+$step2_link = 'register1.php';
+$step3_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2'])) ? 'register2.php' : '#';
+$step4_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2']) && !empty($_SESSION['sams_registration']['step3'])) ? 'register3.php' : '#';
+
 $errors = [];
 $values = [
     'course'          => '',
@@ -537,7 +547,7 @@ function isSelected(string $key, string $option, array $values): string {
       <nav class="progress-card__steps" aria-label="Application steps">
 
         <!-- Step 1 – completed / active highlight -->
-        <a class="step-tab step-tab--active" href="register.php" aria-label="Step 1: Personal Info (completed)">
+        <a class="step-tab step-tab--active" href="<?= $step1_link ?>" aria-label="Step 1: Personal Info (completed)">
           <svg class="step-tab__svg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
@@ -553,7 +563,7 @@ function isSelected(string $key, string $option, array $values): string {
         </div>
 
         <!-- Step 3 – locked -->
-        <a class="step-tab" href="#" aria-label="Step 3: Requirements (not yet available)">
+        <a class="step-tab" href="<?= $step3_link ?>" aria-label="Step 3: Requirements">
           <svg class="step-tab__svg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -561,7 +571,7 @@ function isSelected(string $key, string $option, array $values): string {
         </a>
 
         <!-- Step 4 – locked -->
-        <a class="step-tab" href="#" aria-label="Step 4: Assessment (not yet available)">
+        <a class="step-tab" href="<?= $step4_link ?>" aria-label="Step 4: Assessment">
           <svg class="step-tab__svg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>

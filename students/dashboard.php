@@ -1225,13 +1225,6 @@ try {
         </svg>
         My Schedule
       </a>
-      <a class="nav-item" href="fingerprint_enrollment.php">
-        <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" fill="none" />
-          <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        Fingerprint Enrollment
-      </a>
       <a class="nav-item" href="#attendance">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8" />
@@ -1643,7 +1636,7 @@ try {
               </div>
               <div class="tips-card__item">
                 <span class="tips-card__check">✓</span>
-                <span>Attendance clock-in/out will be enabled once fingerprint hardware is ready</span>
+                <span>Attendance clock-in/out will be enabled once hardware setup is complete</span>
               </div>
               <div class="tips-card__item">
                 <span class="tips-card__check">✓</span>

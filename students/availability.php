@@ -6,6 +6,13 @@ require_once __DIR__ . '/../config/bootstrap.php';
 $submission = $_SESSION['registration_submission'] ?? [];
 $user = sams_authenticated_user();
 
+$isRegistration = !empty($_SESSION['registration_submission']);
+$pageTitle = $isRegistration ? 'Complete Your Application' : 'Set Your Availability';
+$pageSubtitle = $isRegistration 
+    ? 'Please set your weekly time availability below to complete and submit your application.' 
+    : 'Complete your schedule preferences so the office can match you with shifts for the current term.';
+$buttonText = $isRegistration ? 'Submit Application' : 'Save Availability';
+
 $applicationId = (int) ($submission['application_id'] ?? 0);
 $termId = (int) ($submission['term_id'] ?? 0);
 $studentId = (int) ($submission['student_id'] ?? 0);
@@ -67,7 +74,7 @@ $days = [
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Availability – SAMS Student Portal</title>
+    <title><?= htmlspecialchars($pageTitle) ?> – SAMS Student Portal</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
 
     <style>
@@ -193,33 +200,79 @@ $days = [
             color: var(--color-dark);
         }
 
-        .availability-table {
-            width: 100%;
-            border-collapse: collapse;
+        .availability-days {
+            display: grid;
+            gap: 14px;
             margin-top: 8px;
         }
 
-        .availability-table th,
-        .availability-table td {
-            padding: 14px 12px;
-            border-bottom: 1px solid var(--color-border);
-            vertical-align: middle;
+        .day-row {
+            border: 1px solid var(--color-border);
+            border-radius: 14px;
+            background: #fff;
+            padding: 14px;
+            display: grid;
+            grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr);
+            gap: 12px;
+            align-items: start;
         }
 
-        .availability-table th {
-            text-align: left;
+        .day-row__label {
+            font-weight: 800;
+            color: var(--color-dark);
+            padding-top: 8px;
+        }
+
+        .slot-card {
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 12px;
+            background: #fafcff;
+        }
+
+        .slot-card__head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .slot-card__title {
             font-size: 13px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            color: var(--color-primary);
+        }
+
+        .slot-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--color-body);
+        }
+
+        .time-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .time-field__label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: .04em;
             color: var(--color-muted);
+            margin-bottom: 6px;
         }
 
-        .availability-table td:first-child {
-            font-weight: 700;
-            width: 20%;
-        }
-
-        .availability-table input[type="time"] {
+        .time-field input[type="time"] {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid var(--color-border);
@@ -246,10 +299,22 @@ $days = [
             text-align: center;
         }
 
-        .availability-table input[type="checkbox"] {
+        .slot-toggle input[type="checkbox"] {
             width: 18px;
             height: 18px;
             accent-color: var(--color-primary);
+        }
+
+        .availability-note {
+            width: 100%;
+            min-height: 72px;
+            padding: 10px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            font: inherit;
+            font-size: 13px;
+            resize: vertical;
+            line-height: 1.4;
         }
 
         .actions {
@@ -313,35 +378,16 @@ $days = [
                 grid-template-columns: 1fr;
             }
 
-            .availability-table,
-            .availability-table thead,
-            .availability-table tbody,
-            .availability-table th,
-            .availability-table td,
-            .availability-table tr {
-                display: block;
-                width: 100%;
+            .day-row {
+                grid-template-columns: 1fr;
             }
 
-            .availability-table thead {
-                display: none;
+            .day-row__label {
+                padding-top: 0;
             }
 
-            .availability-table tr {
-                border: 1px solid var(--color-border);
-                border-radius: 14px;
-                padding: 12px;
-                margin-bottom: 12px;
-                background: #fff;
-            }
-
-            .availability-table td {
-                border: none;
-                padding: 8px 0;
-            }
-
-            .availability-table td:first-child {
-                width: 100%;
+            .time-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -351,8 +397,8 @@ $days = [
     <main class="page">
         <section class="hero">
             <div class="hero__badge">A</div>
-            <h1 class="hero__title">Set Your Availability</h1>
-            <p class="hero__sub">Complete your schedule preferences so the office can match you with shifts for the current term.</p>
+            <h1 class="hero__title"><?= htmlspecialchars($pageTitle) ?></h1>
+            <p class="hero__sub"><?= htmlspecialchars($pageSubtitle) ?></p>
         </section>
 
         <section class="card">
@@ -380,80 +426,87 @@ $days = [
             </div>
 
             <form id="availability-form">
-                <table class="availability-table">
-                    <thead>
-                        <tr>
-                            <th>Day</th>
-                            <th>Available (Morning)</th>
-                            <th>Start</th>
-                            <th>End</th>
-                            <th>Available (Afternoon)</th>
-                            <th>Start</th>
-                            <th>End</th>
-                        </tr>
-                    </thead>
+                <div class="availability-days">
+                    <?php foreach ($days as $dayIndex => $day): ?>
+                        <section class="day-row" data-index="<?= (int) $dayIndex ?>" data-day="<?= htmlspecialchars($day) ?>">
+                            <div class="day-row__label"><?= htmlspecialchars($day) ?></div>
 
-                    <tbody>
-                        <?php foreach ($days as $dayIndex => $day): ?>
-                            <tr data-index="<?= (int) $dayIndex ?>" data-day="<?= htmlspecialchars($day) ?>">
-                                <td><?= htmlspecialchars($day) ?></td>
-                                <!-- Morning Slot (8am-12pm) -->
-                                <td>
-                                    <input type="checkbox" class="availability-enabled-morning" data-index="<?= (int) $dayIndex ?>" checked />
-                                </td>
-                                <td>
-                                    <div class="time-wrapper">
-                                        <input type="time" class="availability-start-morning" data-index="<?= (int) $dayIndex ?>" value="08:00" />
-                                        <span class="time-ampm">AM</span>
+                            <article class="slot-card">
+                                <div class="slot-card__head">
+                                    <div class="slot-card__title">Morning</div>
+                                    <label class="slot-toggle">
+                                        <input type="checkbox" class="availability-enabled-morning" data-index="<?= (int) $dayIndex ?>" checked />
+                                        <span>Available</span>
+                                    </label>
+                                </div>
+
+                                <div class="time-grid">
+                                    <div class="time-field">
+                                        <label class="time-field__label" for="morning-start-<?= (int) $dayIndex ?>">Start</label>
+                                        <div class="time-wrapper">
+                                            <input id="morning-start-<?= (int) $dayIndex ?>" type="time" class="availability-start-morning" data-index="<?= (int) $dayIndex ?>" value="08:00" />
+                                            <span class="time-ampm">AM</span>
+                                        </div>
                                     </div>
-                                </td>
-                                <td>
-                                    <div class="time-wrapper">
-                                        <input type="time" class="availability-end-morning" data-index="<?= (int) $dayIndex ?>" value="12:00" />
-                                        <span class="time-ampm">PM</span>
+                                    <div class="time-field">
+                                        <label class="time-field__label" for="morning-end-<?= (int) $dayIndex ?>">End</label>
+                                        <div class="time-wrapper">
+                                            <input id="morning-end-<?= (int) $dayIndex ?>" type="time" class="availability-end-morning" data-index="<?= (int) $dayIndex ?>" value="12:00" />
+                                            <span class="time-ampm">PM</span>
+                                        </div>
                                     </div>
-                                </td>
-                                <!-- Afternoon Slot (1pm-8pm) -->
-                                <td>
-                                    <input type="checkbox" class="availability-enabled-afternoon" data-index="<?= (int) $dayIndex ?>" />
-                                </td>
-                                <td>
-                                    <div class="time-wrapper">
-                                        <input type="time" class="availability-start-afternoon" data-index="<?= (int) $dayIndex ?>" value="13:00" />
-                                        <span class="time-ampm">PM</span>
+                                </div>
+
+                                <textarea
+                                    class="availability-note availability-note-morning"
+                                    data-index="<?= (int) $dayIndex ?>"
+                                    placeholder="Optional: Why did you choose this morning slot?"
+                                    maxlength="500"
+                                ></textarea>
+                            </article>
+
+                            <article class="slot-card">
+                                <div class="slot-card__head">
+                                    <div class="slot-card__title">Afternoon</div>
+                                    <label class="slot-toggle">
+                                        <input type="checkbox" class="availability-enabled-afternoon" data-index="<?= (int) $dayIndex ?>" />
+                                        <span>Available</span>
+                                    </label>
+                                </div>
+
+                                <div class="time-grid">
+                                    <div class="time-field">
+                                        <label class="time-field__label" for="afternoon-start-<?= (int) $dayIndex ?>">Start</label>
+                                        <div class="time-wrapper">
+                                            <input id="afternoon-start-<?= (int) $dayIndex ?>" type="time" class="availability-start-afternoon" data-index="<?= (int) $dayIndex ?>" value="13:00" />
+                                            <span class="time-ampm">PM</span>
+                                        </div>
                                     </div>
-                                </td>
-                                <td>
-                                    <div class="time-wrapper">
-                                        <input type="time" class="availability-end-afternoon" data-index="<?= (int) $dayIndex ?>" value="20:00" />
-                                        <span class="time-ampm">PM</span>
+                                    <div class="time-field">
+                                        <label class="time-field__label" for="afternoon-end-<?= (int) $dayIndex ?>">End</label>
+                                        <div class="time-wrapper">
+                                            <input id="afternoon-end-<?= (int) $dayIndex ?>" type="time" class="availability-end-afternoon" data-index="<?= (int) $dayIndex ?>" value="20:00" />
+                                            <span class="time-ampm">PM</span>
+                                        </div>
                                     </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                                </div>
+
+                                <textarea
+                                    class="availability-note availability-note-afternoon"
+                                    data-index="<?= (int) $dayIndex ?>"
+                                    placeholder="Optional: Why did you choose this afternoon slot?"
+                                    maxlength="500"
+                                ></textarea>
+                            </article>
+                        </section>
+                    <?php endforeach; ?>
+                </div>
 
                 <div class="actions">
-                    <a class="btn-secondary" href="../status.php">Skip for now</a>
-                    <button class="btn" type="submit">Save Availability</button>
+                    <button class="btn" type="submit"><?= htmlspecialchars($buttonText) ?></button>
                 </div>
 
-                <p class="helper">Set your available hours for morning (8am-12pm) and/or afternoon (1pm-8pm). You can enable/disable each slot and adjust times as needed. Each schedule assigned will be minimum 2 hours.</p>
-
-                <!-- Notes -->
-                <div class="card" style="margin-top: 24px; border-top: 2px solid var(--color-primary);">
-                    <h3 style="margin-top: 0; color: var(--color-primary);">Additional Notes <span style="font-size: 14px; color: var(--color-muted); font-weight: 400;">(Optional)</span></h3>
-                    <p style="font-size: 14px; color: var(--color-muted); margin-bottom: 12px;">
-                        Please explain your time availability (e.g., "10am-12pm available because I have 8-10am class", "Only free after 1pm due to morning schedule"). Miss Zai will check your Class Schedule (COR) to validate.
-                    </p>
-                    <textarea 
-                        id="availability-notes" 
-                        name="notes" 
-                        placeholder="Explain your availability constraints and class schedule..."
-                        style="width: 100%; min-height: 100px; padding: 12px; border: 1px solid var(--color-border); border-radius: 12px; font-family: inherit; font-size: 14px; resize: vertical;">
-                    </textarea>
-                </div>
+                <p class="helper">Set your available hours for morning (8am-12pm) and/or afternoon (1pm-8pm). You can enable/disable each slot and adjust times as needed. Each schedule assigned will be minimum 2 hours, your total weekly availability must be at least 10 hours, and per-slot reason notes are optional.</p>
             </form>
         </section>
     </main>
@@ -468,6 +521,7 @@ $days = [
         var applicationId = <?= (int) $applicationId ?>;
         var studentId = <?= (int) $studentId ?>;
         var termId = <?= (int) $termId ?>;
+        var csrfToken = <?= json_encode(sams_csrf_token()) ?>;
 
         function showError(message) {
             errorBox.textContent = message;
@@ -477,6 +531,26 @@ $days = [
         function clearError() {
             errorBox.textContent = '';
             errorBox.hidden = true;
+        }
+
+        function calculateSlotHours(start, end) {
+            if (!start || !end) {
+                return 0;
+            }
+
+            var startParts = start.split(':');
+            var endParts = end.split(':');
+            if (startParts.length !== 2 || endParts.length !== 2) {
+                return 0;
+            }
+
+            var startMinutes = (parseInt(startParts[0], 10) * 60) + parseInt(startParts[1], 10);
+            var endMinutes = (parseInt(endParts[0], 10) * 60) + parseInt(endParts[1], 10);
+            if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
+                return 0;
+            }
+
+            return (endMinutes - startMinutes) / 60;
         }
 
         if (form) {
@@ -490,7 +564,8 @@ $days = [
                 }
 
                 var entries = [];
-                var rows = document.querySelectorAll('tr[data-day]');
+                var totalHours = 0;
+                var rows = document.querySelectorAll('.day-row[data-day]');
 
                 rows.forEach(function (row) {
                     var index = row.getAttribute('data-index');
@@ -500,12 +575,15 @@ $days = [
                     var enabledMorning = document.querySelector('.availability-enabled-morning[data-index="' + index + '"]');
                     var startMorning = document.querySelector('.availability-start-morning[data-index="' + index + '"]');
                     var endMorning = document.querySelector('.availability-end-morning[data-index="' + index + '"]');
+                    var noteMorning = document.querySelector('.availability-note-morning[data-index="' + index + '"]');
 
                     if (enabledMorning && enabledMorning.checked && startMorning && endMorning) {
+                        totalHours += calculateSlotHours(startMorning.value, endMorning.value);
                         entries.push({
                             day_of_week: day,
                             time_start: startMorning.value,
                             time_end: endMorning.value,
+                            notes: noteMorning ? noteMorning.value.trim() : '',
                             is_available: 1
                         });
                     }
@@ -514,12 +592,15 @@ $days = [
                     var enabledAfternoon = document.querySelector('.availability-enabled-afternoon[data-index="' + index + '"]');
                     var startAfternoon = document.querySelector('.availability-start-afternoon[data-index="' + index + '"]');
                     var endAfternoon = document.querySelector('.availability-end-afternoon[data-index="' + index + '"]');
+                    var noteAfternoon = document.querySelector('.availability-note-afternoon[data-index="' + index + '"]');
 
                     if (enabledAfternoon && enabledAfternoon.checked && startAfternoon && endAfternoon) {
+                        totalHours += calculateSlotHours(startAfternoon.value, endAfternoon.value);
                         entries.push({
                             day_of_week: day,
                             time_start: startAfternoon.value,
                             time_end: endAfternoon.value,
+                            notes: noteAfternoon ? noteAfternoon.value.trim() : '',
                             is_available: 1
                         });
                     }
@@ -527,6 +608,11 @@ $days = [
 
                 if (entries.length === 0) {
                     showError('Please choose at least one availability slot.');
+                    return;
+                }
+
+                if (totalHours < 10) {
+                    showError('Minimum required availability is 10 hours per week.');
                     return;
                 }
 
@@ -540,8 +626,8 @@ $days = [
                         application_id: applicationId,
                         student_id: studentId,
                         term_id: termId,
-                        notes: document.getElementById('availability-notes').value.trim(),
-                        availability: entries
+                        availability: entries,
+                        _csrf: csrfToken
                     })
                 })
                 .then(function (response) {
