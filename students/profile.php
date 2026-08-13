@@ -88,7 +88,7 @@ if (!$currentUser || ($currentUser['role'] ?? null) !== 'student') {
 $pdo = sams_pdo();
 $userPhoneColumn = sams_column_exists($pdo, 'users', 'phone_number') ? 'u.phone_number' : 'NULL AS phone_number';
 $studentStmt = $pdo->prepare(
-    'SELECT s.student_id AS student_db_id, s.student_id_number, s.program, s.year_level, s.current_gpa, s.is_enrolled, s.is_good_standing, s.created_at AS student_created_at, u.user_id AS user_db_id, u.email, u.first_name, u.last_name, ' . $userPhoneColumn . ', NULL AS profile_photo, u.created_at AS user_created_at
+    'SELECT s.student_id AS student_db_id, s.student_id_number, s.program, s.year_level, s.current_gpa, s.is_enrolled, s.is_good_standing, s.created_at AS student_created_at, s.nfc_uid, u.user_id AS user_db_id, u.email, u.first_name, u.last_name, ' . $userPhoneColumn . ', NULL AS profile_photo, u.created_at AS user_created_at
      FROM students s
      INNER JOIN users u ON u.user_id = s.user_id
      WHERE s.user_id = :user_id
@@ -1171,8 +1171,8 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
                     <a href="dashboard.php" class="nav__link">
                         <span class="nav__icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3 11.5L12 4l9 7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M5 10.5V20h5v-5h4v5h5v-9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M3 11.5L12 4l9 7.5" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff"/>
+                                <path d="M5 10.5V20h5v-5h4v5h5v-9.5" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff"/>
                             </svg>
                         </span>
                         <span class="nav__label">Dashboard</span>
@@ -1182,19 +1182,20 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
                     <a href="schedule.php" class="nav__link">
                         <span class="nav__icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/>
-                                <path d="M8 3v4M16 3v4M4 9h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                <rect x="4" y="5" width="16" height="15" rx="2" stroke="#101828" stroke-width="1.8" fill="#ffffff"/>
+                                <path d="M8 3v4M16 3v4M4 9h16" stroke="#101828" stroke-width="1.8" stroke-linecap="round" fill="none"/>
                             </svg>
                         </span>
                         <span class="nav__label">My Schedule</span>
                     </a>
                 </li>
                 <li class="nav__item">
-                    <a href="attendance.php" class="nav__link">
+                    <a href="attendance_history.php" class="nav__link">
                         <span class="nav__icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8"/>
-                                <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M5 4h10l4 4v12H5z" stroke="#101828" stroke-width="1.8" stroke-linejoin="round" fill="#ffffff"/>
+                                <path d="M15 4v4h4" stroke="#101828" stroke-width="1.8" stroke-linejoin="round" fill="#ffffff"/>
+                                <path d="M8 11h8M8 15h8" stroke="#101828" stroke-width="1.8" stroke-linecap="round" fill="none"/>
                             </svg>
                         </span>
                         <span class="nav__label">Duty-Hour Report</span>
@@ -1204,8 +1205,8 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
                     <a href="profile.php" class="nav__link nav__link--active" aria-current="page">
                         <span class="nav__icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/>
-                                <path d="M6.5 19c1.4-3.1 4-4.8 5.5-4.8S15.6 15.9 17 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle cx="12" cy="8" r="3.2" stroke="#101828" stroke-width="1.8" fill="#ffffff"/>
+                                <path d="M6.5 19c1.4-3.1 4-4.8 5.5-4.8S15.6 15.9 17 19" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff"/>
                             </svg>
                         </span>
                         <span class="nav__label">Profile</span>
@@ -1256,8 +1257,9 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
                         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke="#4A5565" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        <span class="topbar__badge" aria-label="New notifications"></span>
+                        <span class="topbar__badge" style="display:none;" aria-label="New notifications"></span>
                     </a>
+                    <script>window.SAMS_CSRF = '<?php echo addslashes(sams_csrf_token()); ?>';</script>
                     <a href="#" class="topbar__action-btn" aria-label="Settings">
                         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z" stroke="#4A5565" stroke-width="1.8"/>
@@ -1430,6 +1432,8 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
                         </div>
                     </div>
 
+
+
                     <!-- Skills & Qualifications -->
                     <div class="info-card" role="region" aria-label="Skills and Qualifications">
                         <div class="info-card__heading">
@@ -1555,6 +1559,7 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
 <script>
 (function () {
     'use strict';
+    var originalNfcUid = <?php echo json_encode((string) ($student['nfc_uid'] ?? '')); ?>;
 
     var hamburger = document.getElementById('hamburgerBtn');
     var sidebar   = document.getElementById('sidebar');
@@ -1589,12 +1594,16 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
         }
     });
 
-    window.setInterval(function () {
+    // Handle Page Auto-Reload
+    var reloadTimer = window.setInterval(function () {
         window.location.reload();
     }, 30000);
 
+
+
 })();
 </script>
+<script src="../assets/js/student-notifications.js"></script>
 
 </body>
 </html>

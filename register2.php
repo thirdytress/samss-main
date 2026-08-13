@@ -22,6 +22,7 @@ $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $allowed_types = ['application/pdf', 'image/jpeg', 'image/png'];
+    $allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png'];
     $max_size_5mb = 5 * 1024 * 1024;
     $max_size_2mb = 2 * 1024 * 1024;
 
@@ -31,16 +32,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'photo' => ['label' => '2x2 Photo',              'max' => $max_size_2mb],
     ];
 
+    $verified_mimes = [];
     foreach ($files as $key => $config) {
         if (!isset($_FILES[$key]) || $_FILES[$key]['error'] === UPLOAD_ERR_NO_FILE) {
             $errors[$key] = $config['label'] . ' is required.';
         } elseif ($_FILES[$key]['error'] !== UPLOAD_ERR_OK) {
             $errors[$key] = $config['label'] . ' upload failed.';
-        } elseif (!in_array($_FILES[$key]['type'], $allowed_types)) {
-            $errors[$key] = $config['label'] . ' must be PDF, JPG, or PNG.';
-        } elseif ($_FILES[$key]['size'] > $config['max']) {
-            $max_label = ($config['max'] === $max_size_2mb) ? '2MB' : '5MB';
-            $errors[$key] = $config['label'] . ' must not exceed ' . $max_label . '.';
+        } else {
+            $originalName = basename($_FILES[$key]['name']);
+            $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+
+            if (!in_array($extension, $allowed_extensions, true)) {
+                $errors[$key] = $config['label'] . ' must have a PDF, JPG, JPEG, or PNG extension.';
+                continue;
+            }
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mimeType = finfo_file($finfo, $_FILES[$key]['tmp_name']);
+            finfo_close($finfo);
+
+            if (!in_array($mimeType, $allowed_types, true)) {
+                $errors[$key] = $config['label'] . ' must be a valid PDF, JPG, or PNG file.';
+                continue;
+            }
+
+            if ($_FILES[$key]['size'] > $config['max']) {
+                $max_label = ($config['max'] === $max_size_2mb) ? '2MB' : '5MB';
+                $errors[$key] = $config['label'] . ' must not exceed ' . $max_label . '.';
+                continue;
+            }
+
+            $verified_mimes[$key] = $mimeType;
         }
     }
 
@@ -76,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'original_name' => $originalName,
                 'stored_name' => $safeName,
                 'stored_path' => $targetPath,
-                'mime_type' => $_FILES[$fileKey]['type'] ?? '',
+                'mime_type' => $verified_mimes[$fileKey] ?? '',
                 'size' => (int) ($_FILES[$fileKey]['size'] ?? 0),
             ];
         }

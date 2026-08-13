@@ -744,12 +744,10 @@
           <div class="hero__content">
             <!-- Badge -->
             <div class="hero__badge">
-              <img
-                class="hero__badge-icon"
-                src="https://www.figma.com/api/mcp/asset/aeea810e-4743-4cba-abb9-e2d0b156ec1a"
-                alt=""
-                aria-hidden="true"
-              />
+              <svg class="hero__badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px; color: var(--color-primary);">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
               <span class="hero__badge-text">National University – Lipa Campus</span>
             </div>
 
@@ -772,11 +770,10 @@
             <div class="hero__actions">
               <a class="hero__btn--apply" href="register.php">
                 Apply as Student Assistant
-                <img
-                  src="https://www.figma.com/api/mcp/asset/e6d2026f-610d-4753-909d-1feb9c6d5d78"
-                  alt=""
-                  aria-hidden="true"
-                />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px;">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
               </a>
               <a class="hero__btn--login" href="login.php">Login</a>
             </div>
@@ -785,24 +782,31 @@
           <!-- Right: card -->
           <div class="hero__card" aria-label="Join SDAO Today">
             <div class="hero__card-inner">
-              <img
-                class="hero__card-icon"
-                src="https://www.figma.com/api/mcp/asset/a786d8f7-7b8a-4e5f-b06a-4cefaf2f8196"
-                alt="SDAO graduation cap icon"
-              />
+              <svg class="hero__card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 56px; height: 56px; color: var(--color-gold); margin-bottom: var(--space-5);">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path>
+              </svg>
               <h2 class="hero__card-title">Join SDAO Today!</h2>
               <p class="hero__card-desc">Be part of the team that shapes student life at NU Lipa</p>
               <ul class="hero__card-perks">
                 <li class="hero__card-perk">
-                  <img src="https://www.figma.com/api/mcp/asset/a5a2bd59-40a7-4388-84d4-ffda6653728c" alt="" aria-hidden="true" />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px; color: var(--color-gold); flex-shrink: 0;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
                   <span class="hero__card-perk-text">Flexible Schedule</span>
                 </li>
                 <li class="hero__card-perk">
-                  <img src="https://www.figma.com/api/mcp/asset/a5a2bd59-40a7-4388-84d4-ffda6653728c" alt="" aria-hidden="true" />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px; color: var(--color-gold); flex-shrink: 0;">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
                   <span class="hero__card-perk-text">Gain Leadership Experience</span>
                 </li>
                 <li class="hero__card-perk">
-                  <img src="https://www.figma.com/api/mcp/asset/a5a2bd59-40a7-4388-84d4-ffda6653728c" alt="" aria-hidden="true" />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px; color: var(--color-gold); flex-shrink: 0;">
+                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                  </svg>
                   <span class="hero__card-perk-text">Financial Support</span>
                 </li>
               </ul>
@@ -827,7 +831,12 @@
           <!-- Card 1 -->
           <article class="feature-card">
             <div class="feature-card__icon-wrap feature-card__icon-wrap--blue">
-              <img src="https://www.figma.com/api/mcp/asset/09fc8456-4ef8-43eb-92b4-132059be29a0" alt="" aria-hidden="true" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 32px; height: 32px; color: white;">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="8.5" cy="7" r="4"></circle>
+                <line x1="20" y1="8" x2="20" y2="14"></line>
+                <line x1="23" y1="11" x2="17" y2="11"></line>
+              </svg>
             </div>
             <h3 class="feature-card__title">Easy Registration</h3>
             <p class="feature-card__desc">4-step application process with auto-filtering questions and instant submission</p>
@@ -836,7 +845,12 @@
           <!-- Card 2 -->
           <article class="feature-card">
             <div class="feature-card__icon-wrap feature-card__icon-wrap--blue">
-              <img src="https://www.figma.com/api/mcp/asset/6efd79e8-fe80-4bcc-884c-1772020825e1" alt="" aria-hidden="true" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 32px; height: 32px; color: white;">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
             </div>
             <h3 class="feature-card__title">Smart Scheduling</h3>
             <p class="feature-card__desc">View your duty schedule in calendar or list format with real-time updates</p>
@@ -845,7 +859,16 @@
           <!-- Card 3 -->
           <article class="feature-card">
             <div class="feature-card__icon-wrap feature-card__icon-wrap--blue">
-              <img src="https://www.figma.com/api/mcp/asset/8f8ba024-d133-483d-8f9a-0ca75514a603" alt="" aria-hidden="true" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 32px; height: 32px; color: white;">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+                <rect x="7" y="7" width="2" height="2"></rect>
+                <rect x="15" y="7" width="2" height="2"></rect>
+                <rect x="7" y="15" width="2" height="2"></rect>
+                <rect x="15" y="15" width="2" height="2"></rect>
+              </svg>
             </div>
             <h3 class="feature-card__title">QR Attendance</h3>
             <p class="feature-card__desc">Secure check-in/out with QR code scanning and PIN verification</p>
@@ -854,7 +877,10 @@
           <!-- Card 4 -->
           <article class="feature-card">
             <div class="feature-card__icon-wrap feature-card__icon-wrap--gold">
-              <img src="https://www.figma.com/api/mcp/asset/b47f8ccf-5461-4bbc-8dcd-d68c86a9cda3" alt="" aria-hidden="true" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 32px; height: 32px; color: white;">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
             </div>
             <h3 class="feature-card__title">Real-time Updates</h3>
             <p class="feature-card__desc">Get instant notifications about schedule changes and announcements</p>
@@ -907,9 +933,15 @@
           <h2 class="cta__title" id="cta-heading">Ready to Join SDAO?</h2>
           <p class="cta__desc">Apply now and become part of the team that creates amazing experiences for NU Lipa students!</p>
           <a class="cta__btn" href="register.php">
-            <img src="https://www.figma.com/api/mcp/asset/a8f5d1fb-aa39-48cc-afbe-2280c6352853" alt="" aria-hidden="true" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px; color: var(--color-primary); flex-shrink: 0;">
+              <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+              <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path>
+            </svg>
             Apply Now
-            <img src="https://www.figma.com/api/mcp/asset/c0b99c95-ab8f-40c1-8cad-c515c5bdbc28" alt="" aria-hidden="true" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px; color: var(--color-primary); flex-shrink: 0;">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
           </a>
         </div>
       </div>

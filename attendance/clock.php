@@ -89,6 +89,16 @@ try {
       exit;
     }
 
+    $endTime = new DateTimeImmutable(date('Y-m-d') . ' ' . $sched['time_end']);
+    if ($now > $endTime) {
+      $pdo->rollBack();
+      echo json_encode([
+        'success' => false,
+        'message' => 'Unable to Clock In. Your scheduled shift for today ended at ' . date('g:i A', $endTime->getTimestamp()) . '.'
+      ]);
+      exit;
+    }
+
     if ($row) {
       $upd = $pdo->prepare('UPDATE attendance_logs SET clock_in_time = NOW(), status = :status, late_minutes = :late WHERE log_id = :log_id');
       // Compute late

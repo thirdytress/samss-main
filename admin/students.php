@@ -1297,6 +1297,14 @@ function sams_html(string $value): string
     html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Student ID</span><span class="student-profile-modal__field-value">' + studentCode + '</span><span class="student-profile-modal__hint">Cannot be changed</span></div>';
     html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Email Address</span><span class="student-profile-modal__field-value">' + email + '</span></div>';
     html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Contact Number</span><span class="student-profile-modal__field-value">Not provided</span></div>';
+    html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">NFC Card ID</span>';
+    html += '<div style="display: flex; align-items: center; gap: 8px; width: 100%;">';
+    html += '<span id="modal-nfc-uid" class="student-profile-modal__field-value" style="margin: 0; flex: 1;">' + (d.nfc_uid ? escapeHtml(d.nfc_uid) : 'No card registered') + '</span>';
+    html += '<button type="button" class="btn-view" id="btn-modal-nfc-scan" style="height: 32px; font-size: 13px; font-weight: 700; background: var(--color-navy); padding: 0 12px; display: inline-flex; align-items: center; justify-content: center;" onclick="startNfcScan(' + (d.student_id || d.student_db_id) + ')">Scan ID</button>';
+    if (d.nfc_uid) {
+      html += '<button type="button" class="btn-view" id="btn-modal-nfc-clear" style="height: 32px; font-size: 13px; font-weight: 700; background: #e5e7eb; border: 1px solid var(--color-border); color: var(--color-red-dot); padding: 0 12px; display: inline-flex; align-items: center; justify-content: center;" onclick="clearModalNfcCard(' + (d.student_id || d.student_db_id) + ')">Clear ID</button>';
+    }
+    html += '</div></div>';
     html += '</div></div>';
 
     html += '<div class="student-profile-modal__info-card">';
@@ -1357,6 +1365,117 @@ function sams_html(string $value): string
       closeStudentModal();
     }
   });
+
+  // NFC Card Scanning on Admin Modal
+  var scanBuffer = '';
+  var isScanningMode = false;
+  var currentScanStudentId = null;
+
+  document.addEventListener('keydown', function (e) {
+    if (!isScanningMode) return;
+
+    // Safety check: do not intercept if the user is typing in another input
+    var activeEl = document.activeElement;
+    if (activeEl && activeEl.id !== 'nfc-uid-input-placeholder') {
+      var tag = activeEl.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || activeEl.isContentEditable) {
+        return;
+      }
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var uid = scanBuffer.trim();
+      if (uid !== '') {
+        saveModalNfcUid(uid);
+      }
+      return;
+    }
+
+    if (e.key.length !== 1) {
+      return;
+    }
+
+    if (/^[a-zA-Z0-9]$/.test(e.key)) {
+      e.preventDefault();
+      scanBuffer += e.key;
+      var displayVal = document.getElementById('modal-nfc-uid');
+      if (displayVal) {
+        displayVal.textContent = 'Scanning... ' + scanBuffer;
+      }
+    }
+  });
+
+  window.startNfcScan = function (studentId) {
+    isScanningMode = true;
+    scanBuffer = '';
+    currentScanStudentId = studentId;
+
+    var displayVal = document.getElementById('modal-nfc-uid');
+    if (displayVal) {
+      displayVal.textContent = 'Tap ID card on reader now...';
+      displayVal.style.color = '#e17100'; // Gold/orange highlight
+    }
+    var scanBtn = document.getElementById('btn-modal-nfc-scan');
+    if (scanBtn) {
+      scanBtn.textContent = 'Scanning...';
+      scanBtn.disabled = true;
+    }
+  };
+
+  window.clearModalNfcCard = function (studentId) {
+    if (confirm('Are you sure you want to unregister/clear this student\'s NFC ID card?')) {
+      currentScanStudentId = studentId;
+      saveModalNfcUid('');
+    }
+  };
+
+  function saveModalNfcUid(uid) {
+    var displayVal = document.getElementById('modal-nfc-uid');
+    if (displayVal) {
+      displayVal.textContent = 'Saving... Please wait.';
+      displayVal.style.color = 'var(--color-navy)';
+    }
+
+    var formData = new FormData();
+    formData.append('student_id', currentScanStudentId);
+    formData.append('nfc_uid', uid);
+
+    fetch('save_student_nfc.php', {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin'
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success) {
+        alert(data.message || 'NFC card saved successfully!');
+        window.location.reload();
+      } else {
+        alert(data.message || 'Error occurred.');
+        resetModalNfcInput();
+      }
+    })
+    .catch(function () {
+      alert('A network or server error occurred. Please try again.');
+      resetModalNfcInput();
+    });
+  }
+
+  function resetModalNfcInput() {
+    isScanningMode = false;
+    scanBuffer = '';
+    var displayVal = document.getElementById('modal-nfc-uid');
+    if (displayVal) {
+      displayVal.textContent = 'Error resetting...';
+      displayVal.style.color = 'var(--color-dark)';
+    }
+    var scanBtn = document.getElementById('btn-modal-nfc-scan');
+    if (scanBtn) {
+      scanBtn.textContent = 'Scan ID';
+      scanBtn.disabled = false;
+    }
+  }
 
 </script>
 

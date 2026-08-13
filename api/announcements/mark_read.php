@@ -11,9 +11,11 @@ if (!$currentUser) {
 
 $input = json_decode(file_get_contents('php://input') ?: '{}', true);
 $announcementId = isset($input['announcement_id']) ? (int)$input['announcement_id'] : 0;
-if ($announcementId <= 0) {
+$markAll = !empty($input['mark_all']);
+
+if ($announcementId <= 0 && !$markAll) {
     http_response_code(400);
-    echo json_encode(['error' => 'announcement_id required']);
+    echo json_encode(['error' => 'announcement_id or mark_all required']);
     exit;
 }
 
@@ -48,6 +50,21 @@ $pdo = sams_pdo();
 $userId = (int)($currentUser['user_id'] ?? $currentUser['id'] ?? 0);
 
 try {
+    if ($markAll) {
+        // Mark all active announcements for this user's role as read
+        $audience = (($currentUser['role'] ?? null) === 'supervisor') ? 'supervisors' : 'students';
+        $stmt = $pdo->prepare('
+            INSERT INTO announcement_reads (announcement_id, user_id, read_at)
+            SELECT id, :uid, NOW()
+            FROM announcements
+            WHERE is_active = 1 AND audience IN (:aud, "all")
+            ON DUPLICATE KEY UPDATE read_at = NOW()
+        ');
+        $stmt->execute(['uid' => $userId, 'aud' => $audience]);
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     // Use idempotent insert; requires unique key on (announcement_id, user_id)
     $ins = $pdo->prepare(
         'INSERT INTO announcement_reads (announcement_id, user_id, read_at) VALUES (:aid, :uid, NOW())

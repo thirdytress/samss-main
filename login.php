@@ -4,6 +4,12 @@ declare(strict_types=1);
 require_once __DIR__ . '/config/bootstrap.php';
 require_once __DIR__ . '/config/mail.php';
 
+$currentUser = sams_authenticated_user();
+if ($currentUser) {
+  header('Location: ' . sams_dashboard_for_role($currentUser['role']));
+  exit;
+}
+
 $error = '';
 $success = '';
 $showOtpModal = false;

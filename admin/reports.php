@@ -167,10 +167,10 @@ if ($mode === 'scheduled') {
         'SELECT
             COALESCE(CONCAT(u.last_name, ", ", u.first_name), "Unassigned Student") AS name,
             COALESCE(a.preferred_office, "Unassigned") AS office_name,
-            COUNT(DISTINCT ds.duty_id) AS total,
+            SUM(CASE WHEN (al.log_id IS NOT NULL OR COALESCE(ds.student_response_date, ds.updated_at, ds.created_at) <= NOW()) THEN 1 ELSE 0 END) AS total,
             SUM(CASE WHEN al.status = "present" THEN 1 ELSE 0 END) AS present,
             SUM(CASE WHEN al.status = "late" THEN 1 ELSE 0 END) AS late,
-            SUM(CASE WHEN (al.log_id IS NULL OR al.status = "absent") THEN 1 ELSE 0 END) AS absent,
+            SUM(CASE WHEN (al.log_id IS NULL OR al.status = "absent") AND COALESCE(ds.student_response_date, ds.updated_at, ds.created_at) <= NOW() THEN 1 ELSE 0 END) AS absent,
             COALESCE(SUM(CASE WHEN al.clock_in_time IS NOT NULL AND al.clock_out_time IS NOT NULL
                 THEN TIMESTAMPDIFF(SECOND, al.clock_in_time, al.clock_out_time) / 3600
                 ELSE 0 END), 0) AS hours
@@ -278,10 +278,10 @@ if ($mode === 'scheduled') {
     }
     $attendanceSummaryStmt = $pdo->prepare(
         'SELECT
-            COUNT(DISTINCT ds.duty_id) AS total,
+            SUM(CASE WHEN (al.log_id IS NOT NULL OR COALESCE(ds.student_response_date, ds.updated_at, ds.created_at) <= NOW()) THEN 1 ELSE 0 END) AS total,
             SUM(CASE WHEN al.status = "present" THEN 1 ELSE 0 END) AS present,
             SUM(CASE WHEN al.status = "late" THEN 1 ELSE 0 END) AS late,
-            SUM(CASE WHEN (al.log_id IS NULL OR al.status = "absent") THEN 1 ELSE 0 END) AS absent
+            SUM(CASE WHEN (al.log_id IS NULL OR al.status = "absent") AND COALESCE(ds.student_response_date, ds.updated_at, ds.created_at) <= NOW() THEN 1 ELSE 0 END) AS absent
          FROM duty_schedules ds
          JOIN applications a ON a.application_id = ds.application_id
          LEFT JOIN attendance_logs al ON al.log_id = (

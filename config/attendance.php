@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function sams_attendance_clocking_enabled(): bool
 {
-    return false;
+    return true;
 }
 
 function sams_current_term(PDO $pdo): array
@@ -143,26 +143,43 @@ function sams_attendance_normalize_student_logs(PDO $pdo, int $applicationId, ?i
     }
 
     if ($termId !== null && $termId > 0) {
-                $scheduleStmt = $pdo->prepare(
-                                'SELECT ds.duty_id, ds.day_of_week, ds.start_time, ds.end_time, ds.student_response_date, ds.created_at, COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") AS office_name
-                                 FROM duty_schedules ds
-                                 INNER JOIN applications a ON a.application_id = ds.application_id
-                                 WHERE ds.application_id = :application_id
-                                     AND ds.term_id = :term_id
-                                     AND ds.status = "deployed"
-                                 ORDER BY FIELD(ds.day_of_week, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"), ds.start_time ASC'
-                        );
+        $scheduleStmt = $pdo->prepare(
+            'SELECT ds.duty_id, ds.day_of_week, ds.start_time, ds.end_time, ds.student_response_date, ds.created_at, ds.updated_at, COALESCE(NULLIF(TRIM(ds.office_name), ""), NULLIF(TRIM(a.preferred_office), ""), "Unassigned") AS office_name
+             FROM duty_schedules ds
+             INNER JOIN applications a ON a.application_id = ds.application_id
+             WHERE ds.application_id = :application_id
+                 AND ds.term_id = :term_id
+                 AND ds.status = "deployed"
+             ORDER BY FIELD(ds.day_of_week, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"), ds.start_time ASC'
+        );
         $scheduleStmt->execute([
             'application_id' => $applicationId,
             'term_id' => $termId,
         ]);
         $scheduleRows = $scheduleStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-        $recordsByDuty = [];
-        foreach ($records as $record) {
-            $dutyId = (int) ($record['duty_id'] ?? 0);
-            if ($dutyId > 0) {
-                $recordsByDuty[$dutyId] = true;
+        $termStmt = $pdo->prepare('SELECT start_date, end_date FROM terms WHERE term_id = :term_id LIMIT 1');
+        $termStmt->execute(['term_id' => $termId]);
+        $termRow = $termStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $termStartStr = !empty($termRow['start_date']) ? (string) $termRow['start_date'] : '';
+        $termEndStr = !empty($termRow['end_date']) ? (string) $termRow['end_date'] : '';
+
+        if ($termStartStr === '') {
+            $termStartStr = date('Y-m-d', strtotime('monday this week'));
+        }
+        if ($termEndStr === '') {
+            $termEndStr = date('Y-m-d', strtotime('sunday this week'));
+        }
+
+        $recordsByDutyAndDate = [];
+        foreach ($rawLogs as $log) {
+            $dId = (int) ($log['duty_id'] ?? 0);
+            if ($dId > 0) {
+                $timeRef = !empty($log['created_at']) ? (string) $log['created_at'] : (!empty($log['time_in']) ? (string) $log['time_in'] : '');
+                if ($timeRef !== '') {
+                    $lDate = date('Y-m-d', strtotime($timeRef));
+                    $recordsByDutyAndDate[$dId][$lDate] = true;
+                }
             }
         }
 
@@ -175,11 +192,10 @@ function sams_attendance_normalize_student_logs(PDO $pdo, int $applicationId, ?i
             'Saturday' => 6,
         ];
         $today = new DateTimeImmutable('now');
-        $weekStart = new DateTimeImmutable('monday this week');
 
         foreach ($scheduleRows as $schedule) {
             $dutyId = (int) ($schedule['duty_id'] ?? 0);
-            if ($dutyId <= 0 || isset($recordsByDuty[$dutyId])) {
+            if ($dutyId <= 0) {
                 continue;
             }
 
@@ -188,58 +204,85 @@ function sams_attendance_normalize_student_logs(PDO $pdo, int $applicationId, ?i
                 continue;
             }
 
-            $scheduledDate = $weekStart->modify('+' . ($weekdayMap[$day] - 1) . ' days');
-            $endTime = trim((string) ($schedule['end_time'] ?? ''));
-            if ($endTime === '') {
-                continue;
-            }
-
-            $scheduledEnd = DateTimeImmutable::createFromFormat(
-                'Y-m-d H:i:s',
-                $scheduledDate->format('Y-m-d') . ' ' . $endTime
-            );
-
-            if (!($scheduledEnd instanceof DateTimeImmutable)) {
-                continue;
-            }
-
-            // Skip derived-absent if the schedule was assigned/accepted after the scheduled end
+            // Skip derived-absent if the schedule was assigned/accepted/deployed after the scheduled end
             $assignmentTime = '';
             if (!empty($schedule['student_response_date'])) {
                 $assignmentTime = trim((string) $schedule['student_response_date']);
+            } elseif (!empty($schedule['updated_at'])) {
+                $assignmentTime = trim((string) $schedule['updated_at']);
             } elseif (!empty($schedule['created_at'])) {
                 $assignmentTime = trim((string) $schedule['created_at']);
             }
 
+            $schedStartBound = $termStartStr;
             if ($assignmentTime !== '') {
-                $assignedTs = strtotime($assignmentTime);
-                if ($assignedTs && $assignedTs > $scheduledEnd->getTimestamp()) {
-                    // Assigned after the duty ended for this week — do not count as absent
-                    continue;
+                $assignedDate = date('Y-m-d', strtotime($assignmentTime));
+                if ($assignedDate > $schedStartBound) {
+                    $schedStartBound = $assignedDate;
                 }
             }
 
-            // If the scheduled end is still in the future, skip (not yet absent)
-            if ($today < $scheduledEnd) {
-                continue;
+            $currentIter = new DateTime((string) $schedStartBound);
+            // endIter is always today — we track absences from assignment date up to now.
+            // Do NOT cap by term end date: schedules are sometimes deployed after the term's
+            // official end_date (e.g. the term record is stale), and capping there would
+            // produce an impossible range (startBound > endIter) that generates zero records.
+            $endIter = new DateTime('today');
+
+            while ($currentIter <= $endIter) {
+                if ($currentIter->format('l') === $day) {
+                    break;
+                }
+                $currentIter->modify('+1 day');
             }
 
-            $records[] = [
-                'log_id' => null,
-                'duty_id' => $dutyId,
-                'day_of_week' => $day,
-                'start_time' => (string) ($schedule['start_time'] ?? ''),
-                'end_time' => (string) ($schedule['end_time'] ?? ''),
-                'office_name' => (string) ($schedule['office_name'] ?? 'Unassigned'),
-                'status' => 'absent',
-                'time_in' => null,
-                'time_out' => null,
-                'late_minutes' => 0,
-                'notes' => 'No clock-in by cutoff',
-                'created_at' => $scheduledDate->format('Y-m-d') . ' 00:00:00',
-                '__derived_absent' => true,
-                '__priority' => 1,
-            ];
+            while ($currentIter <= $endIter) {
+                $dateStr = $currentIter->format('Y-m-d');
+                $endTime = trim((string) ($schedule['end_time'] ?? ''));
+                if ($endTime === '') {
+                    $currentIter->modify('+7 days');
+                    continue;
+                }
+
+                $scheduledEnd = DateTimeImmutable::createFromFormat(
+                    'Y-m-d H:i:s',
+                    $dateStr . ' ' . $endTime
+                );
+
+                if (!($scheduledEnd instanceof DateTimeImmutable)) {
+                    $currentIter->modify('+7 days');
+                    continue;
+                }
+
+                if ($today < $scheduledEnd) {
+                    $currentIter->modify('+7 days');
+                    continue;
+                }
+
+                if (isset($recordsByDutyAndDate[$dutyId][$dateStr])) {
+                    $currentIter->modify('+7 days');
+                    continue;
+                }
+
+                $records[] = [
+                    'log_id' => null,
+                    'duty_id' => $dutyId,
+                    'day_of_week' => $day,
+                    'start_time' => (string) ($schedule['start_time'] ?? ''),
+                    'end_time' => (string) ($schedule['end_time'] ?? ''),
+                    'office_name' => (string) ($schedule['office_name'] ?? 'Unassigned'),
+                    'status' => 'absent',
+                    'time_in' => null,
+                    'time_out' => null,
+                    'late_minutes' => 0,
+                    'notes' => 'No clock-in by cutoff',
+                    'created_at' => $dateStr . ' 00:00:00',
+                    '__derived_absent' => true,
+                    '__priority' => 1,
+                ];
+
+                $currentIter->modify('+7 days');
+            }
         }
     }
 

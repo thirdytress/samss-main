@@ -22,8 +22,9 @@ if ($adminUserId <= 0) {
 $notificationId = (int) ($_POST['notification_id'] ?? 0);
 $reportId = (int) ($_POST['report_id'] ?? 0);
 $type = trim((string) ($_POST['type'] ?? ''));
+$markAll = !empty($_POST['mark_all']);
 
-if ($type === '' || ($notificationId <= 0 && $reportId <= 0)) {
+if (!$markAll && ($type === '' || ($notificationId <= 0 && $reportId <= 0))) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'invalid payload']);
     exit;
@@ -32,6 +33,25 @@ if ($type === '' || ($notificationId <= 0 && $reportId <= 0)) {
 $pdo = sams_pdo();
 
 try {
+    if ($markAll) {
+        // Mark all meeting notifications for current admin as read
+        $stmtMeetings = $pdo->prepare(
+            'UPDATE admin_meeting_notifications
+             SET is_read = 1, read_at = NOW()
+             WHERE admin_user_id = :admin_user_id AND is_read = 0'
+        );
+        $stmtMeetings->execute(['admin_user_id' => $adminUserId]);
+
+        // Mark all open student reports as read (is_new = 0)
+        $stmtReports = $pdo->query(
+            "UPDATE student_reports
+             SET is_new = 0
+             WHERE status = 'open' AND is_new = 1"
+        );
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
     if ($type === 'meeting' && $notificationId > 0) {
         $stmt = $pdo->prepare(
             'UPDATE admin_meeting_notifications

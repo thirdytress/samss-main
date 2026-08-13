@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 // Simple migration runner to execute SQL files in tools/migrations
-require_once __DIR__ . '/../../config/bootstrap.php';
+require_once __DIR__ . '/../config/bootstrap.php';
 
 $dir = __DIR__ . '/migrations';
 $pdo = sams_pdo();

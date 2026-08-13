@@ -27,6 +27,7 @@ function sams_snapshot_time_label(string $time): string
 function sams_snapshot_status_label(string $status): string
 {
   return match ($status) {
+    'deployed' => 'Deployed',
     'accepted' => 'Accepted',
     'declined' => 'Declined',
     default => 'Pending',
@@ -77,7 +78,7 @@ if ($studentDbId > 0) {
   $totalSchedules = count($studentSchedules);
   foreach ($studentSchedules as $schedule) {
     $status = (string) ($schedule['status'] ?? 'pending');
-    if ($status === 'accepted') {
+    if ($status === 'accepted' || $status === 'deployed') {
       $acceptedSchedules++;
     } elseif ($status === 'declined') {
       $declinedSchedules++;
@@ -110,7 +111,8 @@ if ($studentDbId > 0) {
 
     $currentAssignment = null;
     foreach ($sortedSchedules as $schedule) {
-      if ((string) ($schedule['status'] ?? '') === 'accepted') {
+      $status = (string) ($schedule['status'] ?? '');
+      if ($status === 'accepted' || $status === 'deployed') {
         $currentAssignment = $schedule;
         break;
       }

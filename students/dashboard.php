@@ -180,7 +180,7 @@ $respondedSchedules = 0;
 
 foreach ($studentSchedules as $schedule) {
   $status = (string) ($schedule['status'] ?? 'pending');
-  if ($status === 'accepted') {
+  if ($status === 'accepted' || $status === 'deployed') {
     $acceptedSchedules++;
     $respondedSchedules++;
   } elseif ($status === 'declined') {
@@ -230,7 +230,8 @@ if (!empty($studentSchedules)) {
   $nextDuty = $sortedSchedules[0] ?? null;
 
   foreach ($sortedSchedules as $schedule) {
-    if ((string) ($schedule['status'] ?? '') === 'accepted') {
+    $status = (string) ($schedule['status'] ?? '');
+    if ($status === 'accepted' || $status === 'deployed') {
       $currentAssignment = $schedule;
       break;
     }
@@ -1213,37 +1214,30 @@ try {
     <nav class="sidebar__nav" aria-label="Main navigation">
       <a class="nav-item nav-item--active" href="dashboard.php" aria-current="page">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M3 11.5L12 4l9 7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M5 10.5V20h5v-5h4v5h5v-9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M3 11.5L12 4l9 7.5" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
+          <path d="M5 10.5V20h5v-5h4v5h5v-9.5" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
         </svg>
         Dashboard
       </a>
       <a class="nav-item" href="schedule.php">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8" />
-          <path d="M8 3v4M16 3v4M4 9h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <rect x="4" y="5" width="16" height="15" rx="2" stroke="#101828" stroke-width="1.8" fill="#ffffff" />
+          <path d="M8 3v4M16 3v4M4 9h16" stroke="#101828" stroke-width="1.8" stroke-linecap="round" fill="none" />
         </svg>
         My Schedule
       </a>
-      <a class="nav-item" href="#attendance">
-        <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8" />
-          <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        Attendance
-      </a>
       <a class="nav-item" href="attendance_history.php">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M5 4h10l4 4v12H5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-          <path d="M15 4v4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M8 11h8M8 15h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <path d="M5 4h10l4 4v12H5z" stroke="#101828" stroke-width="1.8" stroke-linejoin="round" fill="#ffffff" />
+          <path d="M15 4v4h4" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
+          <path d="M8 11h8M8 15h8" stroke="#101828" stroke-width="1.8" stroke-linecap="round" fill="none" />
         </svg>
         Duty-Hour Report
       </a>
       <a class="nav-item" href="profile.php">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8" />
-          <path d="M6.5 19c1.4-3.1 4-4.8 5.5-4.8S15.6 15.9 17 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="12" cy="8" r="3.2" stroke="#101828" stroke-width="1.8" fill="#ffffff" />
+          <path d="M6.5 19c1.4-3.1 4-4.8 5.5-4.8S15.6 15.9 17 19" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
         </svg>
         Profile
       </a>
@@ -1288,35 +1282,15 @@ try {
       </div>
       <div class="topbar__actions">
         <!-- Notification bell -->
-        <div style="position:relative">
-          <button id="notif-toggle" class="topbar__icon-btn" aria-label="Notifications">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 4a5 5 0 0 0-5 5v2.2c0 .9-.2 1.8-.6 2.6L5.2 15.6A1 1 0 0 0 6 17h12a1 1 0 0 0 .8-1.4l-1.2-1.8c-.4-.8-.6-1.7-.6-2.6V9a5 5 0 0 0-5-5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              <path d="M9.5 17.5a2.8 2.8 0 0 0 5 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
-            <?php if ($notificationCount > 0): ?>
-              <span class="topbar__notif-dot" aria-label="New notifications"><?php echo (int) $notificationCount; ?></span>
-            <?php endif; ?>
-          </button>
-          <?php // expose CSRF token to JS for API calls ?>
-          <script>window.SAMS_CSRF = '<?php echo addslashes(sams_csrf_token()); ?>';</script>
-          <div id="notif-dropdown" style="display:none; position:absolute; right:0; top:42px; width:560px; background:#fff; border:1px solid #ddd; box-shadow:0 8px 24px rgba(0,0,0,.08); border-radius:8px; z-index:40;">
-            <div style="padding:12px; font-weight:700; border-bottom:1px solid #f3f3f3">Announcements</div>
-            <div id="notif-list" style="max-height:540px; overflow:auto; padding:6px">
-              <?php if (!empty($announcements)): ?>
-                <?php foreach ($announcements as $a): ?>
-                  <div class="notif-item" data-id="<?php echo (int)$a['id']; ?>" style="padding:12px;border-bottom:1px solid #f6f6f6;">
-                    <div style="font-weight:700"><?php echo htmlspecialchars((string)$a['title'], ENT_QUOTES, 'UTF-8'); ?></div>
-                    <div style="font-size:13px;color:#666;margin-top:8px;"><?php echo nl2br(htmlspecialchars((string)$a['body'], ENT_QUOTES, 'UTF-8')); ?></div>
-                    <div style="font-size:12px;color:#999;margin-top:8px"><?php echo htmlspecialchars((string)$a['created_at'], ENT_QUOTES, 'UTF-8'); ?></div>
-                  </div>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <div style="padding:12px;color:#666">No announcements</div>
-              <?php endif; ?>
-            </div>
-          </div>
-        </div>
+        <button id="notif-toggle" class="topbar__icon-btn" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 4a5 5 0 0 0-5 5v2.2c0 .9-.2 1.8-.6 2.6L5.2 15.6A1 1 0 0 0 6 17h12a1 1 0 0 0 .8-1.4l-1.2-1.8c-.4-.8-.6-1.7-.6-2.6V9a5 5 0 0 0-5-5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+            <path d="M9.5 17.5a2.8 2.8 0 0 0 5 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          <span class="topbar__notif-dot" style="display:none;" aria-label="New notifications"></span>
+        </button>
+        <?php // expose CSRF token to JS for API calls ?>
+        <script>window.SAMS_CSRF = '<?php echo addslashes(sams_csrf_token()); ?>';</script>
         <!-- Settings -->
         <button class="topbar__icon-btn" aria-label="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1778,17 +1752,8 @@ try {
       </div><!-- /.dashboard-grid -->
 
     </main>
-
-  <script>
+    <script>
     (function(){
-      var toggle = document.getElementById('notif-toggle');
-      var dd = document.getElementById('notif-dropdown');
-      if (!toggle) return;
-      toggle.addEventListener('click', function(e){
-        e.preventDefault();
-        dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-      });
-
       function escapeHtml(s){
         return String(s).replace(/[&<>\"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
@@ -2175,6 +2140,7 @@ try {
 
   }());
 </script>
+<script src="../assets/js/student-notifications.js"></script>
 
 </body>
 </html>

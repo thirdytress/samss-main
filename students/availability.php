@@ -7,6 +7,12 @@ $submission = $_SESSION['registration_submission'] ?? [];
 $user = sams_authenticated_user();
 
 $isRegistration = !empty($_SESSION['registration_submission']);
+if (!$isRegistration) {
+    if (!$user || ($user['role'] ?? null) !== 'student') {
+        header('Location: ../login.php');
+        exit;
+    }
+}
 $pageTitle = $isRegistration ? 'Complete Your Application' : 'Set Your Availability';
 $pageSubtitle = $isRegistration 
     ? 'Please set your weekly time availability below to complete and submit your application.' 

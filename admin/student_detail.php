@@ -118,6 +118,7 @@ try {
             s.year_level,
             s.is_enrolled,
             s.is_good_standing,
+            s.nfc_uid,
             s.created_at AS student_created_at,
             u.email,
             u.first_name,
@@ -275,6 +276,7 @@ try {
         'latest_attendance' => $latestAttendance,
             'availability_records' => $availabilityRecords,
             'availability_notes' => $availabilityNotes,
+        'nfc_uid' => (string) ($row['nfc_uid'] ?? ''),
         'email' => (string) ($row['email'] ?? ''),
         'phone' => 'Not provided',
     ];

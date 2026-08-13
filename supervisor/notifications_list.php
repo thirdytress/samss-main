@@ -11,18 +11,29 @@ if (!$user || (($user['role'] ?? null) !== 'supervisor')) {
     echo json_encode(['success' => false, 'message' => 'forbidden']);
     exit;
 }
-
 $pdo = sams_pdo();
 try {
-    $stmt = $pdo->prepare("SELECT id, title, body, created_at FROM announcements WHERE is_active = 1 AND audience IN ('supervisors','all') ORDER BY created_at DESC LIMIT 50");
-    $stmt->execute();
+    $userId = (int) ($user['user_id'] ?? $user['id'] ?? 0);
+    $stmt = $pdo->prepare("
+        SELECT a.id, a.title, a.body, a.created_at
+        FROM announcements a
+        LEFT JOIN announcement_reads r ON a.id = r.announcement_id AND r.user_id = :user_id
+        WHERE a.is_active = 1 
+          AND a.audience IN ('supervisors','all') 
+          AND r.id IS NULL
+        ORDER BY a.created_at DESC
+        LIMIT 10
+    ");
+    $stmt->execute(['user_id' => $userId]);
     $items = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $body = (string) ($row['body'] ?? '');
         $snippet = mb_strlen($body) > 200 ? mb_substr($body, 0, 197) . '...' : $body;
         $items[] = [
-            'id' => (int) ($row['id'] ?? 0),
+            'type' => 'announcement',
+            'notification_id' => (int) ($row['id'] ?? 0),
             'title' => (string) ($row['title'] ?? 'Announcement'),
+            'preferred_office' => 'Announcement',
             'snippet' => $snippet,
             'created_at' => (string) ($row['created_at'] ?? ''),
             'link_url' => 'announcements.php',

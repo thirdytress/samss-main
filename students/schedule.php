@@ -79,6 +79,11 @@ function sams_schedule_date_for_day(string $day): string
 }
 
 $currentUser = sams_authenticated_user();
+if (!$currentUser || ($currentUser['role'] ?? null) !== 'student') {
+  header('Location: ../login.php');
+  exit;
+}
+
 $pdo = sams_pdo();
 $studentSchedules = [];
 $studentName = (string) ($currentUser['name'] ?? 'Student');
@@ -90,69 +95,67 @@ $pendingSchedules = 0;
 $declinedSchedules = 0;
 $notificationCount = 0;
 
-if ($currentUser && ($currentUser['role'] ?? null) === 'student') {
-  $userId = (int) ($currentUser['user_id'] ?? $currentUser['id'] ?? 0);
-  if ($userId > 0) {
-    $studentStmt = $pdo->prepare(
-      'SELECT s.student_id AS id, s.student_id_number, u.first_name, u.last_name
-       FROM students s
-       INNER JOIN users u ON u.user_id = s.user_id
-       WHERE s.user_id = :user_id
-       LIMIT 1'
-    );
-    $studentStmt->execute(['user_id' => $userId]);
-    $studentRow = $studentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$userId = (int) ($currentUser['user_id'] ?? $currentUser['id'] ?? 0);
+if ($userId > 0) {
+  $studentStmt = $pdo->prepare(
+    'SELECT s.student_id AS id, s.student_id_number, u.first_name, u.last_name
+     FROM students s
+     INNER JOIN users u ON u.user_id = s.user_id
+     WHERE s.user_id = :user_id
+     LIMIT 1'
+  );
+  $studentStmt->execute(['user_id' => $userId]);
+  $studentRow = $studentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-    if (!empty($studentRow)) {
-      $studentName = trim((string) ($studentRow['first_name'] ?? '') . ' ' . (string) ($studentRow['last_name'] ?? '')) ?: $studentName;
-      $studentCode = (string) ($studentRow['student_id_number'] ?? $studentCode);
-      $studentId = (int) ($studentRow['id'] ?? 0);
+  if (!empty($studentRow)) {
+    $studentName = trim((string) ($studentRow['first_name'] ?? '') . ' ' . (string) ($studentRow['last_name'] ?? '')) ?: $studentName;
+    $studentCode = (string) ($studentRow['student_id_number'] ?? $studentCode);
+    $studentId = (int) ($studentRow['id'] ?? 0);
 
-      if ($studentId > 0) {
-        $schedStmt = $pdo->prepare(
-            "SELECT ds.duty_id AS id,
-              COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') AS office_name,
-              ds.day_of_week, ds.start_time AS time_start, ds.end_time AS time_end, ds.status,
-                  ds.term_id, t.term_name, t.term_year AS school_year,
-                  al.log_id AS attendance_id, al.status AS attendance_status, al.late_minutes, al.notes AS remarks, al.clock_in_time AS time_in, al.clock_out_time AS time_out
-           FROM duty_schedules ds
-           LEFT JOIN applications a ON a.application_id = ds.application_id
-           LEFT JOIN terms t ON t.term_id = ds.term_id
-           LEFT JOIN attendance_logs al ON al.application_id = ds.application_id
-             AND al.duty_id = ds.duty_id
-           WHERE a.student_id = :student_id
-           ORDER BY FIELD(ds.day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), ds.start_time ASC"
-        );
-        $schedStmt->execute(['student_id' => $studentId]);
-        $studentSchedules = $schedStmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($studentId > 0) {
+      $schedStmt = $pdo->prepare(
+          "SELECT ds.duty_id AS id,
+            COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') AS office_name,
+            ds.day_of_week, ds.start_time AS time_start, ds.end_time AS time_end, ds.status,
+                ds.term_id, t.term_name, t.term_year AS school_year,
+                al.log_id AS attendance_id, al.status AS attendance_status, al.late_minutes, al.notes AS remarks, al.clock_in_time AS time_in, al.clock_out_time AS time_out
+         FROM duty_schedules ds
+         LEFT JOIN applications a ON a.application_id = ds.application_id
+         LEFT JOIN terms t ON t.term_id = ds.term_id
+         LEFT JOIN attendance_logs al ON al.application_id = ds.application_id
+           AND al.duty_id = ds.duty_id
+         WHERE a.student_id = :student_id
+         ORDER BY FIELD(ds.day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), ds.start_time ASC"
+      );
+      $schedStmt->execute(['student_id' => $studentId]);
+      $studentSchedules = $schedStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $seenAcceptedDays = [];
-        foreach ($studentSchedules as $schedule) {
-          $day = (string) ($schedule['day_of_week'] ?? '');
+      $seenAcceptedDays = [];
+      foreach ($studentSchedules as $schedule) {
+        $day = (string) ($schedule['day_of_week'] ?? '');
 
-          $status = (string) ($schedule['status'] ?? 'pending');
-          if ($status === 'accepted') {
-            $start = strtotime((string) ($schedule['time_start'] ?? ''));
-            $end = strtotime((string) ($schedule['time_end'] ?? ''));
-            if ($start && $end && $end > $start) {
-              $totalHours += ($end - $start) / 3600;
-            }
-
-            if ($day !== '' && !isset($seenAcceptedDays[$day])) {
-              $seenAcceptedDays[$day] = true;
-            }
-
-            $acceptedSchedules++;
-          } elseif ($status === 'declined') {
-            $declinedSchedules++;
-          } else {
-            $pendingSchedules++;
+        $status = (string) ($schedule['status'] ?? 'pending');
+        if ($status === 'accepted' || $status === 'deployed') {
+          $start = strtotime((string) ($schedule['time_start'] ?? ''));
+          $end = strtotime((string) ($schedule['time_end'] ?? ''));
+          if ($start && $end && $end > $start) {
+            $totalHours += ($end - $start) / 3600;
           }
-        }
 
-        $totalDays = count($seenAcceptedDays);
-        $notificationCount = $pendingSchedules + ($declinedSchedules > 0 ? 1 : 0);
+          if ($day !== '' && !isset($seenAcceptedDays[$day])) {
+            $seenAcceptedDays[$day] = true;
+          }
+
+          $acceptedSchedules++;
+        } elseif ($status === 'declined') {
+          $declinedSchedules++;
+        } else {
+          $pendingSchedules++;
+        }
       }
+
+      $totalDays = count($seenAcceptedDays);
+      $notificationCount = $pendingSchedules + ($declinedSchedules > 0 ? 1 : 0);
     }
   }
 }
@@ -1252,29 +1255,30 @@ if (!empty($studentSchedules)) {
     <nav class="sidebar__nav" aria-label="Main navigation">
       <a class="nav-item" href="dashboard.php">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M3 11.5L12 4l9 7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M5 10.5V20h5v-5h4v5h5v-9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M3 11.5L12 4l9 7.5" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
+          <path d="M5 10.5V20h5v-5h4v5h5v-9.5" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
         </svg>
         Dashboard
       </a>
       <a class="nav-item nav-item--active" href="#" aria-current="page">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8" />
-          <path d="M8 3v4M16 3v4M4 9h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <rect x="4" y="5" width="16" height="15" rx="2" stroke="#101828" stroke-width="1.8" fill="#ffffff" />
+          <path d="M8 3v4M16 3v4M4 9h16" stroke="#101828" stroke-width="1.8" stroke-linecap="round" fill="none" />
         </svg>
         My Schedule
       </a>
-      <a class="nav-item" href="attendance.php">
+      <a class="nav-item" href="attendance_history.php">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8" />
-          <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M5 4h10l4 4v12H5z" stroke="#101828" stroke-width="1.8" stroke-linejoin="round" fill="#ffffff" />
+          <path d="M15 4v4h4" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
+          <path d="M8 11h8M8 15h8" stroke="#101828" stroke-width="1.8" stroke-linecap="round" fill="none" />
         </svg>
         Duty-Hour Report
       </a>
       <a class="nav-item" href="profile.php">
         <svg class="nav-item__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8" />
-          <path d="M6.5 19c1.4-3.1 4-4.8 5.5-4.8S15.6 15.9 17 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="12" cy="8" r="3.2" stroke="#101828" stroke-width="1.8" fill="#ffffff" />
+          <path d="M6.5 19c1.4-3.1 4-4.8 5.5-4.8S15.6 15.9 17 19" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
         </svg>
         Profile
       </a>
@@ -1322,10 +1326,9 @@ if (!empty($studentSchedules)) {
               <path d="M12 4a5 5 0 0 0-5 5v2.2c0 .9-.2 1.8-.6 2.6L5.2 15.6A1 1 0 0 0 6 17h12a1 1 0 0 0 .8-1.4l-1.2-1.8c-.4-.8-.6-1.7-.6-2.6V9a5 5 0 0 0-5-5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
               <path d="M9.5 17.5a2.8 2.8 0 0 0 5 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             </svg>
-            <?php if ($notificationCount > 0): ?>
-              <span class="topbar__notif-dot" aria-label="New notifications"><?php echo (int) $notificationCount; ?></span>
-            <?php endif; ?>
+            <span class="topbar__notif-dot" style="display:none;" aria-label="New notifications"></span>
         </button>
+        <script>window.SAMS_CSRF = '<?php echo addslashes(sams_csrf_token()); ?>';</script>
         <button class="topbar__icon-btn" aria-label="Settings">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" stroke="currentColor" stroke-width="1.8" fill="none" />
@@ -1798,6 +1801,7 @@ if (!empty($studentSchedules)) {
     setView('calendar');
   }());
 </script>
+<script src="../assets/js/student-notifications.js"></script>
 
 </body>
 </html>

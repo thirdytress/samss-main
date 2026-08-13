@@ -14,9 +14,18 @@ if (!$user || (($user['role'] ?? null) !== 'supervisor')) {
 
 $pdo = sams_pdo();
 try {
-    // Count recent active announcements for supervisors or all users
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM announcements WHERE is_active = 1 AND audience IN ('supervisors','all') AND created_at >= (NOW() - INTERVAL 30 DAY)");
-    $stmt->execute();
+    $userId = (int) ($user['user_id'] ?? $user['id'] ?? 0);
+    // Count unread recent active announcements for supervisors or all users
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM announcements a
+        LEFT JOIN announcement_reads r ON a.id = r.announcement_id AND r.user_id = :user_id
+        WHERE a.is_active = 1 
+          AND a.audience IN ('supervisors','all') 
+          AND a.created_at >= (NOW() - INTERVAL 30 DAY)
+          AND r.id IS NULL
+    ");
+    $stmt->execute(['user_id' => $userId]);
     $count = (int) $stmt->fetchColumn();
     echo json_encode(['success' => true, 'count' => $count]);
 } catch (Throwable $e) {
