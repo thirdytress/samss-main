@@ -87,6 +87,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $email = trim((string) ($step1['email'] ?? ''));
             $studentCode = trim((string) ($step1['student_id'] ?? ''));
+            $contactNumber = preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? ''));
+
+            if (!sams_column_exists($pdo, 'users', 'phone_number')) {
+                throw new RuntimeException('Users table must have phone_number column. Please apply the latest database migration.');
+            }
 
             if (!sams_column_exists($pdo, 'students', 'student_id_number')) {
                 throw new RuntimeException('Students table must have student_id_number column.');
@@ -95,10 +100,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $duplicateCheck = $pdo->prepare(
                 "SELECT
                     (SELECT COUNT(*) FROM users WHERE email = :email) AS email_count,
-                        (SELECT COUNT(*) FROM students WHERE student_id_number = :student_code) AS student_count"
+                    (SELECT COUNT(*) FROM users WHERE phone_number = :phone_number) AS phone_count,
+                    (SELECT COUNT(*) FROM students WHERE student_id_number = :student_code) AS student_count"
             );
             $duplicateCheck->execute([
                 'email' => $email,
+                'phone_number' => $contactNumber,
                 'student_code' => $studentCode,
             ]);
             $duplicateCounts = $duplicateCheck->fetch() ?: ['email_count' => 0, 'student_count' => 0];
@@ -107,19 +114,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('This email is already registered. Please use a different email or log in.');
             }
 
+            if ((int) ($duplicateCounts['phone_count'] ?? 0) > 0) {
+                throw new RuntimeException('This phone number is already registered. Please use a different phone number.');
+            }
+
             if ((int) ($duplicateCounts['student_count'] ?? 0) > 0) {
                 throw new RuntimeException('This student ID is already registered. Please use a different student ID or log in.');
             }
 
             $pdo->beginTransaction();
 
-            $termIdColumn = sams_first_existing_column($pdo, 'terms', ['id', 'term_id']);
-            if ($termIdColumn === null) {
-                throw new RuntimeException('Terms table must have id or term_id column.');
-            }
-
-            $termStatement = $pdo->query("SELECT {$termIdColumn} FROM terms WHERE is_active = 1 ORDER BY {$termIdColumn} DESC LIMIT 1");
-            $activeTermId = $termStatement->fetchColumn();
+            $currentTerm = sams_current_term($pdo);
+            $activeTermId = $currentTerm['term_id'] ?? false;
 
             if ($activeTermId === false) {
                 throw new RuntimeException('No active term is configured yet. Please activate a term before accepting applications.');
@@ -127,7 +133,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $fullName = trim((string) ($step1['full_name'] ?? ''));
             [$firstName, $lastName] = sams_split_full_name($fullName);
-            $contactNumber = trim((string) ($step1['contact_number'] ?? ''));
             $course = trim((string) ($step2['course'] ?? ''));
             $yearLevel = sams_map_year_level((string) ($step2['year_level'] ?? '1'));
             $gpa = trim((string) ($step2['gpa'] ?? ''));
@@ -156,11 +161,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $userValues['must_change_password'] = 1;
             }
 
-            if (sams_column_exists($pdo, 'users', 'phone_number')) {
-                $userColumns[] = 'phone_number';
-                $userParams[] = ':phone_number';
-                $userValues['phone_number'] = $contactNumber;
-            }
+            $userColumns[] = 'phone_number';
+            $userParams[] = ':phone_number';
+            $userValues['phone_number'] = $contactNumber;
 
             $userStatement = $pdo->prepare(
                 'INSERT INTO users (' . implode(', ', $userColumns) . ')
@@ -217,9 +220,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $documentMap = [
-                'cog' => 'grade_slip',
-                'valid_id' => 'valid_id',
-                'photo' => 'other',
+                'resume' => 'resume',
+                'intent_letter' => 'letter_of_intent',
+                'parent_consent' => 'parent_consent',
+                'recommendation' => 'recommendation_letter',
+                'grades' => 'grades',
+                'class_schedule' => 'class_schedule',
+                'good_moral' => 'good_moral',
             ];
 
             if (is_array($storedFiles) && sams_column_exists($pdo, 'document_uploads', 'application_id')) {

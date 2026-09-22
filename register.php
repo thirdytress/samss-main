@@ -39,11 +39,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if (!sams_column_exists($pdo, 'students', 'student_id_number')) {
         throw new RuntimeException('Students table must have student_id_number column.');
       }
+      if (!sams_column_exists($pdo, 'users', 'phone_number')) {
+        throw new RuntimeException('Users table must have phone_number column. Please apply the latest database migration.');
+      }
 
-      $duplicateStatement = $pdo->prepare('SELECT COUNT(*) FROM students WHERE student_id_number = :student_id');
-      $duplicateStatement->execute(['student_id' => $values['student_id']]);
+      $normalizedPhone = preg_replace('/\D+/', '', $values['contact_number']);
 
-      if ((int) $duplicateStatement->fetchColumn() > 0) {
+      $duplicateStatement = $pdo->prepare(
+        'SELECT
+            (SELECT COUNT(*) FROM users WHERE email = :email) AS email_count,
+            (SELECT COUNT(*) FROM users WHERE phone_number = :phone_number) AS phone_count,
+            (SELECT COUNT(*) FROM students WHERE student_id_number = :student_id) AS student_count'
+      );
+      $duplicateStatement->execute([
+        'email' => $values['email'],
+        'phone_number' => $normalizedPhone,
+        'student_id' => $values['student_id'],
+      ]);
+      $duplicateCounts = $duplicateStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+
+      if ((int) ($duplicateCounts['email_count'] ?? 0) > 0) {
+        $errors['email'] = 'This email is already registered. Please use a different email or log in.';
+      }
+
+      if ((int) ($duplicateCounts['phone_count'] ?? 0) > 0) {
+        $errors['contact_number'] = 'This phone number is already registered. Please use a different phone number.';
+      }
+
+      if ((int) ($duplicateCounts['student_count'] ?? 0) > 0) {
         $errors['student_id'] = 'This student ID is already registered. Please use a different student ID or log in.';
       }
     }
