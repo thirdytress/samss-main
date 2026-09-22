@@ -99,6 +99,7 @@ foreach ($reports as $reportRow) {
     <link rel="stylesheet" href="../assets/css/sams-shell.css" />
     <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
     <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
+    <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
     <style>
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--color-bg-app);color:var(--color-heading);min-height:100vh;display:flex}
@@ -372,6 +373,6 @@ foreach ($reports as $reportRow) {
             function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
         })();
     </script>
-        <script src="../assets/js/admin-notifications.js"></script>
+        <script src="../assets/js/admin-notifications.js?v=20260922"></script>
 </body>
 </html>

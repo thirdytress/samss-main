@@ -594,6 +594,6 @@ function sams_eval_badge_class(float $score): string
       </section>
     </main>
   </div>
-  <script src="../assets/js/admin-notifications.js"></script>
+  <script src="../assets/js/admin-notifications.js?v=20260922"></script>
 </body>
 </html>

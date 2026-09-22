@@ -1464,7 +1464,7 @@ function sams_admin_dashboard_attendance_dot(string $status): string
     window.setInterval(refreshDashboard, 20000);
 })();
 </script>
-<script src="../assets/js/admin-notifications.js"></script>
+<script src="../assets/js/admin-notifications.js?v=20260922"></script>
 
 </body>
 </html>

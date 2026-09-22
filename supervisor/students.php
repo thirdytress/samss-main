@@ -129,6 +129,7 @@ function h(?string $value): string
     <link rel="stylesheet" href="../assets/css/sams-shell.css" />
     <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
     <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
+    <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
     <style>
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--color-bg-app);color:var(--color-heading);min-height:100vh;display:flex}
@@ -234,7 +235,7 @@ function h(?string $value): string
             </div>
         </header>
 
-        <script src="../assets/js/admin-notifications.js"></script>
+        <script src="../assets/js/admin-notifications.js?v=20260922"></script>
 
         <section class="page">
             <div class="stats">

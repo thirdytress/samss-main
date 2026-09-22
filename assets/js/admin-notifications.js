@@ -1,13 +1,27 @@
 (function () {
   'use strict';
 
-  var bell = document.querySelector('.topbar__notif') || document.querySelector('.topbar__notif-btn');
+  var bell = document.querySelector('.topbar__notif, .topbar__notif-btn');
+  var topbarRight = document.querySelector('.topbar__right');
+
+  if (!bell && topbarRight) {
+    bell = document.createElement('button');
+    bell.type = 'button';
+    bell.className = 'topbar__notif-btn';
+    bell.setAttribute('aria-label', 'Notifications');
+    topbarRight.insertBefore(bell, topbarRight.firstChild);
+  }
+
   if (!bell || bell.dataset.notifBound === '1') {
     return;
   }
   bell.dataset.notifBound = '1';
 
-  var dot = document.querySelector('.topbar__notif-dot');
+  bell.classList.remove('topbar__notif');
+  bell.classList.add('topbar__notif-btn');
+  bell.innerHTML = '<svg class="topbar__notif-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="topbar__notif-dot" aria-label="No new notifications"></span>';
+
+  var dot = bell.querySelector('.topbar__notif-dot');
   var dropdown = null;
   var isOpen = false;
 
@@ -221,7 +235,7 @@
     if (!isOpen) {
       return;
     }
-    if (event.target.closest && (event.target.closest('.topbar__notif') || event.target.closest('.topbar__notif-btn') || event.target.closest('#admin-notif-dropdown'))) {
+    if (event.target.closest && (event.target.closest('.topbar__notif-btn') || event.target.closest('#admin-notif-dropdown'))) {
       return;
     }
     closeDropdown();

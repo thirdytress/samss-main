@@ -1479,7 +1479,7 @@ function sams_html(string $value): string
 
 </script>
 
-<script src="../assets/js/admin-notifications.js"></script>
+<script src="../assets/js/admin-notifications.js?v=20260922"></script>
 
 </body>
 </html>

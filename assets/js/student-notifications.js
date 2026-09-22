@@ -9,6 +9,9 @@
   }
   bell.dataset.notifBound = '1';
 
+  bell.classList.add('topbar__notif-btn');
+  bell.innerHTML = '<svg class="topbar__notif-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="topbar__notif-dot" aria-label="No new notifications"></span>';
+
   var dot = bell.querySelector('.topbar__notif-dot') || bell.querySelector('.topbar__badge') || document.querySelector('.topbar__notif-dot');
   var dropdown = null;
   var isOpen = false;

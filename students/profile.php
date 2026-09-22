@@ -1141,6 +1141,7 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
             .actions-card { padding: var(--sp-16); }
         }
     </style>
+<link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
 </head>
 <body>
 
@@ -1603,7 +1604,7 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
 
 })();
 </script>
-<script src="../assets/js/student-notifications.js"></script>
+<script src="../assets/js/student-notifications.js?v=20260922"></script>
 
 </body>
 </html>

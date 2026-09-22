@@ -1,0 +1,62 @@
+/* Shared notification bell used by admin, supervisor, and student portals. */
+.topbar__notif,
+.topbar__notif-btn,
+.topbar__icon-btn[aria-label="Notifications"],
+.topbar__action-btn[aria-label="Notifications"] {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  color: #364153 !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .05) !important;
+  transition: background .15s ease, border-color .15s ease, color .15s ease !important;
+}
+
+.topbar__notif:hover,
+.topbar__notif-btn:hover,
+.topbar__icon-btn[aria-label="Notifications"]:hover,
+.topbar__action-btn[aria-label="Notifications"]:hover {
+  background: #f3f7ff !important;
+  border-color: #bfd3ff !important;
+  color: #155dfc !important;
+  transform: none !important;
+}
+
+.topbar__notif-icon,
+.topbar__notif img,
+.topbar__notif-btn svg,
+.topbar__icon-btn[aria-label="Notifications"] svg,
+.topbar__icon-btn[aria-label="Notifications"] img,
+.topbar__action-btn[aria-label="Notifications"] svg {
+  width: 21px !important;
+  height: 21px !important;
+  display: block !important;
+  object-fit: contain;
+}
+
+.topbar__notif-dot,
+.topbar__badge {
+  position: absolute !important;
+  top: 5px !important;
+  right: 5px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  padding: 0 3px !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 999px !important;
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  line-height: 12px !important;
+  text-align: center !important;
+  box-shadow: none !important;
+}

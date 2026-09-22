@@ -1415,7 +1415,7 @@ $currentDateLabel = date('l, F j, Y');
 })();
 </script>
 
-<script src="../assets/js/admin-notifications.js"></script>
+<script src="../assets/js/admin-notifications.js?v=20260922"></script>
 
 </body>
 </html>

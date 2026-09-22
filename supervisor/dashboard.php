@@ -216,6 +216,7 @@ function h(?string $value): string
     <link rel="stylesheet" href="../assets/css/sams-shell.css" />
     <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
     <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
+    <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; font-family: Inter, Arial, sans-serif; background: #f4f6fa; color: var(--color-heading); }
@@ -590,6 +591,6 @@ function h(?string $value): string
     setInterval(pollMetrics, 10000);
 })();
 </script>
-<script src="../assets/js/admin-notifications.js"></script>
+<script src="../assets/js/admin-notifications.js?v=20260922"></script>
 </body>
 </html>

@@ -1517,6 +1517,6 @@ if (!function_exists('meeting_block_style')) {
             }
         });
     </script>
-    <script src="../assets/js/admin-notifications.js"></script>
+    <script src="../assets/js/admin-notifications.js?v=20260922"></script>
 </body>
 </html>

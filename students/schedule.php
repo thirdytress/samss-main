@@ -1234,6 +1234,7 @@ if (!empty($studentSchedules)) {
       .stat-row { grid-template-columns: 1fr; }
     }
   </style>
+<link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
 </head>
 <body>
 
@@ -1801,7 +1802,7 @@ if (!empty($studentSchedules)) {
     setView('calendar');
   }());
 </script>
-<script src="../assets/js/student-notifications.js"></script>
+<script src="../assets/js/student-notifications.js?v=20260922"></script>
 
 </body>
 </html>

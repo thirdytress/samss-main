@@ -46,8 +46,57 @@ $footerNavItems = [
     ['key' => 'logout', 'href' => 'logout.php', 'label' => 'Sign Out'],
 ];
 ?>
-<link rel="stylesheet" href="../assets/css/admin-shell.css" />
+<link rel="stylesheet" href="../assets/css/admin-shell.css?v=20260922" />
 <style>
+    .topbar__notif,
+    .topbar__notif-btn {
+        position: relative !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 40px !important;
+        height: 40px !important;
+        padding: 0 !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 10px !important;
+        background: #ffffff !important;
+        color: #364153 !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .05) !important;
+    }
+
+    .topbar__notif:hover,
+    .topbar__notif-btn:hover {
+        background: #f3f7ff !important;
+        border-color: #bfd3ff !important;
+        color: #155dfc !important;
+    }
+
+    .topbar__notif-icon,
+    .topbar__notif-btn svg {
+        width: 21px !important;
+        height: 21px !important;
+        display: block !important;
+    }
+
+    .topbar__notif-dot {
+        position: absolute !important;
+        top: 5px !important;
+        right: 5px !important;
+        min-width: 16px !important;
+        height: 16px !important;
+        padding: 0 3px !important;
+        border: 2px solid #ffffff !important;
+        border-radius: 999px !important;
+        background: #dc2626 !important;
+        color: #ffffff !important;
+        font-size: 9px !important;
+        font-weight: 800 !important;
+        line-height: 12px !important;
+        text-align: center !important;
+    }
+
     /* Hard fallback to keep admin sidebar typography consistent across pages */
     .sidebar,
     .sidebar * {
@@ -131,3 +180,4 @@ $footerNavItems = [
         </ul>
     </div>
 </aside>
+<script src="../assets/js/admin-notifications.js?v=20260922" defer></script>

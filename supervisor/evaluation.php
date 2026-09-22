@@ -195,6 +195,7 @@ if ($activeTerm && $officeName !== '') {
   <link rel="stylesheet" href="../assets/css/sams-shell.css" />
   <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
   <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
+  <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
   <style>
     /* Reuse admin design system for consistent shell */
       *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -438,6 +439,6 @@ if ($activeTerm && $officeName !== '') {
         </main>
     </div>
 </div>
-    <script src="../assets/js/admin-notifications.js"></script>
+    <script src="../assets/js/admin-notifications.js?v=20260922"></script>
 </body>
 </html>
