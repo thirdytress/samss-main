@@ -865,7 +865,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" autocomplete="off">
           <input type="hidden" name="action" value="verify_otp" />
           <div class="otp-modal__otp" id="otpSlots">
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 1" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 1" autocomplete="one-time-code" />
             <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 2" />
             <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 3" />
             <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-slot" aria-label="Digit 4" />
@@ -965,6 +965,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         otpSlots.forEach(function(input, idx) {
           input.addEventListener('input', function(e) {
             var v = input.value.replace(/\D/g, '');
+            if (v.length > 1) {
+              v.split('').slice(0, 6).forEach(function(digit, digitIdx) {
+                if (otpSlots[idx + digitIdx]) otpSlots[idx + digitIdx].value = digit;
+              });
+              updateOtpHidden();
+              if (otpSlots[Math.min(idx + v.length, 5)]) otpSlots[Math.min(idx + v.length, 5)].focus();
+              return;
+            }
             input.value = v;
             if (v && idx < 5) otpSlots[idx+1].focus();
             updateOtpHidden();

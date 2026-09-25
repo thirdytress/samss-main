@@ -104,7 +104,7 @@ $expiresIn = max(0, (int) $pending['expires_at'] - time());
             <form method="POST" autocomplete="off">
                 <input type="hidden" name="action" value="verify" />
                 <div class="otp">
-                    <input type="text" name="otp" maxlength="6" inputmode="numeric" pattern="[0-9]*" aria-label="One time password" autofocus />
+                    <input type="text" name="otp" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" aria-label="One time password" autofocus />
                 </div>
                 <div class="actions">
                     <button class="btn btn--primary" type="submit">Verify OTP</button>
