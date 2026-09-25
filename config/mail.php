@@ -68,6 +68,55 @@ function sams_send_schedule_email(string $toEmail, string $toName, string $actio
     }
 }
 
+function sams_send_supervisor_account_email(
+    string $toEmail,
+    string $toName,
+    string $temporaryPassword,
+    string $officeName,
+    int $maxStudents
+): void {
+    require_once __DIR__ . '/../vendor/autoload.php';
+
+    $config = sams_mail_config();
+    $safeName = htmlspecialchars($toName, ENT_QUOTES, 'UTF-8');
+    $safeEmail = htmlspecialchars($toEmail, ENT_QUOTES, 'UTF-8');
+    $safePassword = htmlspecialchars($temporaryPassword, ENT_QUOTES, 'UTF-8');
+    $safeOffice = htmlspecialchars($officeName, ENT_QUOTES, 'UTF-8');
+    $loginUrl = 'http://localhost/samss-main/login.php';
+    $message = 'Hello ' . $safeName . ',<br><br>'
+        . 'An administrator created your SAMS Supervisor account.<br><br>'
+        . '<strong>Email:</strong> ' . $safeEmail . '<br>'
+        . '<strong>Temporary password:</strong> ' . $safePassword . '<br>'
+        . '<strong>Assigned office:</strong> ' . $safeOffice . '<br>'
+        . '<strong>Student capacity:</strong> ' . $maxStudents . '<br><br>'
+        . 'For security, you must change this temporary password after your first login.';
+
+    $mailer = new PHPMailer\PHPMailer\PHPMailer(true);
+    $mailer->CharSet = 'UTF-8';
+    $mailer->setFrom($config['from_email'], $config['from_name']);
+    $mailer->addAddress($toEmail, $toName);
+    sams_configure_mailer($mailer, $config);
+    $mailer->isHTML(true);
+    $mailer->Subject = 'Your SAMS Supervisor account';
+    $mailer->Body = sams_build_branded_email(
+        'SAMS Supervisor Access',
+        'Your account is ready',
+        $message,
+        '#003087',
+        'Open SAMS Login',
+        $loginUrl,
+        true
+    );
+    $mailer->AltBody = "Hello {$toName},\n\nYour SAMS Supervisor account is ready.\nEmail: {$toEmail}\nTemporary password: {$temporaryPassword}\nAssigned office: {$officeName}\nStudent capacity: {$maxStudents}\n\nChange the temporary password after your first login: {$loginUrl}";
+
+    try {
+        $mailer->send();
+    } catch (Throwable $exception) {
+        error_log('[sams] Supervisor account mailer failed: ' . $exception->getMessage());
+        throw $exception;
+    }
+}
+
 function sams_mail_config(): array
 {
     return [

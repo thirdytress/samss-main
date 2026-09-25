@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/bootstrap.php';
+require_once __DIR__ . '/../config/mail.php';
 
 $currentUser = sams_authenticated_user();
 if (!$currentUser || (($currentUser['role'] ?? null) !== 'admin')) {
@@ -95,7 +96,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'create') {
                 ]);
 
                 $pdo->commit();
-                header('Location: supervisors.php?created=1');
+
+                $mailStatus = 'sent';
+                try {
+                    sams_send_supervisor_account_email(
+                        $email,
+                        trim($firstName . ' ' . $lastName),
+                        $password,
+                        $officeName,
+                        $maxStudents
+                    );
+                } catch (Throwable $mailException) {
+                    $mailStatus = 'failed';
+                    error_log('[sams] Supervisor account created but email failed: ' . $mailException->getMessage());
+                }
+
+                header('Location: supervisors.php?created=1&mail=' . $mailStatus);
                 exit;
             } catch (Throwable $exception) {
                 if ($pdo->inTransaction()) {
@@ -109,6 +125,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'create') {
 
 if (isset($_GET['created'])) {
     $flashMessage = 'Supervisor account created successfully.';
+    if (($_GET['mail'] ?? '') === 'sent') {
+        $flashMessage .= ' Login details were sent to the supervisor email.';
+    } elseif (($_GET['mail'] ?? '') === 'failed') {
+        $flashError = 'Account was created, but the email could not be sent. Check your mail settings and share the temporary password securely.';
+    }
 }
 
 $editSupervisorId = (int) ($_GET['edit_id'] ?? 0);
