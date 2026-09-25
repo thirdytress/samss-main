@@ -503,10 +503,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       line-height: 1;
     }
     .login-form__submit:hover { opacity: .88; }
-    .login-form__submit img {
+    .login-form__submit img,
+    .login-form__submit svg {
       width: 24px;
       height: 24px;
       flex-shrink: 0;
+      display: block;
     }
 
     /* Footer links below form */
@@ -812,11 +814,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
           <!-- Submit -->
           <button class="login-form__submit" type="submit">
-            <img
-              src="https://www.figma.com/api/mcp/asset/c5624380-e6ad-4e87-ae39-38852df4717f"
-              alt=""
-              aria-hidden="true"
-            />
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Login
           </button>
 

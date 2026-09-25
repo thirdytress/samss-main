@@ -237,7 +237,7 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
       justify-content: center;
       margin-bottom: var(--space-5);
     }
-    .page-header__icon-wrap img { width: 32px; height: 32px; }
+    .page-header__icon-wrap img, .page-header__icon-wrap svg { width: 32px; height: 32px; }
     .page-header__title {
       font-size: var(--font-2xl);
       font-weight: 900;
@@ -472,7 +472,7 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
       transition: background .2s;
     }
     .form-nav__back:hover { background: #d1d5db; }
-    .form-nav__back img { width: 20px; height: 20px; }
+    .form-nav__back img, .form-nav__back svg { width: 20px; height: 20px; display: block; }
     .form-nav__next {
       display: inline-flex;
       align-items: center;
@@ -490,7 +490,7 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
       transition: opacity .2s;
     }
     .form-nav__next:hover { opacity: .88; }
-    .form-nav__next img { width: 20px; height: 20px; }
+    .form-nav__next img, .form-nav__next svg { width: 20px; height: 20px; display: block; }
 
     /* =============================================
        RESPONSIVE – TABLET (≤1024px)
@@ -530,22 +530,14 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
 
     <!-- Back to Home -->
     <a class="back-link" href="index.php">
-      <img
-        class="back-link__icon"
-        src="https://www.figma.com/api/mcp/asset/d7b8649b-6ce9-4b30-bc12-f47e2ec8ace8"
-        alt=""
-        aria-hidden="true"
-      />
+      <svg class="back-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Back to Home
     </a>
 
     <!-- Page header -->
     <header class="page-header">
       <div class="page-header__icon-wrap" aria-hidden="true">
-        <img
-          src="https://www.figma.com/api/mcp/asset/02563ae0-6f2d-41f7-970b-4365358e3511"
-          alt="Graduation cap icon"
-        />
+        <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="m3 12 13-7 13 7-13 7L3 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 15v6c3 3 13 3 16 0v-6M29 12v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
       <h1 class="page-header__title">Student Assistant Application</h1>
       <p class="page-header__subtitle">Complete the 4-step process to apply</p>
@@ -603,12 +595,7 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
     <!-- Personal Information form card -->
     <section class="form-card" aria-labelledby="personal-info-heading">
       <div class="form-card__heading">
-        <img
-          class="form-card__heading-icon"
-          src="https://www.figma.com/api/mcp/asset/4163249c-8cd8-47ad-bbd7-1bf885fe7a65"
-          alt=""
-          aria-hidden="true"
-        />
+        <svg class="form-card__heading-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 21c.8-4.1 3.5-6 8-6s7.2 1.9 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <h2 class="form-card__heading-text" id="personal-info-heading">Personal Information</h2>
       </div>
 
@@ -722,11 +709,7 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
     <div class="form-nav">
 
       <a class="form-nav__back" href="index.php" aria-label="Go back to home">
-        <img
-          src="https://www.figma.com/api/mcp/asset/62767a77-da7b-4e87-8a2d-384e7bf5b1eb"
-          alt=""
-          aria-hidden="true"
-        />
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Back
       </a>
 
@@ -737,11 +720,7 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
         aria-label="Proceed to next step"
       >
         Next
-        <img
-          src="https://www.figma.com/api/mcp/asset/2372ea79-f063-4762-93b1-9d0f4285ac4a"
-          alt=""
-          aria-hidden="true"
-        />
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
     </div>

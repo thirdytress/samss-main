@@ -421,7 +421,7 @@ function sams_html(string $value): string
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .topbar__avatar img { width: 20px; height: 20px; }
+    .topbar__avatar img, .topbar__avatar svg { width: 20px; height: 20px; display: block; }
 
     /* =============================================
        PAGE CONTENT
@@ -635,7 +635,7 @@ function sams_html(string $value): string
       white-space: nowrap;
     }
     .btn-view:hover { opacity: .88; }
-    .btn-view img { width: 16px; height: 16px; }
+    .btn-view img, .btn-view svg { width: 16px; height: 16px; display: block; }
 
     /* Student profile modal */
     .student-profile-modal {
@@ -967,9 +967,7 @@ function sams_html(string $value): string
       </div>
       <div class="topbar__user">
         <div class="topbar__notif" aria-label="Notifications">
-          <img class="topbar__notif-icon"
-            src="https://www.figma.com/api/mcp/asset/b420f128-d205-4262-8978-1c953eb09e28"
-            alt="" aria-hidden="true" />
+          <svg class="topbar__notif-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="topbar__notif-dot" aria-label="New notifications"></span>
         </div>
         <div class="topbar__user-info">
@@ -977,8 +975,7 @@ function sams_html(string $value): string
             <div class="topbar__user-role"><?php echo sams_html($admin_role); ?></div>
         </div>
         <div class="topbar__avatar">
-          <img src="https://www.figma.com/api/mcp/asset/c5b922bb-0679-4656-aa3e-84eb8083ac5b"
-            alt="User avatar" />
+          <svg viewBox="0 0 24 24" fill="none" aria-label="User avatar"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </div>
       </div>
     </header>
@@ -1040,9 +1037,7 @@ function sams_html(string $value): string
       <div class="toolbar">
         <div class="toolbar__left">
           <div class="toolbar__search">
-            <img class="toolbar__search-icon"
-              src="https://www.figma.com/api/mcp/asset/5987b038-d42a-42ad-9db5-3a660c6ee678"
-              alt="" aria-hidden="true" />
+            <svg class="toolbar__search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
             <input type="search" id="search-input" placeholder="Search students..."
               aria-label="Search students" />
           </div>
@@ -1051,9 +1046,7 @@ function sams_html(string $value): string
           <button class="filter-btn filter-btn--inactive" data-filter="inactive" aria-pressed="false">Inactive <span class="filter-btn__count"><?php echo (int) $inactiveStudents; ?></span></button>
         </div>
         <a class="btn-export" href="#" aria-label="Export student list">
-          <img class="btn-export__icon"
-            src="https://www.figma.com/api/mcp/asset/002a3f6c-ced1-413d-bc5a-6854dd0f01fd"
-            alt="" aria-hidden="true" />
+          <svg class="btn-export__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Export List
         </a>
       </div>
@@ -1112,7 +1105,7 @@ function sams_html(string $value): string
                 <td><span class="badge <?php echo sams_student_status_class($isEnrolled); ?>"><?php echo sams_html(sams_student_status_label($isEnrolled)); ?></span></td>
                 <td>
                   <button class="btn-view" data-student-id="<?= (int) ($student['student_id'] ?? 0) ?>" aria-label="View <?php echo sams_html($studentName); ?> profile">
-                    <img src="https://www.figma.com/api/mcp/asset/45b69a69-1a47-4f80-8f4c-3829aa0e2c33" alt="" aria-hidden="true" />
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg>
                     View
                   </button>
                 </td>

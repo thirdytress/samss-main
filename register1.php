@@ -188,7 +188,7 @@ function isSelected(string $key, string $option, array $values): string {
       justify-content: center;
       margin-bottom: var(--space-5);
     }
-    .page-header__icon-wrap img { width: 32px; height: 32px; }
+    .page-header__icon-wrap img, .page-header__icon-wrap svg { width: 32px; height: 32px; }
     .page-header__title {
       font-size: var(--font-2xl);
       font-weight: 900;
@@ -448,7 +448,7 @@ function isSelected(string $key, string $option, array $values): string {
       transition: background .2s;
     }
     .form-nav__back:hover { background: rgba(0,48,135,.05); }
-    .form-nav__back img { width: 20px; height: 20px; }
+    .form-nav__back img, .form-nav__back svg { width: 20px; height: 20px; display: block; }
 
     .form-nav__next {
       display: inline-flex;
@@ -467,7 +467,7 @@ function isSelected(string $key, string $option, array $values): string {
       transition: opacity .2s;
     }
     .form-nav__next:hover { opacity: .88; }
-    .form-nav__next img { width: 20px; height: 20px; }
+    .form-nav__next img, .form-nav__next svg { width: 20px; height: 20px; display: block; }
 
     /* =============================================
        RESPONSIVE – TABLET (≤1024px)
@@ -504,22 +504,14 @@ function isSelected(string $key, string $option, array $values): string {
 
     <!-- Back to Home -->
     <a class="back-link" href="index.php">
-      <img
-        class="back-link__icon"
-        src="https://www.figma.com/api/mcp/asset/555aa9ae-c186-4d40-8d38-faf1e28ff813"
-        alt=""
-        aria-hidden="true"
-      />
+      <svg class="back-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Back to Home
     </a>
 
     <!-- Page header -->
     <header class="page-header">
       <div class="page-header__icon-wrap" aria-hidden="true">
-        <img
-          src="https://www.figma.com/api/mcp/asset/543102a2-b95a-4025-a58c-2d2593ebb144"
-          alt="Graduation cap icon"
-        />
+        <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="m3 12 13-7 13 7-13 7L3 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 15v6c3 3 13 3 16 0v-6M29 12v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
       <h1 class="page-header__title">Student Assistant Application</h1>
       <p class="page-header__subtitle">Complete the 4-step process to apply</p>
@@ -585,12 +577,7 @@ function isSelected(string $key, string $option, array $values): string {
     <section class="form-card" aria-labelledby="academic-info-heading">
 
       <div class="form-card__heading">
-        <img
-          class="form-card__heading-icon"
-          src="https://www.figma.com/api/mcp/asset/1006700c-4b45-477a-9f83-45d134914662"
-          alt=""
-          aria-hidden="true"
-        />
+        <svg class="form-card__heading-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16l-8-4-8 4V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
         <h2 class="form-card__heading-text" id="academic-info-heading">Academic Information</h2>
       </div>
 
@@ -680,11 +667,7 @@ function isSelected(string $key, string $option, array $values): string {
     <div class="form-nav">
 
       <a class="form-nav__back" href="register.php" aria-label="Go back to Step 1: Personal Info">
-        <img
-          src="https://www.figma.com/api/mcp/asset/555aa9ae-c186-4d40-8d38-faf1e28ff813"
-          alt=""
-          aria-hidden="true"
-        />
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Back
       </a>
 
@@ -695,11 +678,7 @@ function isSelected(string $key, string $option, array $values): string {
         aria-label="Proceed to Step 3: Requirements"
       >
         Next
-        <img
-          src="https://www.figma.com/api/mcp/asset/d9edad4f-8377-4fdc-a04c-964b22cfc8e8"
-          alt=""
-          aria-hidden="true"
-        />
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
     </div>
