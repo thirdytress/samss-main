@@ -9,6 +9,7 @@ if (!$user || ($user['role'] ?? null) !== 'admin') {
     header('Location: ../login.php');
     exit;
 }
+  $admin_name = (string) ($user['name'] ?? 'SAMS Admin');
 
 $pdo = sams_pdo();
 $termFilter = (int) ($_GET['term_id'] ?? 0);
@@ -471,7 +472,7 @@ function sams_eval_badge_class(float $score): string
           </a>
           <div class="topbar__user">
             <div class="topbar__user-info">
-              <div class="topbar__user-name">Zaira Joy S. Enayo</div>
+              <div class="topbar__user-name"><?= htmlspecialchars($admin_name, ENT_QUOTES, 'UTF-8') ?></div>
               <div class="topbar__user-role">SDAO Head</div>
             </div>
             <div class="topbar__avatar" aria-hidden="true">

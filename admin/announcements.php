@@ -63,9 +63,9 @@ function sams_admin_dashboard_initials(?string $firstName, ?string $lastName): s
     return $initials !== '' ? $initials : 'SA';
 }
 
-$adminName = trim((string) ($currentUser['first_name'] ?? '') . ' ' . (string) ($currentUser['last_name'] ?? ''));
+$adminName = trim((string) ($currentUser['name'] ?? '') ?: ((string) ($currentUser['first_name'] ?? '') . ' ' . (string) ($currentUser['last_name'] ?? '')));
 if ($adminName === '') {
-    $adminName = 'Admin User';
+    $adminName = 'SAMS Admin';
 }
 
 $adminRole = (string) ($currentUser['role'] ?? 'SDAO Head');

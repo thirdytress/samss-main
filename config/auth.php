@@ -47,7 +47,36 @@ function sams_authenticated_user(): ?array
         return null;
     }
 
-    return $_SESSION['sams_user'] ?? null;
+    $sessionUser = $_SESSION['sams_user'] ?? null;
+    if (!is_array($sessionUser) || empty($sessionUser['user_id'])) {
+        return null;
+    }
+
+    try {
+        $statement = sams_pdo()->prepare(
+            'SELECT user_id, email, role, first_name, last_name, is_active
+             FROM users WHERE user_id = :user_id LIMIT 1'
+        );
+        $statement->execute(['user_id' => (int) $sessionUser['user_id']]);
+        $databaseUser = $statement->fetch(PDO::FETCH_ASSOC);
+
+        if (!$databaseUser || !(int) $databaseUser['is_active']) {
+            return $sessionUser;
+        }
+
+        $_SESSION['sams_user'] = array_merge($sessionUser, [
+            'user_id' => (int) $databaseUser['user_id'],
+            'email' => (string) $databaseUser['email'],
+            'role' => (string) $databaseUser['role'],
+            'first_name' => (string) ($databaseUser['first_name'] ?? ''),
+            'last_name' => (string) ($databaseUser['last_name'] ?? ''),
+            'name' => sams_normalize_name($databaseUser['first_name'] ?? null, $databaseUser['last_name'] ?? null),
+        ]);
+    } catch (Throwable $exception) {
+        // Keep the session identity available if the profile refresh is temporarily unavailable.
+    }
+
+    return $_SESSION['sams_user'];
 }
 
 function sams_login(array $user): void

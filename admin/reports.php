@@ -1321,7 +1321,7 @@ if (!empty($attendance_data)) {
                 </a>
                 <div class="topbar__user">
                     <div class="topbar__user-info">
-                        <span class="topbar__user-name">Zaira Joy S. Enayo</span>
+                        <span class="topbar__user-name"><?= htmlspecialchars($admin_name, ENT_QUOTES, 'UTF-8') ?></span>
                         <span class="topbar__user-role">SDAO Head</span>
                     </div>
                     <div class="topbar__avatar" aria-hidden="true">

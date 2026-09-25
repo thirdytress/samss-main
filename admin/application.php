@@ -9,6 +9,7 @@ if (!$currentUser || ($currentUser['role'] ?? null) !== 'admin') {
   header('Location: ../login.php');
   exit;
 }
+$admin_name = (string) ($currentUser['name'] ?? 'SAMS Admin');
 
 $flashMessage = '';
 $flashError = '';
@@ -1264,7 +1265,7 @@ $pendingApplications = (int) $applicationCounts['pending'];
           <span class="topbar__notif-dot" aria-label="New notifications"></span>
         </div>
         <div class="topbar__user-info">
-          <div class="topbar__user-name">Zaira Joy S. Enayo</div>
+          <div class="topbar__user-name"><?= htmlspecialchars($admin_name, ENT_QUOTES, 'UTF-8') ?></div>
           <div class="topbar__user-role">SDAO Head</div>
         </div>
         <div class="topbar__avatar">

@@ -26,7 +26,7 @@ try {
 $activeAdminNav = 'applications';
 $adminName = trim((string) ($currentUser['name'] ?? ((string) ($currentUser['first_name'] ?? '') . ' ' . (string) ($currentUser['last_name'] ?? ''))));
 if ($adminName === '') {
-    $adminName = 'Admin User';
+    $adminName = 'SAMS Admin';
 }
 ?>
 <!DOCTYPE html>
