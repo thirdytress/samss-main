@@ -5,6 +5,10 @@ require_once __DIR__ . '/../config/bootstrap.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+http_response_code(410);
+echo json_encode(['success' => false, 'message' => 'NFC card registration is managed by the SDAO admin.']);
+exit;
+
 // Ensure POST request
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);

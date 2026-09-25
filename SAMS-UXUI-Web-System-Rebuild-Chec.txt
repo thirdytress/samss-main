@@ -1,0 +1,104 @@
+SAMS — UX/UI Web System Rebuild Checklist (Student + Supervisor + Admin)
+
+Confirmed approach: this is a **UI/UX reorganization and visual rebuild only**, not a
+rewrite of functionality. All existing features, business logic, and behavior stay exactly
+as they are — the goal is a clean, organized, easy-to-use interface, styled to match the
+mobile app's exact theme (NU navy `#003087`/gold `#ffb81c`, Poppins/Inter, the same
+card/badge/button patterns already built for mobile).
+
+Hard rule for this entire rebuild: nothing gets added or removed — no feature, no
+page, no field, no button, no file — unless it's explicitly flagged first and approved by
+you. If something looks like it should change (a duplicate, dead code, a naming
+inconsistency, a broken link, anything), the move is to flag it clearly in this checklist
+and wait for approval — never to just make the change while restyling. Every item below
+that involves a real decision (not pure visual work) is written as a flag, not an
+instruction to act.
+
+Scope: this document covers the **web system only** — Student, Supervisor, and Admin
+portals. Mobile app work and paper/documentation tracking are kept in their own separate
+files, intentionally not repeated here.
+
+Confirmed sequence: Student → Supervisor → Admin, in that order. Each portal's
+rebuild should follow its corresponding Low-Fi wireframe file as the structural starting
+point:
+- Student → `Student-LowFi-Wireframe.html` (+ `Web-Login-LowFi-Wireframe.html` and
+  `Web-Application-LowFi-Wireframe.html` for the login and public application form)
+- Supervisor → `Supervisor-LowFi-Wireframe.html`
+- Admin → `Admin-LowFi-Wireframe.html`
+
+Scope: 48 PHP files total, several 60–90KB monoliths.
+
+---
+
+#TRACK A — Student Portal Rebuild (Do First)
+*Structural reference: `Student-LowFi-Wireframe.html`, `Web-Login-LowFi-Wireframe.html`,
+`Web-Application-LowFi-Wireframe.html`*
+
+- [ ] Design system build-out (NU navy/gold, Poppins/Inter, shared card/badge/button
+      components) — build this once here, then reuse as-is for Supervisor and Admin
+- [ ] Restyle only, keeping all existing functionality: Login, Landing, Dashboard,
+      Schedule (Calendar/List), Attendance/Duty-Hour Report, Profile
+- [ ] Restyle only, the public 4-step Application Form (`register.php` through
+      `register3.php` — Personal Info, Academic Info, Upload Requirements, Assessment &
+      Preferences), following `Web-Application-LowFi-Wireframe.html`
+- [ ] Flagged, not yet approved: `duty_schedules.status` has both `'rejected'` and
+      `'declined'` values, but only `'declined'` ever gets written by the code. Possible
+      unused/legacy value — flagging, not touching, until you say so.
+- [ ] Flagged, not yet approved: `scratch/` folder (including a file literally named
+      `check_pogi.php`) appears to be leftover test material sitting in the codebase, not
+      production code. Flagging for your review before anything gets deleted.
+- [ ] Flagged, not yet approved: several near-duplicate scripts exist for the same task
+      (e.g. multiple test-user-cleanup scripts in `tools/`). Flagging the duplication —
+      no consolidation without your go-ahead.
+
+---
+
+#TRACK B — Supervisor Portal Rebuild (Do Second)
+*Structural reference: `Supervisor-LowFi-Wireframe.html`*
+
+- [ ] Dashboard (`dashboard.php` 29KB) — restyle only
+- [ ] Attendance (`attendance.php` 21KB + `attendance_data.php` + `attendance_stream.php`
+      — real-time SSE updates) — restyle only
+- [ ] Evaluation (`evaluation.php` 24KB + `evaluation_data.php` + `evaluation_save.php`)
+      — restyle only
+- [ ] Reports (`reports.php` 24KB + `report_student.php`) — restyle only
+- [ ] Students (`students.php` 18KB + `student_profile.php` + `student_profile_data.php`)
+      — restyle only
+- [ ] Announcements (`announcements.php` — 1.8KB) — restyle only
+- [ ] Mark Excused (`mark_excused.php`) — a real, specific supervisor action; understand
+      it fully before restyling around it
+- [ ] Notifications trio (`notifications_count.php`, `notifications_list.php`,
+      `notifications_mark_read.php`) — restyle using the shared components built in Track A
+- [ ] Apply the exact same NU navy/gold design system from Track A — Supervisor should look
+      like the same product as Student, not a different one
+
+---
+
+#TRACK C — Admin Portal Rebuild (Do Last)
+*Structural reference: `Admin-LowFi-Wireframe.html`*
+
+- [ ] Dashboard (`dashboard.php`, 63KB + `dashboard_data.php`) — restyled with unified NU Gold/Navy design tokens, live metrics & polling
+- [ ] Applications (`applications.php` / `application.php` 69KB, `application_detail.php`, `application_view.php`) — restyled with multi-skill tag filters, live reviews, document previewers
+- [ ] Scheduling (`scheduling.php` — 90KB) — restyled with timetable grids, conflict resolution, clinic hours, auto-generation controls
+- [ ] Attendance (`attendance.php` 54KB + `attendance_data.php`) — restyled with live attendance stream, dot badges, office breakdowns
+- [ ] NFC Kiosk (`nfc_kiosk.php` 28KB + `nfc_clock_process.php`) — restyled dedicated full-screen SDAO Reader Terminal with sound & visual feedback
+- [ ] Evaluation (`evaluation.php` 24KB + `evaluation_detail.php`) — restyled supervisor evaluation review, rubrics, term enable/disable toggle
+- [ ] Reports (`reports.php` — 86KB + `report_detail.php`, `reports_data.php`) — restyled institutional analytics suite, incident resolution, export tools
+- [ ] Announcements (`announcements.php` 17KB) — restyled broadcast center with student/supervisor/all audience routing
+- [ ] Supervisors (`supervisors.php` 35KB) — restyled supervisor management, quota allocations, department scopes
+- [ ] Meetings (`meetings.php` — 76KB) — restyled weekly calendar view, schedule blocks, countdown alerts
+- [ ] Students (`students.php` 60KB + `student_detail.php`) — restyled student directory masterlist, detailed profile inspector
+- [ ] Settings — see the flagged item at the top of this document; do not build or remove without approval
+
+#Flagged items — Admin (not yet approved, no action without sign-off)
+- [ ] `admin/test_application_detail.php` — a test file sitting in a production folder,
+      same pattern as `scratch/check_pogi.php`. Flagging, not removing.
+- [ ] `applications.php` is a near-empty stub while `application.php`/`application_view.php`
+      hold the real logic — confusing naming. Flagging for a possible rename/consolidation,
+      not doing it unprompted.
+- [ ] `admin/save_student_nfc.php` (admin-side card registration) appears to be the correct,
+      current design already — flagging for your confirmation, not changing anything.
+
+#Admin Design System
+- [ ] Apply the exact same NU navy/gold + Poppins/Inter system as Student and Supervisor —
+      one consistent product across all three portals, not three different ones

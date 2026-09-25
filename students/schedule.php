@@ -1676,12 +1676,14 @@ if (!empty($studentSchedules)) {
                             <span class="schedule-list__hint">Attendance will be recorded by admin</span>
                           <?php elseif ($displayStatus === 'schedule' && ($s['status'] ?? '') === 'pending'): ?>
                             <div class="schedule-list__actions">
-                              <form method="POST" action="respond_schedule.php" style="display:inline-block;">
+                              <form method="POST" action="respond_schedule.php" class="schedule-response-form" style="display:inline-block;">
+                                <input type="hidden" name="_csrf" value="<?= htmlspecialchars(sams_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="schedule_id" value="<?= (int) ($s['id'] ?? 0) ?>">
                                 <input type="hidden" name="status" value="accepted">
                                 <button type="submit" class="schedule-list__action-btn schedule-list__action-btn--accept">✓ Accept</button>
                               </form>
-                              <form method="POST" action="respond_schedule.php" style="display:inline-block;">
+                              <form method="POST" action="respond_schedule.php" class="schedule-response-form" style="display:inline-block;">
+                                <input type="hidden" name="_csrf" value="<?= htmlspecialchars(sams_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="schedule_id" value="<?= (int) ($s['id'] ?? 0) ?>">
                                 <input type="hidden" name="status" value="declined">
                                 <button type="submit" class="schedule-list__action-btn schedule-list__action-btn--decline">✕ Decline</button>
@@ -1801,6 +1803,43 @@ if (!empty($studentSchedules)) {
 
     setView('calendar');
   }());
+</script>
+<script>
+(function () {
+  document.querySelectorAll('.schedule-response-form').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var button = form.querySelector('button[type="submit"]');
+      if (button) {
+        button.disabled = true;
+      }
+
+      fetch(form.action, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': form.querySelector('[name="_csrf"]').value },
+        body: new FormData(form)
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok || !data.success) {
+              throw new Error(data.message || 'Unable to update schedule.');
+            }
+            return data;
+          });
+        })
+        .then(function () {
+          window.location.reload();
+        })
+        .catch(function (error) {
+          window.alert(error.message);
+          if (button) {
+            button.disabled = false;
+          }
+        });
+    });
+  });
+}());
 </script>
 <script src="../assets/js/student-notifications.js?v=20260922"></script>
 

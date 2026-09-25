@@ -42,7 +42,6 @@ $mainNavItems = [
 ];
 
 $footerNavItems = [
-    ['key' => 'settings', 'href' => 'settings.php', 'label' => 'Settings'],
     ['key' => 'logout', 'href' => 'logout.php', 'label' => 'Sign Out'],
 ];
 ?>
