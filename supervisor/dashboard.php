@@ -363,6 +363,7 @@ function h(?string $value): string
                     <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#4A5565"/></svg>
                     <span class="topbar__notif-dot" aria-hidden="true" style="display:none"></span>
                 </div>
+                    <a href="profile.php" class="logout-warning"><?php echo h($supervisorName); ?></a>
                 <a href="logout.php" class="logout-warning">Logout</a>
             </div>
         </header>

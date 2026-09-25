@@ -40,6 +40,7 @@ $mainNavItems = [
     ['key' => 'supervisors', 'href' => 'supervisors.php', 'label' => 'Supervisors'],
     ['key' => 'meetings', 'href' => 'meetings.php', 'label' => 'Meetings'],
     ['key' => 'students', 'href' => 'students.php', 'label' => 'Students'],
+    ['key' => 'shuffle_requests', 'href' => 'shuffle_requests.php', 'label' => 'Shuffle Requests'],
 ];
 
 $footerNavItems = [

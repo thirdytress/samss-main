@@ -49,7 +49,7 @@ $studentStmt = $pdo->prepare(
             SELECT 1
             FROM duty_schedules ds
             WHERE ds.application_id = a.application_id
-              AND ds.status = "deployed"
+              AND ds.status IN ("assigned", "pending", "accepted", "deployed")
                             AND (ds.office_name = :office_ds OR a.preferred_office = :office_app)
                             AND (:term_id_guard = 0 OR ds.term_id = :term_id_ds)
        )
@@ -74,7 +74,7 @@ $schedulesStmt = $pdo->prepare(
      FROM duty_schedules ds
      INNER JOIN applications a ON a.application_id = ds.application_id
      WHERE ds.application_id = :application_id
-       AND ds.status = "deployed"
+    AND ds.status IN ("assigned", "pending", "accepted", "deployed")
              AND (ds.office_name = :office_ds OR a.preferred_office = :office_app)
              AND (:term_id_guard = 0 OR ds.term_id = :term_id_ds)
      ORDER BY FIELD(ds.day_of_week, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"), ds.start_time ASC'

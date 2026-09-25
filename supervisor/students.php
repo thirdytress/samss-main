@@ -10,6 +10,8 @@ if (!$user || (($user['role'] ?? null) !== 'supervisor')) {
 }
 
 $pdo = sams_pdo();
+$shuffleFlash = (string) ($_SESSION['supervisor_shuffle_flash'] ?? '');
+unset($_SESSION['supervisor_shuffle_flash']);
 
 $supervisorStatement = $pdo->prepare(
     'SELECT s.office_name
@@ -20,6 +22,7 @@ $supervisorStatement = $pdo->prepare(
 $supervisorStatement->execute(['user_id' => (int) ($user['user_id'] ?? 0)]);
 $supervisorRow = $supervisorStatement->fetch(PDO::FETCH_ASSOC) ?: [];
 $supervisorOffice = trim((string) ($supervisorRow['office_name'] ?? ($user['office_name'] ?? '')));
+$supervisorName = trim((string) ($user['name'] ?? 'Supervisor'));
 
 $activeTerm = sams_current_term($pdo);
 $activeTermId = (int) ($activeTerm['term_id'] ?? 0);
@@ -30,8 +33,19 @@ if ($termLabel === '') {
 
 $search = trim((string) ($_GET['q'] ?? ''));
 
+$replacementStmt = $pdo->prepare(
+    'SELECT DISTINCT s.student_id, s.student_id_number, u.first_name, u.last_name
+     FROM applications a
+     INNER JOIN students s ON s.student_id = a.student_id
+     INNER JOIN users u ON u.user_id = s.user_id
+     WHERE a.term_id = :term_id AND a.status = "approved" AND a.preferred_office = :office
+     ORDER BY u.last_name, u.first_name'
+);
+$replacementStmt->execute(['term_id' => $activeTermId, 'office' => $supervisorOffice]);
+$replacementStudents = $replacementStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
 $where = [
-    'ds.status = "deployed"',
+    'ds.status IN ("assigned", "pending", "accepted", "deployed")',
     '(ds.office_name = :office_ds OR a.preferred_office = :office_app)',
 ];
 $params = [
@@ -231,6 +245,7 @@ function h(?string $value): string
                     <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#4A5565"/></svg>
                     <span class="topbar__notif-dot" aria-hidden="true" style="display:none"></span>
                 </div>
+                <a href="profile.php" class="btn" style="background:#eef2ff;color:#003087;"><?php echo h($supervisorName); ?></a>
                 <a href="logout.php" class="btn">Logout</a>
             </div>
         </header>
@@ -238,6 +253,7 @@ function h(?string $value): string
         <script src="../assets/js/admin-notifications.js?v=20260922"></script>
 
         <section class="page">
+            <?php if ($shuffleFlash !== ''): ?><div class="card" style="padding:14px;font-weight:700;color:#155dfc;"><?php echo h($shuffleFlash); ?></div><?php endif; ?>
             <div class="stats">
                 <div class="stat"><div class="stat__label">Total Students</div><div class="stat__value"><?php echo (int) $totalStudents; ?></div></div>
                 <div class="stat"><div class="stat__label">Active</div><div class="stat__value"><?php echo (int) $activeStudents; ?></div></div>
@@ -248,7 +264,7 @@ function h(?string $value): string
             <div class="card">
                 <div class="card__head">
                     <div class="card__title">Student Directory</div>
-                    <div class="card__meta">Showing <?php echo (int) $resultCount; ?> result<?php echo (int) $resultCount === 1 ? '' : 's'; ?> for <?php echo h($supervisorOffice !== '' ? $supervisorOffice : 'assigned office'); ?>.</div>
+                        <div class="card__meta">Showing <?php echo (int) $resultCount; ?> assigned student<?php echo (int) $resultCount === 1 ? '' : 's'; ?> for <?php echo h($supervisorOffice !== '' ? $supervisorOffice : 'assigned office'); ?>.</div>
                 </div>
                 <form method="get" class="toolbar">
                     <input class="search" type="text" name="q" value="<?php echo h($search); ?>" placeholder="Search students by name, ID, or program" />
@@ -287,17 +303,52 @@ function h(?string $value): string
                                 <td><?php echo number_format((float) ($studentRow['rendered_hours'] ?? 0), 1); ?>h</td>
                                 <td><?php echo $rating > 0 ? number_format($rating, 1) . '/5' : 'N/A'; ?></td>
                                 <td><span class="pill pill--active">Active</span></td>
-                                <td><a class="btn" href="student_profile.php?application_id=<?php echo (int) ($studentRow['application_id'] ?? 0); ?>">View</a></td>
+                                <td>
+                                    <a class="btn" href="student_profile.php?application_id=<?php echo (int) ($studentRow['application_id'] ?? 0); ?>">View</a>
+                                    <button class="btn shuffle-open" type="button" data-student-id="<?php echo (int) ($studentRow['student_id'] ?? 0); ?>" style="margin-top:6px;background:#b45309;">Request shuffle</button>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr><td class="empty" colspan="9">No deployed students found for this office.</td></tr>
+                        <tr><td class="empty" colspan="9">No assigned students found for this office.</td></tr>
                     <?php endif; ?>
                     </tbody>
                 </table>
+            </div>
+
+            <div id="shuffle-modal" hidden style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1000;padding:24px;">
+                <div class="card" style="max-width:560px;margin:8vh auto;padding:24px;">
+                    <h2 style="margin-bottom:8px;">Request Student Shuffle</h2>
+                    <p class="muted" style="margin-bottom:18px;">Explain the support or performance concern objectively. This request will be reviewed by Admin and will not immediately change the assignment.</p>
+                    <form method="post" action="shuffle_request.php">
+                        <?php echo sams_csrf_input_field(); ?>
+                        <input type="hidden" name="from_student_id" id="shuffle-from-student">
+                        <label style="display:block;font-weight:700;margin-bottom:6px;" for="shuffle-to-student">Proposed replacement student (optional)</label>
+                        <select name="to_student_id" id="shuffle-to-student" style="width:100%;height:40px;margin-bottom:14px;">
+                            <option value="0">Let Admin choose</option>
+                            <?php foreach ($replacementStudents as $replacement): ?>
+                                <option value="<?php echo (int) $replacement['student_id']; ?>"><?php echo h(trim($replacement['first_name'] . ' ' . $replacement['last_name']) . ' - ' . $replacement['student_id_number']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <label style="display:block;font-weight:700;margin-bottom:6px;" for="shuffle-reason">Reason *</label>
+                        <textarea name="reason" id="shuffle-reason" required rows="4" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;" placeholder="Describe the support or assignment concern"></textarea>
+                        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;"><button class="btn" type="button" id="shuffle-cancel" style="background:#e5e7eb;color:#364153;">Cancel</button><button class="btn" type="submit">Send request</button></div>
+                    </form>
+                </div>
             </div>
         </section>
     </main>
 </div>
 </body>
+<script>
+document.querySelectorAll('.shuffle-open').forEach(function (button) {
+    button.addEventListener('click', function () {
+        document.getElementById('shuffle-from-student').value = button.dataset.studentId;
+        document.getElementById('shuffle-modal').hidden = false;
+    });
+});
+document.getElementById('shuffle-cancel').addEventListener('click', function () {
+    document.getElementById('shuffle-modal').hidden = true;
+});
+</script>
 </html>

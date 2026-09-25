@@ -13,6 +13,7 @@ $admin_name = (string) ($currentUser['name'] ?? 'SAMS Admin');
 
 $flashMessage = '';
 $flashError = '';
+$officeOptions = sams_office_options();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $applicationId = (int) ($_POST['application_id'] ?? 0);
@@ -1455,7 +1456,18 @@ $pendingApplications = (int) $applicationCounts['pending'];
                 </td>
                 <td data-label="Student ID"><?= htmlspecialchars((string) ($application['student_id_number'] ?? '')) ?></td>
                 <td data-label="Program"><?= htmlspecialchars((string) ($application['program'] ?? '')) ?></td>
-                <td data-label="Preferred Office"><?= htmlspecialchars((string) ($application['preferred_office'] ?? '')) ?></td>
+                <td data-label="Preferred Office">
+                  <form method="post" action="reassign_office.php" style="display:flex;gap:6px;align-items:center;min-width:260px;">
+                    <?= sams_csrf_input_field() ?>
+                    <input type="hidden" name="application_id" value="<?= (int) $application['application_id'] ?>" />
+                    <select name="preferred_office" style="max-width:220px;" <?= !in_array($status, ['pending', 'approved'], true) ? 'disabled' : '' ?>>
+                      <?php foreach ($officeOptions as $officeOption): ?>
+                        <option value="<?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?>" <?= $officeOption === (string) ($application['preferred_office'] ?? '') ? 'selected' : '' ?>><?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                    <?php if (in_array($status, ['pending', 'approved'], true)): ?><button type="submit" class="action-btn" title="Update preferred office" aria-label="Update preferred office">Save</button><?php endif; ?>
+                  </form>
+                </td>
                 <td data-label="Skills">
                   <div class="skills">
                     <?php if (empty($skills)): ?>
