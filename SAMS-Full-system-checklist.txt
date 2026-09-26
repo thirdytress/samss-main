@@ -12,23 +12,21 @@
   (`register2.php`), Assessment & Preferences still Step 4 (`register3.php`) — the
   Availability+Preferences merge into Step 3 and Documents moving to Step 4 (per
   `Web-Application-HiFi-Wireframe.html`) is still only a design, not code.
-- [ ] **`respond_schedule.php` is still redirect-based, not JSON.** Still does
-  `header('Location: schedule.php')` on Accept/Decline, not a JSON response.
-- [ ] **`duty_schedules.status` still has both `'rejected'` and `'declined'`** in the
-  schema — this ambiguity was not resolved by the recent "clean schema" commit, despite
-  that commit's name suggesting cleanup happened here.
-- [ ] **`students/save_nfc_uid.php` (student self-registration) still exists**, still
-  contradicting the revised design where only the SDAO admin registers a card via
-  `admin/save_student_nfc.php`.
+- [x] **`respond_schedule.php` is now JSON-based.** Accept/Decline validates CSRF,
+  writes `student_response_date`, and the schedule UI handles the JSON response.
+- [x] **`duty_schedules.status` is normalized.** The schema and migration now use
+  `assigned`, `pending`, `deployed`, `accepted`, and `declined`.
+- [ ] **Legacy status migration:** verify every deployed database has the normalized enum.
+- [x] **`students/save_nfc_uid.php` is disabled for student self-registration.** NFC
+  assignment is admin-only through `admin/save_student_nfc.php`.
+- [ ] **Legacy endpoint file remains present** for compatibility; remove it only after
+  confirming no old client still calls it.
 
 ## Codebase hygiene — still unresolved
 
-- [ ] `scratch/` folder still present, and has actually **grown** — now also contains
-  `test_db_connection.php` alongside the original test files. Worth addressing before this
-  keeps accumulating.
-- [ ] `admin/test_application_detail.php` — still sitting in a production folder.
-- [ ] `admin/settings.php` — still linked in the sidebar nav, still doesn't exist as a file.
-  Still a dead link.
+- [x] Development-only `scratch/*` files were removed from the production workspace.
+- [x] `admin/test_application_detail.php` was removed from the production folder.
+- [x] `admin/settings.php` dead link was removed from the sidebar nav.
 - [ ] All three portals' page files are still 60–90KB monoliths — file sizes are
   essentially unchanged from our first audit. The UI/UX rebuild itself has not started on
   any portal yet; only the notification-bell sharing work above has begun.
@@ -75,7 +73,9 @@
 - [ ] Confirm Dashboard, Students, Attendance, Evaluation, Reports, Announcements
   navigation still works — none of the recent commits touched `supervisor/`, so this
   should be stable, but hasn't been re-verified this pass
-- [ ] Notification bell has not been unified here yet — still using whatever the original
+- [x] Notification bell is unified across Admin, Supervisor, and Student using shared
+  styling and cache-busted notification scripts.
+- [ ] Notification data endpoints still use role-specific sources, which is intentional.
   `notifications_count.php` / `notifications_list.php` pattern was, not the new shared
   component
 
@@ -111,7 +111,7 @@
   a live hardware test now that other attendance-related logic has shifted around it
 
 **Functionality**
-- [ ] `admin/settings.php` — resolve the dead nav link (build it, or remove the link)
+- [x] `admin/settings.php` dead nav link was removed.
   before Admin's rebuild pass reaches that section
 - [ ] Decide the fate of `applications.php` as a near-empty stub, now that
   `application_view.php` has grown significantly larger and more central to the real flow
@@ -120,10 +120,12 @@
 
 ## Database — Schema Checklist
 
-- [ ] Resolve `duty_schedules.status`'s `'rejected'` vs `'declined'` ambiguity — confirm
+- [x] Resolve `duty_schedules.status`'s `'rejected'` vs `'declined'` ambiguity — the
+  local database and schema now use `declined`.
   with the team whether `'rejected'` is genuinely dead, and either remove it from the enum
   or document a real distinct use for it
-- [ ] `student_response_date` (new column) — confirm it's actually being written to on
+- [x] `student_response_date` is written on student Accept/Decline and admin status updates.
+- [ ] `student_response_date` (new column) — confirm it is present in every deployed database.
   Accept/Decline, not just present in schema without being used yet
 - [ ] Re-confirm no fingerprint-related columns remain anywhere (schema-level cleanup
   should match the code-level cleanup already confirmed)
