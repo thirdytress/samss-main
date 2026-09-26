@@ -31,6 +31,7 @@ function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
     .ann h3{margin:0 0 6px}
     .ann .meta{color:#6b7280;font-size:13px;margin-bottom:8px}
   </style>
+<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
   <div class="container">
@@ -48,5 +49,6 @@ function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
     <?php endif; ?>
   </div>
   <script src="../assets/js/admin-notifications.js?v=20260922"></script>
+<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

@@ -273,6 +273,7 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
         @media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
         @media (max-width:560px){.grid{grid-template-columns:1fr}}
     </style>
+<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
 <div class="wrap">
@@ -552,5 +553,6 @@ $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($s
     setInterval(poll, 5000);
 })();
 </script>
+<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

@@ -397,6 +397,7 @@ $days = [
             }
         }
     </style>
+<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 
 <body>
@@ -655,5 +656,6 @@ $days = [
         }
     })();
     </script>
+<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

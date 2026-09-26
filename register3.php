@@ -953,6 +953,7 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
             }
         }
     </style>
+    <link rel="stylesheet" href="assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
 
@@ -1270,5 +1271,6 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
 })();
 </script>
 
+<script src="assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

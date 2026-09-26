@@ -216,6 +216,7 @@ function h(?string $value): string
     <link rel="stylesheet" href="../assets/css/sams-shell.css" />
     <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
     <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
+    <link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
     <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
     <style>
         * { box-sizing: border-box; }
@@ -593,5 +594,6 @@ function h(?string $value): string
 })();
 </script>
 <script src="../assets/js/admin-notifications.js?v=20260922"></script>
+<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

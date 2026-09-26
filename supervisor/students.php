@@ -143,6 +143,7 @@ function h(?string $value): string
     <link rel="stylesheet" href="../assets/css/sams-shell.css" />
     <link rel="stylesheet" href="../assets/css/sams-theme-admin.css" />
     <link rel="stylesheet" href="../assets/css/supervisor-notifications.css" />
+    <link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
     <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
     <style>
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -250,7 +251,7 @@ function h(?string $value): string
             </div>
         </header>
 
-        <script src="../assets/js/admin-notifications.js?v=20260922"></script>
+        <script src="../assets/js/admin-notifications.js?v=20260922"></script><script src="../assets/js/sams-theme.js?v=20260926"></script>
 
         <section class="page">
             <?php if ($shuffleFlash !== ''): ?><div class="card" style="padding:14px;font-weight:700;color:#155dfc;"><?php echo h($shuffleFlash); ?></div><?php endif; ?>

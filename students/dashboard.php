@@ -1192,6 +1192,7 @@ try {
   </style>
   <link rel="stylesheet" href="../assets/css/sams-shell.css" />
 <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
+<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
 
@@ -2142,6 +2143,7 @@ try {
   }());
 </script>
 <script src="../assets/js/student-notifications.js?v=20260922"></script>
+<script src="../assets/js/sams-theme.js?v=20260926"></script>
 
 </body>
 </html>

@@ -141,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="assets/css/sams-dark-mode.css?v=20260926" />
   <title>Login – SAMS | NU Lipa</title>
   <meta name="description" content="Login to SAMS – the Student Assistant Management System for National University Lipa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1033,5 +1034,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     })();
   </script>
 
+<script src="assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

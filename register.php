@@ -117,6 +117,7 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="assets/css/sams-dark-mode.css?v=20260926" />
   <title>Apply – Student Assistant | SAMS NU Lipa</title>
   <meta name="description" content="Apply as a Student Assistant at National University Lipa through SAMS." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -778,5 +779,6 @@ function sams_register_first_existing_column(PDO $pdo, string $table, array $col
     })();
   </script>
 
+<script src="assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

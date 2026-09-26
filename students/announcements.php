@@ -42,6 +42,7 @@ function escape($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
     .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
     .back{font-weight:700;color:#155dfc;text-decoration:none}
   </style>
+<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
   <div class="card">
@@ -80,5 +81,6 @@ function escape($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
       });
     });
   </script>
+<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>
