@@ -1241,9 +1241,7 @@ if (!empty($studentSchedules)) {
 
 <div class="app">
 
-  <!-- ============================================
-       SIDEBAR
-  ============================================= -->
+
   <aside class="sidebar" id="sidebar" aria-label="Student navigation">
 
     <div class="sidebar__brand">

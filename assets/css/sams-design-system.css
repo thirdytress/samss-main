@@ -1,0 +1,888 @@
+/**
+ * ==============================================================================
+ * SAMS UNIFIED DESIGN SYSTEM
+ * National University Lipa — Student Assistant Management System
+ * Shared tokens and UI components across Student, Supervisor, and Admin portals.
+ * Theme: NU Navy (#003087) & NU Gold (#ffb81c) | Poppins & Inter
+ * ==============================================================================
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap');
+
+:root {
+  /* -------------------------------------------------------------
+     1. BRAND COLORS (National University Palette)
+     ------------------------------------------------------------- */
+  --nu-navy:               #003087;
+  --nu-navy-dark:          #00205b;
+  --nu-navy-deeper:        #001438;
+  --nu-navy-light:         #0042a5;
+  --nu-navy-bright:        #004aab;
+  --nu-navy-rgb:           0, 48, 135;
+  --nu-navy-subtle:        #eff4fc;
+  --nu-navy-pale:          #dbe6f8;
+
+  --nu-gold:               #ffb81c;
+  --nu-gold-hover:         #f0a90e;
+  --nu-gold-dark:          #b37b00;
+  --nu-gold-light:         #fff7e6;
+  --nu-gold-subtle:        #fff2d1;
+  --nu-gold-rgb:           255, 184, 28;
+
+  /* Aliases for compatibility */
+  --color-primary:         var(--nu-navy);
+  --color-primary-dark:    var(--nu-navy-dark);
+  --color-primary-end:     var(--nu-navy-bright);
+  --color-gold:            var(--nu-gold);
+  --color-gold-hover:      var(--nu-gold-hover);
+  --color-gold-light:      var(--nu-gold-subtle);
+
+  /* -------------------------------------------------------------
+     2. NEUTRALS & BACKGROUNDS
+     ------------------------------------------------------------- */
+  --color-white:           #ffffff;
+  --neutral-50:            #f8fafc;
+  --neutral-100:           #f1f5f9;
+  --neutral-150:           #e9eef5;
+  --neutral-200:           #e2e8f0;
+  --neutral-300:           #cbd5e1;
+  --neutral-400:           #94a3b8;
+  --neutral-500:           #64748b;
+  --neutral-600:           #475569;
+  --neutral-700:           #334155;
+  --neutral-800:           #1e293b;
+  --neutral-900:           #0f172a;
+
+  --color-bg-app:          #f8fafc;
+  --color-bg-surface:      #ffffff;
+  --color-border:          #e2e8f0;
+  --color-border-subtle:   #f1f5f9;
+  --color-border-strong:   #cbd5e1;
+
+  --color-heading:         #0f172a;
+  --color-body:            #334155;
+  --color-label:           #1e293b;
+  --color-muted:           #64748b;
+  --color-placeholder:     #94a3b8;
+
+  /* -------------------------------------------------------------
+     3. STATUS & SEMANTIC COLORS
+     ------------------------------------------------------------- */
+  --color-success:         #10b981;
+  --color-success-dark:    #059669;
+  --color-success-bg:      #ecfdf5;
+  --color-success-border:  #a7f3d0;
+  --color-success-text:    #065f46;
+
+  --color-warning:         #f59e0b;
+  --color-warning-dark:    #d97706;
+  --color-warning-bg:      #fffbeb;
+  --color-warning-border:  #fde68a;
+  --color-warning-text:    #92400e;
+
+  --color-danger:          #ef4444;
+  --color-danger-dark:     #dc2626;
+  --color-danger-bg:       #fef2f2;
+  --color-danger-border:   #fecaca;
+  --color-danger-text:     #991b1b;
+
+  --color-info:            #0284c7;
+  --color-info-dark:       #0369a1;
+  --color-info-bg:         #f0f9ff;
+  --color-info-border:     #bae6fd;
+  --color-info-text:       #075985;
+
+  --color-purple:          #8b5cf6;
+  --color-purple-bg:       #f5f3ff;
+  --color-purple-border:   #ddd6fe;
+  --color-purple-text:     #5b21b6;
+
+  /* Attendance specific tokens */
+  --status-present-bg:     #ecfdf5;
+  --status-present-text:   #065f46;
+  --status-present-dot:    #10b981;
+
+  --status-late-bg:        #fffbeb;
+  --status-late-text:      #92400e;
+  --status-late-dot:       #f59e0b;
+
+  --status-absent-bg:      #fef2f2;
+  --status-absent-text:    #991b1b;
+  --status-absent-dot:     #ef4444;
+
+  --status-excused-bg:     #f5f3ff;
+  --status-excused-text:   #5b21b6;
+  --status-excused-dot:    #8b5cf6;
+
+  --status-pending-bg:     #eff6ff;
+  --status-pending-text:   #1e40af;
+  --status-pending-dot:    #3b82f6;
+
+  /* -------------------------------------------------------------
+     4. GRADIENTS
+     ------------------------------------------------------------- */
+  --grad-navy:             linear-gradient(135deg, #00205b 0%, #003087 55%, #004aab 100%);
+  --grad-navy-light:       linear-gradient(135deg, #003087 0%, #004aab 100%);
+  --grad-gold:             linear-gradient(135deg, #ffb81c 0%, #f5ab0c 100%);
+  --grad-gold-subtle:      linear-gradient(135deg, #fff7e6 0%, #ffe9b8 100%);
+  --grad-page:             linear-gradient(149deg, #eff4fc 0%, #ffffff 50%, #fffbf0 100%);
+  --grad-hero:             linear-gradient(135deg, #00163e 0%, #003087 60%, #0042a5 100%);
+  --gradient-brand:        linear-gradient(135deg, #003087 0%, #004aab 100%);
+
+  /* -------------------------------------------------------------
+     5. TYPOGRAPHY
+     ------------------------------------------------------------- */
+  --font-sans:             'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display:          'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:             'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --font-xs:               12px;
+  --font-sm:               14px;
+  --font-base:             16px;
+  --font-md:               18px;
+  --font-lg:               20px;
+  --font-xl:               24px;
+  --font-2xl:              28px;
+  --font-3xl:              32px;
+  --font-4xl:              40px;
+
+  /* -------------------------------------------------------------
+     6. ELEVATION & SHADOWS
+     ------------------------------------------------------------- */
+  --shadow-xs:             0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-sm:             0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
+  --shadow-md:             0 4px 8px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+  --shadow-lg:             0 10px 18px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-xl:             0 20px 25px -5px rgba(15, 23, 42, 0.10), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  --shadow-navy:           0 10px 24px -4px rgba(0, 48, 135, 0.28);
+  --shadow-gold:           0 8px 20px -3px rgba(255, 184, 28, 0.36);
+  --shadow-card:           0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-card-hover:     0 12px 24px -4px rgba(15, 23, 42, 0.09), 0 4px 8px -2px rgba(15, 23, 42, 0.05);
+
+  /* -------------------------------------------------------------
+     7. RADIUS SCALE
+     ------------------------------------------------------------- */
+  --radius-xs:             6px;
+  --radius-sm:             8px;
+  --radius-md:             12px;
+  --radius-lg:             16px;
+  --radius-xl:             20px;
+  --radius-2xl:            24px;
+  --radius-full:           9999px;
+  --radius-card:           16px;
+  --radius-pill:           9999px;
+
+  /* -------------------------------------------------------------
+     8. SHELL & LAYOUT DIMENSIONS
+     ------------------------------------------------------------- */
+  --sidebar-width:         264px;
+  --sidebar-collapsed:     76px;
+  --topbar-height:         76px;
+  --sams-shell-brand-size: 42px;
+  --sams-shell-brand-radius: 12px;
+  --sams-shell-brand-gap:  12px;
+  --sams-shell-brand-padding-y: 20px;
+  --sams-shell-brand-padding-x: 22px;
+  --sams-shell-topbar-height: var(--topbar-height);
+  --sams-shell-topbar-padding-x: 32px;
+}
+
+/* =============================================================
+   BASE RESET & TYPOGRAPHY FOUNDATION
+   ============================================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-base);
+  line-height: 1.5;
+  color: var(--color-body);
+  background-color: var(--color-bg-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--color-heading);
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+a {
+  color: var(--nu-navy);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: var(--nu-navy-light);
+}
+
+/* =============================================================
+   BUTTONS (.btn, .sams-btn)
+   ============================================================= */
+.btn, .sams-btn, .primary, .secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  line-height: 1;
+  padding: 10px 18px;
+  min-height: 42px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.18s ease,
+              border-color 0.18s ease,
+              color 0.18s ease,
+              box-shadow 0.18s ease,
+              transform 0.18s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn:hover, .sams-btn:hover, .primary:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active, .sams-btn:active, .primary:active {
+  transform: translateY(0);
+}
+
+.btn:focus-visible, .sams-btn:focus-visible {
+  outline: 2px solid var(--nu-gold);
+  outline-offset: 2px;
+}
+
+/* Primary Navy Button */
+.btn--primary, .primary, .btn-primary {
+  background-color: var(--nu-navy);
+  color: var(--color-white) !important;
+  border-color: var(--nu-navy);
+  box-shadow: 0 2px 4px rgba(0, 48, 135, 0.15);
+}
+
+.btn--primary:hover, .primary:hover, .btn-primary:hover {
+  background-color: var(--nu-navy-light);
+  border-color: var(--nu-navy-light);
+  box-shadow: var(--shadow-navy);
+}
+
+/* Gold Accent Button (High impact CTAs) */
+.btn--gold, .btn-gold {
+  background: var(--nu-gold);
+  color: var(--nu-navy-deeper) !important;
+  font-weight: 700;
+  border-color: var(--nu-gold);
+  box-shadow: 0 2px 4px rgba(255, 184, 28, 0.25);
+}
+
+.btn--gold:hover, .btn-gold:hover {
+  background-color: var(--nu-gold-hover);
+  border-color: var(--nu-gold-hover);
+  box-shadow: var(--shadow-gold);
+}
+
+/* Secondary / Outline Button */
+.btn--secondary, .secondary, .btn-secondary, .btn--outline {
+  background-color: var(--color-white);
+  color: var(--neutral-700) !important;
+  border-color: var(--neutral-200);
+}
+
+.btn--secondary:hover, .secondary:hover, .btn-secondary:hover, .btn--outline:hover {
+  background-color: var(--neutral-50);
+  border-color: var(--neutral-300);
+  color: var(--nu-navy) !important;
+}
+
+/* Subtle / Ghost Button */
+.btn--ghost {
+  background-color: transparent;
+  color: var(--neutral-600) !important;
+  border-color: transparent;
+}
+
+.btn--ghost:hover {
+  background-color: var(--neutral-100);
+  color: var(--neutral-900) !important;
+}
+
+/* Danger Button */
+.btn--danger, .btn-danger {
+  background-color: var(--color-danger);
+  color: var(--color-white) !important;
+  border-color: var(--color-danger);
+}
+
+.btn--danger:hover, .btn-danger:hover {
+  background-color: var(--color-danger-dark);
+  border-color: var(--color-danger-dark);
+}
+
+/* Danger Subtle */
+.btn--danger-subtle {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text) !important;
+  border-color: var(--color-danger-border);
+}
+
+.btn--danger-subtle:hover {
+  background-color: #fee2e2;
+}
+
+/* Success Button */
+.btn--success, .btn-success {
+  background-color: var(--color-success);
+  color: var(--color-white) !important;
+  border-color: var(--color-success);
+}
+
+.btn--success:hover, .btn-success:hover {
+  background-color: var(--color-success-dark);
+  border-color: var(--color-success-dark);
+}
+
+/* Sizes */
+.btn--sm {
+  padding: 6px 12px;
+  min-height: 32px;
+  font-size: var(--font-xs);
+  border-radius: var(--radius-sm);
+}
+
+.btn--lg {
+  padding: 12px 24px;
+  min-height: 48px;
+  font-size: var(--font-base);
+  border-radius: var(--radius-md);
+}
+
+.btn--icon {
+  padding: 8px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: var(--radius-md);
+}
+
+/* =============================================================
+   CARDS & PANELS (.card, .sams-card)
+   ============================================================= */
+.card, .sams-card {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card--hoverable:hover, .report-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--neutral-300);
+}
+
+/* Gold Accent Top Ribbon */
+.card--gold-ribbon {
+  position: relative;
+  overflow: hidden;
+}
+
+.card--gold-ribbon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--nu-gold);
+}
+
+/* Brand Navy Card */
+.card--navy {
+  background: var(--grad-navy);
+  color: var(--color-white);
+  border-color: transparent;
+  box-shadow: var(--shadow-navy);
+}
+
+.card--navy h1, .card--navy h2, .card--navy h3 {
+  color: var(--color-white);
+}
+
+.card--navy p {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.card__title {
+  font-family: var(--font-display);
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--color-heading);
+  margin: 0;
+}
+
+.card__subtitle {
+  font-size: var(--font-xs);
+  color: var(--color-muted);
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+/* =============================================================
+   BADGES & STATUS PILLS (.badge, .status-badge, .metric-pill)
+   ============================================================= */
+.badge, .sams-badge, .status-badge, .metric-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  line-height: 1.25;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.badge--dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  background-color: currentColor;
+}
+
+/* Status variants */
+.badge--present, .badge--completed, .badge--approved, .metric-pill--present {
+  background-color: var(--status-present-bg);
+  color: var(--status-present-text);
+  border-color: var(--color-success-border);
+}
+
+.badge--late, .badge--warning, .metric-pill--late {
+  background-color: var(--status-late-bg);
+  color: var(--status-late-text);
+  border-color: var(--color-warning-border);
+}
+
+.badge--absent, .badge--danger, .badge--declined, .metric-pill--absent {
+  background-color: var(--status-absent-bg);
+  color: var(--status-absent-text);
+  border-color: var(--color-danger-border);
+}
+
+.badge--excused {
+  background-color: var(--status-excused-bg);
+  color: var(--status-excused-text);
+  border-color: var(--color-purple-border);
+}
+
+.badge--pending, .badge--info {
+  background-color: var(--status-pending-bg);
+  color: var(--status-pending-text);
+  border-color: var(--color-info-border);
+}
+
+.badge--navy {
+  background-color: var(--nu-navy-subtle);
+  color: var(--nu-navy);
+  border-color: var(--nu-navy-pale);
+}
+
+.badge--gold {
+  background-color: var(--nu-gold-light);
+  color: var(--nu-gold-dark);
+  border-color: var(--nu-gold-subtle);
+}
+
+/* =============================================================
+   FORM INPUTS & CONTROLS
+   ============================================================= */
+.form-group, .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.form-label, .field label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-label);
+  line-height: 1.3;
+}
+
+.form-label--required::after {
+  content: ' *';
+  color: var(--color-danger);
+}
+
+.form-input, .form-select, .form-textarea,
+.field input, .field select, .field textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: var(--font-sm);
+  color: var(--neutral-800);
+  background-color: var(--color-white);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.form-input::placeholder, .form-textarea::placeholder,
+.field input::placeholder, .field textarea::placeholder {
+  color: var(--color-placeholder);
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus,
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--nu-navy);
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.14);
+}
+
+.form-input--error, .field input.is-invalid {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger-bg);
+}
+
+.form-input--error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.form-help, .field-hint {
+  font-size: var(--font-xs);
+  color: var(--color-muted);
+}
+
+.form-error, .field-error {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--color-danger-dark);
+}
+
+/* =============================================================
+   STAT TILES & METRIC CARDS (.tile, .stat-tile, .stat-card)
+   ============================================================= */
+.stat-tile, .tile {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 110px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.stat-tile:hover, .tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.stat-tile__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.stat-tile__label, .tile span {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.stat-tile__value, .tile strong {
+  font-family: var(--font-display);
+  font-size: var(--font-2xl);
+  font-weight: 700;
+  color: var(--color-heading);
+  line-height: 1.1;
+}
+
+.stat-tile__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  background-color: var(--nu-navy-subtle);
+  color: var(--nu-navy);
+}
+
+/* =============================================================
+   SHELL (Sidebar + Topbar + Content Layout)
+   ============================================================= */
+.shell, .sams-shell {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--color-bg-app);
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background-color: var(--color-white);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 40;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sams-shell-brand-gap);
+  padding: var(--sams-shell-brand-padding-y) var(--sams-shell-brand-padding-x);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar__logo {
+  width: var(--sams-shell-brand-size);
+  height: var(--sams-shell-brand-size);
+  border-radius: var(--sams-shell-brand-radius);
+  background: var(--grad-navy);
+  color: var(--nu-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 800;
+  font-size: 18px;
+  box-shadow: 0 4px 10px rgba(0, 48, 135, 0.25);
+}
+
+.sidebar__brand-name {
+  font-family: var(--font-display);
+  font-size: var(--font-base);
+  font-weight: 700;
+  color: var(--nu-navy);
+  line-height: 1.2;
+}
+
+.sidebar__brand-sub {
+  font-size: var(--font-xs);
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.sidebar__nav {
+  flex: 1;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.sidebar__nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--neutral-600);
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.sidebar__nav-link:hover {
+  background-color: var(--nu-navy-subtle);
+  color: var(--nu-navy);
+  transform: translateX(2px);
+}
+
+.sidebar__nav-link--active {
+  background: var(--nu-navy) !important;
+  color: var(--color-white) !important;
+  box-shadow: var(--shadow-navy);
+}
+
+.sidebar__nav-link--active .sidebar__nav-icon,
+.sidebar__nav-link--active svg {
+  color: var(--nu-gold) !important;
+  stroke: var(--nu-gold) !important;
+}
+
+.sidebar__nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar__footer {
+  border-top: 1px solid var(--color-border);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  background-color: var(--neutral-50);
+}
+
+/* Main Content & Topbar */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  background-color: var(--color-white);
+  border-bottom: 1px solid var(--color-border);
+  min-height: var(--topbar-height);
+  padding: 0 var(--sams-shell-topbar-padding-x);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.topbar__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar__title {
+  font-family: var(--font-display);
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--color-heading);
+  margin: 0;
+}
+
+.topbar__sub, .topbar__subtitle {
+  font-size: var(--font-xs);
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page {
+  flex: 1;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* =============================================================
+   UTILITIES
+   ============================================================= */
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.align-center { display: flex; align-items: center; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+
+.mt-4 { margin-top: 4px; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mt-20 { margin-top: 20px; }
+.mb-0 { margin-bottom: 0 !important; }
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.text-muted { color: var(--color-muted); }
+.text-gold { color: var(--nu-gold-dark); }
+.text-navy { color: var(--nu-navy); }
+
+.pre-wrap { white-space: pre-wrap; }
+.hidden { display: none !important; }
+.no-decor { text-decoration: none; color: inherit; }
+
+/* Grid systems */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page { padding: 20px; }
+  .topbar { padding: 0 20px; }
+}
+
+@media (max-width: 768px) {
+  .grid, .grid--2, .grid--4 { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+}

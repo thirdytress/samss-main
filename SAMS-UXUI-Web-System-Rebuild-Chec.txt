@@ -34,8 +34,8 @@ Scope: 48 PHP files total, several 60–90KB monoliths.
 *Structural reference: `Student-LowFi-Wireframe.html`, `Web-Login-LowFi-Wireframe.html`,
 `Web-Application-LowFi-Wireframe.html`*
 
-- [ ] Design system build-out (NU navy/gold, Poppins/Inter, shared card/badge/button
-      components) — build this once here, then reuse as-is for Supervisor and Admin
+- [x] Design system build-out (NU navy/gold, Poppins/Inter, shared card/badge/button
+      components) — built in assets/css/sams-design-system.css, imported by sams-shell.css
 - [ ] Restyle only, keeping all existing functionality: Login, Landing, Dashboard,
       Schedule (Calendar/List), Attendance/Duty-Hour Report, Profile
 - [ ] Restyle only, the public 4-step Application Form (`register.php` through

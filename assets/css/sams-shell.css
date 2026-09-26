@@ -1,4 +1,6 @@
 /* Shared shell styling for SAMS admin, supervisor, and student pages */
+@import url('sams-design-system.css');
+
 :root {
   --sams-shell-brand-size: 40px;
   --sams-shell-brand-radius: 10px;

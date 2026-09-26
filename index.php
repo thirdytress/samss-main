@@ -12,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/sams-design-system.css" />
   <style>
     /* =============================================
        CSS VARIABLES / DESIGN TOKENS
@@ -150,8 +151,9 @@
     }
     .nav__brand-text {}
     .nav__brand-name {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       font-size: var(--font-xl);
-      font-weight: 900;
+      font-weight: 800;
       color: var(--color-dark);
       line-height: 1.4;
     }
@@ -275,8 +277,9 @@
       white-space: nowrap;
     }
     .hero__heading {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       font-size: var(--font-6xl);
-      font-weight: 900;
+      font-weight: 800;
       color: var(--color-dark);
       line-height: 1.25;
       margin-bottom: var(--space-4);
@@ -412,8 +415,9 @@
       margin-bottom: var(--space-16);
     }
     .section__title {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       font-size: var(--font-4xl);
-      font-weight: 900;
+      font-weight: 800;
       color: var(--color-dark);
       line-height: 1.1;
       margin-bottom: var(--space-4);
@@ -448,8 +452,9 @@
     .feature-card__icon-wrap--gold { background: var(--grad-gold); }
     .feature-card__icon-wrap img { width: 32px; height: 32px; }
     .feature-card__title {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       font-size: var(--font-xl);
-      font-weight: 900;
+      font-weight: 700;
       color: var(--color-dark);
       margin-bottom: var(--space-4);
     }
