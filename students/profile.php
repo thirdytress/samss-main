@@ -1150,9 +1150,7 @@ $dashboardTitle = $studentName !== '' ? $studentName . ' | Profile' : 'My Profil
 
 <div class="app">
 
-    <!-- ================================================================
-         SIDEBAR
-    ================================================================ -->
+ 
     <aside class="sidebar" id="sidebar" role="navigation" aria-label="Student portal navigation">
 
         <div class="sidebar__header">

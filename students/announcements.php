@@ -24,46 +24,181 @@ $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 function escape($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 ?>
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Announcements</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Announcements – SAMS Student Portal | NU Lipa</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/sams-shell.css" />
   <style>
-    body{font-family:Inter,Arial,sans-serif;background:#f7fbff;padding:28px;color:#102030}
-    .card{background:#fff;border-radius:12px;padding:18px;border:1px solid #eef3fb;max-width:900px;margin:0 auto}
-    .announcement{border-left:4px solid #155dfc;padding:14px;border-radius:8px;margin-bottom:12px;background:#f0f6ff}
-    .announcement--yellow{background:#fff8e8;border-left-color:#ffb81c}
-    .announcement--green{background:#f0fdf4;border-left-color:#00c950}
-    .announcement__time{font-weight:700;color:#155dfc;margin-bottom:6px}
-    .announcement__title{font-weight:900;font-size:18px;color:#0b2a66}
-    .announcement__body{color:#344050;margin-top:6px}
-    .read{opacity:0.6}
-    .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-    .back{font-weight:700;color:#155dfc;text-decoration:none}
+    body {
+      background: var(--grad-page, #f8fafc);
+      padding: 32px 20px;
+      color: var(--color-body, #334155);
+      min-height: 100vh;
+    }
+    .announcements-container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+    .announcements-card {
+      background: #ffffff;
+      border-radius: var(--radius-card, 16px);
+      padding: 28px 32px;
+      border: 1px solid var(--color-border, #e2e8f0);
+      box-shadow: var(--shadow-card, 0 1px 3px rgba(15,23,42,0.06));
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--color-border, #e2e8f0);
+    }
+    .top h1 {
+      font-family: var(--font-display, 'Poppins', sans-serif);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--nu-navy, #003087);
+      margin: 0;
+    }
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--nu-navy, #003087);
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: var(--radius-md, 10px);
+      background: var(--nu-navy-subtle, #eff4fc);
+      transition: all 0.18s ease;
+    }
+    .back:hover {
+      background: var(--nu-navy-pale, #dbe6f8);
+      color: var(--nu-navy-dark, #00205b);
+      transform: translateX(-2px);
+    }
+    .announcement {
+      border-left: 4px solid var(--nu-navy, #003087);
+      padding: 18px 20px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      background: #ffffff;
+      border-top: 1px solid var(--neutral-200, #e2e8f0);
+      border-right: 1px solid var(--neutral-200, #e2e8f0);
+      border-bottom: 1px solid var(--neutral-200, #e2e8f0);
+      box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .announcement:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md, 0 4px 8px -2px rgba(15,23,42,0.08));
+    }
+    .announcement--yellow {
+      border-left-color: var(--nu-gold, #ffb81c);
+      background: #fffdf8;
+    }
+    .announcement--green {
+      border-left-color: var(--color-success, #10b981);
+      background: #fcfdfd;
+    }
+    .announcement__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .announcement__time {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-muted, #64748b);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .announcement__status {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 8px;
+      border-radius: 9999px;
+    }
+    .announcement__status--unread {
+      background: var(--nu-gold-light, #fff7e6);
+      color: var(--nu-gold-dark, #b37b00);
+      border: 1px solid var(--nu-gold-subtle, #fff2d1);
+    }
+    .announcement__title {
+      font-family: var(--font-display, 'Poppins', sans-serif);
+      font-weight: 700;
+      font-size: 17px;
+      color: var(--color-heading, #0f172a);
+      margin-bottom: 8px;
+      line-height: 1.35;
+    }
+    .announcement__body {
+      color: var(--color-body, #334155);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .read {
+      opacity: 0.68;
+    }
+    .read .announcement__status--unread {
+      display: none;
+    }
+    .empty-state {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--color-muted, #64748b);
+      font-size: 15px;
+    }
   </style>
 <link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
-  <div class="card">
-    <div class="top">
-      <h1 style="margin:0">Announcements</h1>
-      <a class="back" href="dashboard.php">← Back to dashboard</a>
-    </div>
+  <div class="announcements-container">
+    <div class="announcements-card">
+      <div class="top">
+        <h1>Announcements</h1>
+        <a class="back" href="dashboard.php">← Back to Dashboard</a>
+      </div>
 
-    <div id="anns">
-      <?php if (empty($announcements)): ?>
-        <div style="padding:20px;color:#666">No announcements yet.</div>
-      <?php else: ?>
-        <?php foreach ($announcements as $i => $a): ?>
-          <?php $cls = $i % 3 === 0 ? 'announcement' : ($i % 3 === 1 ? 'announcement announcement--yellow' : 'announcement announcement--green'); ?>
-          <div class="<?php echo $cls; ?> <?php echo ((int)($a['is_read'] ?? 0) ? 'read' : ''); ?>" data-id="<?php echo (int)$a['id']; ?>">
-            <div class="announcement__time"><?php echo escape(date('M j, Y g:i A', strtotime((string)$a['created_at']))); ?></div>
-            <div class="announcement__title"><?php echo escape($a['title']); ?></div>
-            <div class="announcement__body"><?php echo nl2br(escape($a['body'])); ?></div>
-          </div>
-        <?php endforeach; ?>
-      <?php endif; ?>
+      <div id="anns">
+        <?php if (empty($announcements)): ?>
+          <div class="empty-state">No announcements yet. Check back later for updates.</div>
+        <?php else: ?>
+          <?php foreach ($announcements as $i => $a): ?>
+            <?php 
+              $isRead = (bool)((int)($a['is_read'] ?? 0));
+              $cls = $i % 3 === 0 ? 'announcement' : ($i % 3 === 1 ? 'announcement announcement--yellow' : 'announcement announcement--green'); 
+            ?>
+            <div class="<?php echo $cls; ?> <?php echo $isRead ? 'read' : ''; ?>" data-id="<?php echo (int)$a['id']; ?>">
+              <div class="announcement__header">
+                <span class="announcement__time">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <?php echo escape(date('M j, Y g:i A', strtotime((string)$a['created_at']))); ?>
+                </span>
+                <?php if (!$isRead): ?>
+                  <span class="announcement__status announcement__status--unread">New</span>
+                <?php endif; ?>
+              </div>
+              <div class="announcement__title"><?php echo escape($a['title']); ?></div>
+              <div class="announcement__body"><?php echo nl2br(escape($a['body'])); ?></div>
+            </div>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 

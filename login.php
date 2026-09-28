@@ -147,6 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/sams-design-system.css" />
   <style>
     /* =============================================
        CSS VARIABLES / DESIGN TOKENS
@@ -280,8 +281,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       flex-shrink: 0;
     }
     .brand-card__title {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       font-size: var(--font-3xl);
-      font-weight: 900;
+      font-weight: 800;
       color: var(--color-white);
       line-height: 1.2;
     }
@@ -294,8 +296,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /* Heading & paragraph */
     .brand-card__heading {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       font-size: var(--font-4xl);
-      font-weight: 900;
+      font-weight: 800;
       color: var(--color-white);
       line-height: 1.25;
       margin-bottom: var(--space-4);
@@ -365,10 +368,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /* Card heading */
     .login-card__heading {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       font-size: var(--font-4xl);
-      font-weight: 900;
+      font-weight: 800;
       color: var(--color-dark);
-      line-height: 1.11;
+      line-height: 1.15;
       margin-bottom: var(--space-2);
     }
     .login-card__tagline {
@@ -570,10 +574,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       gap: 16px;
     }
     .otp-modal__title {
+      font-family: var(--font-display, 'Poppins', sans-serif);
       margin: 0 0 8px;
-      font-size: 28px;
-      line-height: 1.1;
-      font-weight: 900;
+      font-size: 26px;
+      line-height: 1.2;
+      font-weight: 700;
       color: var(--color-dark);
     }
     .otp-modal__subtitle {
