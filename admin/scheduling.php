@@ -535,6 +535,10 @@ try {
                 throw new RuntimeException('No availability saved for this applicant.');
             }
 
+            // Delete existing duty schedules before inserting to prevent duplicates
+            $delAppStmt = $pdo->prepare('DELETE FROM duty_schedules WHERE application_id = :application_id');
+            $delAppStmt->execute(['application_id' => $applicationId]);
+
             // Insert duty_schedules for each availability
             if ($dutyScheduleHasOfficeColumn) {
                 $insertAppStmt = $pdo->prepare(
@@ -601,6 +605,10 @@ try {
             if (!$availRows) {
                 throw new RuntimeException('No availability saved for this applicant.');
             }
+
+            // Delete existing duty schedules before inserting to prevent duplicates
+            $delAppStmt = $pdo->prepare('DELETE FROM duty_schedules WHERE application_id = :application_id');
+            $delAppStmt->execute(['application_id' => $applicationId]);
 
             if ($dutyScheduleHasOfficeColumn) {
                 $insertAppStmt = $pdo->prepare(

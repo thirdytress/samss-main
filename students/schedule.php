@@ -122,8 +122,12 @@ if ($userId > 0) {
          FROM duty_schedules ds
          LEFT JOIN applications a ON a.application_id = ds.application_id
          LEFT JOIN terms t ON t.term_id = ds.term_id
-         LEFT JOIN attendance_logs al ON al.application_id = ds.application_id
-           AND al.duty_id = ds.duty_id
+         LEFT JOIN attendance_logs al ON al.log_id = (
+           SELECT al2.log_id FROM attendance_logs al2
+           WHERE al2.application_id = ds.application_id
+             AND al2.duty_id = ds.duty_id
+           ORDER BY al2.log_id DESC LIMIT 1
+         )
          WHERE a.student_id = :student_id
          ORDER BY FIELD(ds.day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), ds.start_time ASC"
       );

@@ -64,13 +64,14 @@ if ($activeTermId > 0) {
              FROM attendance_logs al2
              WHERE al2.application_id = ds.application_id
                AND al2.duty_id = ds.duty_id
+               AND DATE(al2.created_at) = CURDATE()
              ORDER BY al2.log_id DESC
              LIMIT 1
          )
          WHERE ds.day_of_week = :day
            AND ds.status = "deployed"
            AND ds.term_id = :term_id
-         ORDER BY ds.start_time ASC, al.log_id DESC'
+         ORDER BY ds.start_time ASC'
     );
     $todayRowsStmt->execute([
         'day' => $currentDay,
@@ -131,6 +132,7 @@ foreach ($todayRows as $row) {
         'status' => match ($status) {
             'present', 'completed' => 'Present',
             'late' => 'Late',
+            'active' => 'Active',
             default => 'Absent',
         },
     ];
@@ -1160,8 +1162,8 @@ $currentDateLabel = date('l, F j, Y');
                                     <?php
                                     $st = strtolower($row['status']);
                                     $cls = 'att-status--scheduled';
-                                    if ($st === 'completed') $cls = 'att-status--completed';
-                                    elseif ($st === 'active') $cls = 'att-status--active';
+                                    if ($st === 'present' || $st === 'completed') $cls = 'att-status--completed';
+                                    elseif ($st === 'late' || $st === 'active') $cls = 'att-status--active';
                                     ?>
                                     <span class="att-status <?= $cls ?>"><?= htmlspecialchars($row['status']) ?></span>
                                 </td>

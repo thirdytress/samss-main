@@ -87,6 +87,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $availRows = $availStmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (!empty($availRows)) {
+            // Delete existing duty schedules before inserting to prevent duplicates
+            $delAppStmt = $pdo->prepare('DELETE FROM duty_schedules WHERE application_id = :application_id');
+            $delAppStmt->execute(['application_id' => $applicationId]);
+
             $hasOfficeColumn = sams_column_exists($pdo, 'duty_schedules', 'office_name');
             if ($hasOfficeColumn) {
                 $insertAppStmt = $pdo->prepare(
