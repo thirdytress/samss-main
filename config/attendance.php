@@ -6,6 +6,58 @@ function sams_attendance_clocking_enabled(): bool
     return true;
 }
 
+function sams_attendance_format_duration(int $seconds): string
+{
+    $totalMinutes = (int) round(max(0, $seconds) / 60);
+    $hours = intdiv($totalMinutes, 60);
+    $minutes = $totalMinutes % 60;
+
+    if ($hours === 0) {
+        return $minutes . ' min';
+    }
+
+    $hourLabel = $hours === 1 ? ' hr' : ' hrs';
+    return $hours . $hourLabel . ($minutes > 0 ? ' ' . $minutes . ' min' : '');
+}
+
+function sams_attendance_duration_label(?string $timeIn, ?string $timeOut): string
+{
+    if (empty($timeIn) || empty($timeOut)) {
+        return '-';
+    }
+
+    $start = strtotime($timeIn);
+    $end = strtotime($timeOut);
+    if ($start !== false && $end !== false && $end > $start) {
+        return sams_attendance_format_duration($end - $start);
+    }
+
+    return '-';
+}
+
+function sams_attendance_month_summary(PDO $pdo): array
+{
+    $statement = $pdo->query(
+        "SELECT COALESCE(SUM(GREATEST(TIMESTAMPDIFF(SECOND, clock_in_time, COALESCE(clock_out_time, NOW())), 0)), 0) AS rendered_seconds,
+                COUNT(DISTINCT DATE(created_at)) AS attendance_days
+         FROM attendance_logs
+         WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+           AND created_at < DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
+           AND clock_in_time IS NOT NULL"
+    );
+    $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+    $renderedSeconds = max(0, (int) ($row['rendered_seconds'] ?? 0));
+    $attendanceDays = max(0, (int) ($row['attendance_days'] ?? 0));
+
+    return [
+        'rendered_seconds' => $renderedSeconds,
+        'attendance_days' => $attendanceDays,
+        'average_seconds_per_day' => $attendanceDays > 0
+            ? (int) round($renderedSeconds / $attendanceDays)
+            : 0,
+    ];
+}
+
 function sams_current_term(PDO $pdo): array
 {
     $termStatement = $pdo->query(

@@ -65,7 +65,7 @@ $metrics = [
     'late' => 0,
     'absent' => 0,
     'total' => 0,
-    'rendered_hours' => 0.0,
+    'rendered_seconds' => 0,
 ];
 
 $rows = [];
@@ -77,6 +77,10 @@ foreach ($todayRows as $row) {
 
     $timeInRaw = $row['time_in'] ?? null;
     $timeOutRaw = $row['time_out'] ?? null;
+    $duration = sams_attendance_duration_label(
+        !empty($timeInRaw) ? (string) $timeInRaw : null,
+        !empty($timeOutRaw) ? (string) $timeOutRaw : null
+    );
     $timeIn = $timeInRaw ? date('g:i A', strtotime((string) $timeInRaw)) : '-';
     $timeOut = $timeOutRaw ? date('g:i A', strtotime((string) $timeOutRaw)) : ($timeInRaw ? 'In Progress' : '-');
 
@@ -92,8 +96,8 @@ foreach ($todayRows as $row) {
     if (!empty($row['time_in']) && !empty($row['time_out'])) {
         $inTs = strtotime((string) $row['time_in']);
         $outTs = strtotime((string) $row['time_out']);
-        if ($inTs && $outTs && $outTs > $inTs) {
-            $metrics['rendered_hours'] += ($outTs - $inTs) / 3600;
+        if ($inTs !== false && $outTs !== false && $outTs > $inTs) {
+            $metrics['rendered_seconds'] += $outTs - $inTs;
         }
     }
 
@@ -103,6 +107,7 @@ foreach ($todayRows as $row) {
         'office' => (string) ($row['office_name'] ?? '-'),
         'time_in' => $timeIn,
         'time_out' => $timeOut,
+        'duration' => $duration,
         'status' => match ($status) {
             'present', 'completed' => 'Present',
             'late' => 'Late',
@@ -295,8 +300,8 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
                     <div class="metric__label">Attendance Rate</div>
                 </div>
                 <div class="metric">
-                    <div class="metric__value"><?php echo number_format((float) $metrics['rendered_hours'], 1); ?>h</div>
-                    <div class="metric__label">Rendered Hours</div>
+                    <div class="metric__value"><?php echo htmlspecialchars(sams_attendance_format_duration((int) $metrics['rendered_seconds'])); ?></div>
+                    <div class="metric__label">Rendered Time</div>
                 </div>
             </div>
 
@@ -319,7 +324,7 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
                                 <th>Time In</th>
                                 <th>Time Out</th>
                                 <th>Status</th>
-                                <th>Rendered Hours</th>
+                                <th>Duration</th>
                             </tr>
                         </thead>
                         <tbody id="attendanceBody">
@@ -337,7 +342,7 @@ $pageTitle = 'Attendance Monitoring | Supervisor Portal';
                                     <td><?php echo htmlspecialchars($row['time_in']); ?></td>
                                     <td><?php echo htmlspecialchars($row['time_out']); ?></td>
                                     <td><span class="badge badge--<?php echo strtolower(htmlspecialchars($row['status'])); ?>"><?php echo htmlspecialchars($row['status']); ?></span></td>
-                                    <td><?php echo (!empty($row['time_in']) && !empty($row['time_out']) && $row['time_out'] !== 'In Progress' && $row['time_out'] !== '-') ? number_format((max(0, strtotime((string) $row['time_out']) - strtotime((string) $row['time_in'])) / 3600), 1) . 'h' : '-'; ?></td>
+                                    <td><?php echo htmlspecialchars($row['duration']); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php else: ?>

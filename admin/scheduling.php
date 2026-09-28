@@ -56,6 +56,22 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+function schedule_student_url(int $studentId, string $office, string $showStatus, string $day = ''): string
+{
+    $params = ['student_id' => $studentId];
+    if ($office !== '') {
+        $params['student_office'] = $office;
+    }
+    if ($showStatus !== 'all') {
+        $params['show_status'] = $showStatus;
+    }
+    if ($day !== '') {
+        $params['day'] = $day;
+    }
+
+    return 'scheduling.php?' . http_build_query($params);
+}
+
 function time_to_minutes(string $time): int
 {
     $parts = explode(':', $time);
@@ -377,33 +393,10 @@ if (!in_array($selectedDay, $days, true)) {
     $selectedDay = '';
 }
 
-$approvedStudentOptions = [];
-if ($selectedOffice !== '') {
-    $approvedStudentsStmt = $pdo->prepare(
-        "SELECT DISTINCT
-            a.student_id,
-            s.student_id_number AS student_code,
-            u.first_name,
-            u.last_name
-         FROM applications a
-         INNER JOIN students s ON s.student_id = a.student_id
-         INNER JOIN users u ON u.user_id = s.user_id
-         WHERE a.status = 'approved'
-           AND a.preferred_office = :office
-         ORDER BY u.last_name ASC, u.first_name ASC"
-    );
-    $approvedStudentsStmt->execute(['office' => $selectedOffice]);
-    $approvedStudentOptions = $approvedStudentsStmt->fetchAll();
-
-    $isValidSelectedStudent = false;
-    foreach ($approvedStudentOptions as $approvedStudentOption) {
-        if ((int) $approvedStudentOption['student_id'] === $selectedStudentId) {
-            $isValidSelectedStudent = true;
-            break;
-        }
-    }
-
-    if (!$isValidSelectedStudent) {
+if ($selectedStudentId > 0) {
+    $selectedStudentCheck = $pdo->prepare('SELECT COUNT(*) FROM students WHERE student_id = :student_id');
+    $selectedStudentCheck->execute(['student_id' => $selectedStudentId]);
+    if ((int) $selectedStudentCheck->fetchColumn() === 0) {
         $selectedStudentId = 0;
     }
 }
@@ -412,6 +405,18 @@ if ($selectedOffice !== '') {
 $showStatus = trim((string) ($_GET['show_status'] ?? 'all'));
 $allowedStatus = ['all','applied','approved','deployed'];
 if (!in_array($showStatus, $allowedStatus, true)) { $showStatus = 'all'; }
+
+$studentOfficeOptionsStmt = $pdo->query(
+    "SELECT DISTINCT preferred_office
+     FROM applications
+     WHERE preferred_office IS NOT NULL AND TRIM(preferred_office) <> ''
+     ORDER BY preferred_office ASC"
+);
+$studentOfficeOptions = array_map('strval', $studentOfficeOptionsStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+$selectedStudentOffice = trim((string) ($_GET['student_office'] ?? ''));
+if (!in_array($selectedStudentOffice, $studentOfficeOptions, true)) {
+    $selectedStudentOffice = '';
+}
 
 $studentsByOffice = [];
 $studentsByOfficeStmt = $pdo->query(
@@ -461,6 +466,8 @@ try {
         if (!in_array($redirectDay, $days, true)) {
             $redirectDay = '';
         }
+        $redirectStudentOffice = $selectedStudentOffice;
+        $redirectShowStatus = $showStatus;
 
         if ($action === 'auto_generate') {
             $officeFilter = trim((string) ($_POST['office_filter'] ?? ''));
@@ -864,6 +871,12 @@ try {
         if ($redirectDay !== '') {
             $redirectParams['day'] = $redirectDay;
         }
+        if ($redirectStudentOffice !== '') {
+            $redirectParams['student_office'] = $redirectStudentOffice;
+        }
+        if ($redirectShowStatus !== 'all') {
+            $redirectParams['show_status'] = $redirectShowStatus;
+        }
 
         $redirectUrl = 'scheduling.php';
         if (!empty($redirectParams)) {
@@ -915,6 +928,10 @@ if ($selectedStudentId > 0) {
      INNER JOIN users u ON u.user_id = st.user_id
      WHERE a.student_id = :student_id";
     $scheduleParams = ['student_id' => $selectedStudentId];
+    if ($selectedStudentOffice !== '') {
+        $scheduleSql .= ' AND COALESCE(ds.office_name, a.preferred_office) = :student_office';
+        $scheduleParams['student_office'] = $selectedStudentOffice;
+    }
     if ($selectedDay !== '') {
         $scheduleSql .= ' AND ds.day_of_week = :day_of_week';
         $scheduleParams['day_of_week'] = $selectedDay;
@@ -943,26 +960,21 @@ $approvedStudentsStmt->execute($approvedStudentsParams);
 $approvedStudents = (int) $approvedStudentsStmt->fetchColumn();
 
 // Pending applications for admin review
-$pendingApplicationsStmt = $pdo->prepare(
+$pendingApplicationsSql =
     "SELECT a.application_id, a.student_id, a.term_id, a.preferred_office, a.created_at, s.student_id_number AS student_code, u.first_name, u.last_name
      FROM applications a
      INNER JOIN students s ON s.student_id = a.student_id
      INNER JOIN users u ON u.user_id = s.user_id
-     WHERE a.status = 'pending'
-     ORDER BY a.created_at DESC"
-);
-$pendingApplicationsStmt->execute();
+     WHERE a.status = 'pending'";
+$pendingApplicationsParams = [];
+if ($selectedStudentOffice !== '') {
+    $pendingApplicationsSql .= ' AND a.preferred_office = :office';
+    $pendingApplicationsParams['office'] = $selectedStudentOffice;
+}
+$pendingApplicationsSql .= ' ORDER BY a.created_at DESC';
+$pendingApplicationsStmt = $pdo->prepare($pendingApplicationsSql);
+$pendingApplicationsStmt->execute($pendingApplicationsParams);
 $pendingApplications = $pendingApplicationsStmt->fetchAll(PDO::FETCH_ASSOC);
-
-// All applicants (for student dropdown)
-$studentsListStmt = $pdo->query(
-    "SELECT DISTINCT a.student_id, st.student_id_number AS student_code, u.first_name, u.last_name
-     FROM applications a
-     INNER JOIN students st ON st.student_id = a.student_id
-     INNER JOIN users u ON u.user_id = st.user_id
-     ORDER BY u.last_name ASC, u.first_name ASC"
-);
-$studentsList = $studentsListStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // If a student is selected, load their preferred application and availability
 $selectedPreferred = null;
@@ -978,28 +990,52 @@ if ($selectedStudentId > 0) {
 }
 
 // Approved applicants
-$approvedApplicantsStmt = $pdo->prepare(
+$approvedApplicantsSql =
     "SELECT a.application_id, a.student_id, a.term_id, a.preferred_office, s.student_id_number AS student_code, u.first_name, u.last_name, a.created_at
      FROM applications a
      INNER JOIN students s ON s.student_id = a.student_id
      INNER JOIN users u ON u.user_id = s.user_id
-     WHERE a.status = 'approved'
-     ORDER BY a.created_at DESC"
-);
-$approvedApplicantsStmt->execute();
+         WHERE a.status = 'approved'
+             AND NOT EXISTS (
+                     SELECT 1
+                     FROM duty_schedules deployed_ds
+                     INNER JOIN applications deployed_app ON deployed_app.application_id = deployed_ds.application_id
+                     WHERE deployed_app.student_id = a.student_id
+                         AND deployed_ds.status = 'deployed'
+             )";
+$approvedApplicantsParams = [];
+if ($selectedStudentOffice !== '') {
+    $approvedApplicantsSql .= ' AND a.preferred_office = :office';
+    $approvedApplicantsParams['office'] = $selectedStudentOffice;
+}
+$approvedApplicantsSql .= ' ORDER BY a.created_at DESC';
+$approvedApplicantsStmt = $pdo->prepare($approvedApplicantsSql);
+$approvedApplicantsStmt->execute($approvedApplicantsParams);
 $approvedApplicants = $approvedApplicantsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Deployed (students with schedules)
-$deployedStmt = $pdo->prepare(
-    "SELECT DISTINCT a.application_id, a.student_id, st.student_id_number AS student_code, u.first_name, u.last_name, COALESCE(ds.office_name, a.preferred_office) AS office_name
+$deployedSql =
+        "SELECT DISTINCT a.student_id, st.student_id_number AS student_code, u.first_name, u.last_name, COALESCE(ds.office_name, a.preferred_office) AS office_name
      FROM duty_schedules ds
      INNER JOIN applications a ON a.application_id = ds.application_id
      INNER JOIN students st ON st.student_id = a.student_id
      INNER JOIN users u ON u.user_id = st.user_id
-     WHERE ds.status <> 'declined'
-     ORDER BY u.last_name ASC"
-);
-$deployedStmt->execute();
+         WHERE ds.status = 'deployed'
+             AND ds.duty_id = (
+                     SELECT MAX(deployed_ds.duty_id)
+                     FROM duty_schedules deployed_ds
+                     INNER JOIN applications deployed_app ON deployed_app.application_id = deployed_ds.application_id
+                     WHERE deployed_app.student_id = a.student_id
+                         AND deployed_ds.status = 'deployed'
+             )";
+$deployedParams = [];
+if ($selectedStudentOffice !== '') {
+    $deployedSql .= ' AND COALESCE(ds.office_name, a.preferred_office) = :office';
+    $deployedParams['office'] = $selectedStudentOffice;
+}
+$deployedSql .= ' ORDER BY u.last_name ASC';
+$deployedStmt = $pdo->prepare($deployedSql);
+$deployedStmt->execute($deployedParams);
 $deployedStudents = $deployedStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalSchedules = count($schedules);
@@ -1095,22 +1131,22 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                 <div class="sched-header__right">
                     <div style="display:flex;align-items:center;gap:12px;">
                         <div style="font-weight:700;color:var(--color-body);">Pending applications appear below for review.</div>
-                        <form method="GET" style="margin-left:12px;display:flex;gap:8px;align-items:center;">
-                            <label for="student_id" style="margin-right:6px;color:var(--color-body);font-weight:600;">Student</label>
-                            <select id="student_id" name="student_id" class="sched-select" onchange="this.form.submit()">
-                                <option value="">All students</option>
-                                <?php foreach ($studentsList as $st): $sid = (int)$st['student_id']; $slabel = trim((string)$st['last_name'] . ', ' . (string)$st['first_name']) . ' (' . (string)$st['student_code'] . ')'; ?>
-                                    <option value="<?= $sid ?>" <?= $selectedStudentId === $sid ? 'selected' : '' ?>><?= h($slabel) ?></option>
+                        <form method="GET" style="margin-left:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <?php if ($selectedStudentId > 0): ?><input type="hidden" name="student_id" value="<?= (int) $selectedStudentId ?>"><?php endif; ?>
+                            <?php if ($selectedDay !== ''): ?><input type="hidden" name="day" value="<?= h($selectedDay) ?>"><?php endif; ?>
+                            <label for="student_office" style="margin-right:6px;color:var(--color-body);font-weight:600;">Office</label>
+                            <select id="student_office" name="student_office" class="sched-select" onchange="this.form.submit()">
+                                <option value="">All offices</option>
+                                <?php foreach ($studentOfficeOptions as $officeOption): ?>
+                                    <option value="<?= h($officeOption) ?>" <?= $selectedStudentOffice === $officeOption ? 'selected' : '' ?>><?= h($officeOption) ?></option>
                                 <?php endforeach; ?>
                             </select>
-
                             <label for="show_status" style="margin-right:6px;color:var(--color-body);font-weight:600;">Show</label>
                             <select id="show_status" name="show_status" onchange="this.form.submit()" class="sched-select">
                                 <option value="all" <?php echo $showStatus === 'all' ? 'selected' : ''; ?>>All</option>
                                 <option value="applied" <?php echo $showStatus === 'applied' ? 'selected' : ''; ?>>Applied</option>
                                 <option value="approved" <?php echo $showStatus === 'approved' ? 'selected' : ''; ?>>Approved</option>
                                 <option value="deployed" <?php echo $showStatus === 'deployed' ? 'selected' : ''; ?>>Deployed</option>
-                                <option value="undeployed" <?php echo $showStatus === 'undeployed' ? 'selected' : ''; ?>>Undeployed</option>
                             </select>
                         </form>
                     </div>
@@ -1170,7 +1206,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                         <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
-                                <section class="table-card" style="margin-top:24px;"><table class="schedule-table"><thead><tr><th>Student</th><th>Office</th><th>Day</th><th>Time</th><th>Hours</th><th>Status</th><th>Action</th></tr></thead><tbody><?php if (!$schedules): ?><tr><td colspan="7">No schedules found. Click Auto Generate Schedule.</td></tr><?php endif; ?><?php foreach ($schedules as $schedule): ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); ?><tr><td><?= h($studentName) ?></td><td><?= h((string) $schedule['office_name']) ?></td><td><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?></td><td><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></td><td><?= h(number_format((float) $schedule['required_hours'], 2)) ?>h</td><td><?= schedule_badge_html((string) $schedule['status']) ?></td><td><?php if ($schedule['status'] === 'deployed'): ?><button type="button" class="btn-small" style="background:#e5e7eb;color:#9ca3af;cursor:not-allowed;" disabled>Edit</button><?php else: ?><button type="button" class="btn-small" onclick="openEditModal(<?= (int)$schedule['student_id'] ?>)">Edit</button><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></section>
+                                <section class="table-card" style="margin-top:24px;"><table class="schedule-table"><thead><tr><th>Student</th><th>Office</th><th>Day</th><th>Time</th><th>Hours</th><th>Status</th><th>Action</th></tr></thead><tbody><?php if (!$schedules): ?><tr><td colspan="7">No schedules found. Click Auto Generate Schedule.</td></tr><?php endif; ?><?php foreach ($schedules as $schedule): ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); ?><tr><td><a href="<?= h(schedule_student_url((int) $schedule['student_id'], $selectedStudentOffice, $showStatus, (string) $schedule['day_of_week'])) ?>" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;"><?= h($studentName) ?></a></td><td><?= h((string) $schedule['office_name']) ?></td><td><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?></td><td><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></td><td><?= h(number_format((float) $schedule['required_hours'], 2)) ?>h</td><td><?= schedule_badge_html((string) $schedule['status']) ?></td><td><?php if ($schedule['status'] === 'deployed'): ?><button type="button" class="btn-small" style="background:#e5e7eb;color:#9ca3af;cursor:not-allowed;" disabled>Edit</button><?php else: ?><button type="button" class="btn-small" onclick="openEditModal(<?= (int)$schedule['student_id'] ?>)">Edit</button><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></section>
                             </div>
                             <div class="sched-right" style="flex:0 0 360px;max-width:360px;display:flex;flex-direction:column;gap:24px;">
                     <section class="card" aria-labelledby="pending-heading">
@@ -1197,7 +1233,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                     $availRows = $availStmtRender->fetchAll(PDO::FETCH_ASSOC);
                                 ?>
                                 <div class="sched-item sched-item--<?= h(schedule_color($appOffice)) ?>">
-                                    <div class="sched-item__name"><?= h($appName) ?></div>
+                                        <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $app['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($appName) ?></a>
                                     <div class="sched-item__loc"><strong>Preferred Office:</strong> <?= h($appOffice) ?> · <span style="color:#6b7280"><?= h((string)$app['student_code']) ?></span></div>
                                     <div class="sched-item__time">
                                         <?php if (empty($availRows)): ?>
@@ -1220,7 +1256,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                     <?php foreach ($approvedApplicants as $app): ?>
                                         <?php $appName = trim((string)$app['first_name'] . ' ' . (string)$app['last_name']); $appOffice = (string)$app['preferred_office']; ?>
                                         <div class="sched-item sched-item--<?= h(schedule_color($appOffice)) ?>">
-                                            <div class="sched-item__name"><?= h($appName) ?></div>
+                                            <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $app['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($appName) ?></a>
                                             <div class="sched-item__loc">Preferred: <?= h($appOffice) ?> · <?= h((string)$app['student_code']) ?></div>
 
                                         </div>
@@ -1235,7 +1271,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                     <?php foreach ($deployedStudents as $ds): ?>
                                         <?php $dName = trim((string)$ds['first_name'] . ' ' . (string)$ds['last_name']); $dOffice = (string)$ds['office_name']; ?>
                                         <div class="sched-item sched-item--<?= h(schedule_color($dOffice)) ?>">
-                                            <div class="sched-item__name"><?= h($dName) ?></div>
+                                            <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $ds['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($dName) ?></a>
                                             <div class="sched-item__loc"><?= h($dOffice) ?> · <?= h((string)$ds['student_code']) ?></div>
                                         </div>
                                     <?php endforeach; ?>

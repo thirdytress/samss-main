@@ -117,6 +117,10 @@ while (true) {
                     'office_name' => (string) ($row['office_name'] ?? '-'),
                     'time_in' => $timeIn ? date('g:i A', strtotime((string) $timeIn)) : '-',
                     'time_out' => $timeOut ? date('g:i A', strtotime((string) $timeOut)) : ($timeIn ? 'In Progress' : '-'),
+                    'duration' => sams_attendance_duration_label(
+                        $timeIn ? (string) $timeIn : null,
+                        $timeOut ? (string) $timeOut : null
+                    ),
                     'status' => match ($status) {
                         'present', 'completed' => 'Present',
                         'late' => 'Late',

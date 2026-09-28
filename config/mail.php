@@ -119,14 +119,23 @@ function sams_send_supervisor_account_email(
 
 function sams_mail_config(): array
 {
+    $username = trim((string) ($_ENV['SAMS_MAIL_USERNAME'] ?? getenv('SAMS_MAIL_USERNAME') ?: ''));
+    $fromEmail = trim((string) ($_ENV['SAMS_MAIL_FROM_EMAIL'] ?? getenv('SAMS_MAIL_FROM_EMAIL') ?: ''));
+    if ($fromEmail === '' && filter_var($username, FILTER_VALIDATE_EMAIL)) {
+        $fromEmail = $username;
+    }
+    if (!filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Set SAMS_MAIL_FROM_EMAIL to a valid email address in your .env file.');
+    }
+
     return [
         'mode' => $_ENV['SAMS_MAIL_MODE'] ?? getenv('SAMS_MAIL_MODE') ?: 'smtp',
         'host' => $_ENV['SAMS_MAIL_HOST'] ?? getenv('SAMS_MAIL_HOST') ?: 'smtp.gmail.com',
         'port' => (int) ($_ENV['SAMS_MAIL_PORT'] ?? getenv('SAMS_MAIL_PORT') ?: 587),
-        'username' => $_ENV['SAMS_MAIL_USERNAME'] ?? getenv('SAMS_MAIL_USERNAME') ?: '',
+        'username' => $username,
         'password' => $_ENV['SAMS_MAIL_PASSWORD'] ?? getenv('SAMS_MAIL_PASSWORD') ?: '',
         'encryption' => $_ENV['SAMS_MAIL_ENCRYPTION'] ?? getenv('SAMS_MAIL_ENCRYPTION') ?: 'tls',
-        'from_email' => $_ENV['SAMS_MAIL_FROM_EMAIL'] ?? getenv('SAMS_MAIL_FROM_EMAIL') ?: '',
+        'from_email' => $fromEmail,
         'from_name' => $_ENV['SAMS_MAIL_FROM_NAME'] ?? getenv('SAMS_MAIL_FROM_NAME') ?: 'SAMS Notifications',
         'test_to_email' => $_ENV['SAMS_MAIL_TEST_TO_EMAIL'] ?? getenv('SAMS_MAIL_TEST_TO_EMAIL') ?: '',
     ];

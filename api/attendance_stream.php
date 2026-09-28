@@ -59,6 +59,7 @@ while (!connection_aborted()) {
                              FROM attendance_logs al2
                              WHERE al2.application_id = ds.application_id
                                AND al2.duty_id = ds.duty_id
+                                                             AND DATE(al2.created_at) = CURDATE()
                              ORDER BY al2.log_id DESC
                              LIMIT 1
                          )
@@ -114,6 +115,7 @@ while (!connection_aborted()) {
                         $officeSummary[$officeName]['active']++;
                     }
 
+                    $todayRow['duration'] = sams_attendance_duration_label($timeInRaw, $timeOutRaw);
                     $todayRow['time_in'] = $timeInRaw ? date('g:i A', strtotime($timeInRaw)) : '-';
                     $todayRow['time_out'] = $timeOutRaw ? date('g:i A', strtotime($timeOutRaw)) : ($timeInRaw ? 'In Progress' : '-');
                     $todayRow['status'] = match ($status) {

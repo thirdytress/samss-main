@@ -79,6 +79,10 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
         'student_code' => (string) ($row['student_code'] ?? ''),
         'time_in' => $timeIn ? date('g:i A', strtotime((string) $timeIn)) : '-',
         'time_out' => $timeOut ? date('g:i A', strtotime((string) $timeOut)) : ($timeIn ? 'In Progress' : '-'),
+        'duration' => sams_attendance_duration_label(
+            $timeIn ? (string) $timeIn : null,
+            $timeOut ? (string) $timeOut : null
+        ),
         'duty_start' => !empty($row['start_time']) ? date('g:i A', strtotime((string) $row['start_time'])) : '-',
         'duty_end' => !empty($row['end_time']) ? date('g:i A', strtotime((string) $row['end_time'])) : '-',
         'status' => match ($status) {

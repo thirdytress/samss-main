@@ -15,6 +15,7 @@ try {
 
     $pdo = sams_pdo();
     $pdo->query('SELECT 1');
+    $attendanceMonthSummary = sams_attendance_month_summary($pdo);
 
     $currentDay = date('l');
     $activeTerm = sams_current_term($pdo);
@@ -35,6 +36,7 @@ try {
                  FROM attendance_logs al2
                  WHERE al2.application_id = ds.application_id
                    AND al2.duty_id = ds.duty_id
+                                     AND DATE(al2.created_at) = CURDATE()
                  ORDER BY al2.log_id DESC
                  LIMIT 1
              )
@@ -95,6 +97,7 @@ try {
             $officeSummary[$officeName]['active']++;
         }
 
+        $todayRow['duration'] = sams_attendance_duration_label($timeInRaw, $timeOutRaw);
         $todayRow['time_in'] = $timeInRaw ? date('g:i A', strtotime($timeInRaw)) : '-';
         $todayRow['time_out'] = $timeOutRaw ? date('g:i A', strtotime($timeOutRaw)) : ($timeInRaw ? 'In Progress' : '-');
         $todayRow['status'] = match ($status) {
@@ -141,6 +144,8 @@ try {
             'active_now' => $activeNow,
             'completed_today' => $completedToday,
             'total_schedules' => $totalSchedules,
+            'average_hours_per_day' => sams_attendance_format_duration((int) $attendanceMonthSummary['average_seconds_per_day']),
+            'month_hours' => sams_attendance_format_duration((int) $attendanceMonthSummary['rendered_seconds']),
         ],
         'today_rows' => $todayRows,
         'offices' => $offices,

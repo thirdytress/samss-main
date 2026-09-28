@@ -15,7 +15,7 @@ function sams_report_time_label(?string $time): string
 
 function sams_report_hours_label(float $hours): string
 {
-		return number_format(max(0, $hours), 1) . ' hrs';
+		return sams_attendance_format_duration((int) round(max(0, $hours) * 3600));
 }
 
 function sams_report_status_label(string $status): string
@@ -61,15 +61,15 @@ function sams_report_first_existing_column(PDO $pdo, string $table, array $colum
 
 function sams_report_hours_from_row(array $row): float
 {
+		$timeIn = !empty($row['time_in']) ? strtotime((string) $row['time_in']) : false;
+		$timeOut = !empty($row['time_out']) ? strtotime((string) $row['time_out']) : false;
+		if ($timeIn !== false && $timeOut !== false && $timeOut > $timeIn) {
+				return ($timeOut - $timeIn) / 3600;
+		}
+
 		$hoursColumn = $row['rendered_hours'] ?? null;
 		if ($hoursColumn !== null && $hoursColumn !== '') {
 				return (float) $hoursColumn;
-		}
-
-		$timeIn = !empty($row['time_in']) ? strtotime((string) $row['time_in']) : false;
-		$timeOut = !empty($row['time_out']) ? strtotime((string) $row['time_out']) : false;
-		if ($timeIn && $timeOut && $timeOut > $timeIn) {
-				return ($timeOut - $timeIn) / 3600;
 		}
 
 		return 0.0;
