@@ -1,0 +1,15 @@
+# Security hardening: block direct HTTP access to maintenance/test scripts.
+# These scripts are intended for local CLI/admin-only workflows.
+
+<IfModule mod_authz_core.c>
+  <FilesMatch "^(create_test_student|debug_availability_helper|diagnostic_attendance|find_students|fix_seed_passwords|generate_hashes|inspect_attendance_logs|inspect_students_columns|inspect_students_db|inspect_supervisors|inspect_users_columns|setup_announcements|test_announcements)\.php$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+  <FilesMatch "^(create_test_student|debug_availability_helper|diagnostic_attendance|find_students|fix_seed_passwords|generate_hashes|inspect_attendance_logs|inspect_students_columns|inspect_students_db|inspect_supervisors|inspect_users_columns|setup_announcements|test_announcements)\.php$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+</IfModule>

@@ -1,0 +1,137 @@
+#SAMS — Full System Checklist (Latest Push Audit)
+
+---
+
+##Still open — confirmed still broken in the current push
+
+- [ ] **The application form redirect bug is NOT fixed yet.** `register3.php` still
+  contains `header('Location: students/availability.php')`, and that page still requires
+  `sams_authenticated_user()`. Prospective applicants still cannot complete the weekly
+  availability step — this is exactly the same bug we found before, unchanged.
+- [ ] **The approved 4-step reorder hasn't been implemented.** Documents are still Step 3
+  (`register2.php`), Assessment & Preferences still Step 4 (`register3.php`) — the
+  Availability+Preferences merge into Step 3 and Documents moving to Step 4 (per
+  `Web-Application-HiFi-Wireframe.html`) is still only a design, not code.
+- [x] **`respond_schedule.php` is now JSON-based.** Accept/Decline validates CSRF,
+  writes `student_response_date`, and the schedule UI handles the JSON response.
+- [x] **`duty_schedules.status` is normalized.** The schema and migration now use
+  `assigned`, `pending`, `deployed`, `accepted`, and `declined`.
+- [ ] **Legacy status migration:** verify every deployed database has the normalized enum.
+- [x] **`students/save_nfc_uid.php` is disabled for student self-registration.** NFC
+  assignment is admin-only through `admin/save_student_nfc.php`.
+- [ ] **Legacy endpoint file remains present** for compatibility; remove it only after
+  confirming no old client still calls it.
+
+## Codebase hygiene — still unresolved
+
+- [x] Development-only `scratch/*` files were removed from the production workspace.
+- [x] `admin/test_application_detail.php` was removed from the production folder.
+- [x] `admin/settings.php` dead link was removed from the sidebar nav.
+- [ ] All three portals' page files are still 60–90KB monoliths — file sizes are
+  essentially unchanged from our first audit. The UI/UX rebuild itself has not started on
+  any portal yet; only the notification-bell sharing work above has begun.
+
+## Documentation gaps — still open
+
+- [ ] `admin/meetings.php` is still not represented anywhere in Table 5's module list —
+  and it just grew by ~779 lines of real functionality, making this gap more significant
+  than when we first flagged it, not less.
+- [ ] `students/announcements.php` — confirmed still not touched by the recent shared
+  notification-bell work, and still missing from the rebuild tracker.
+
+---
+
+## Student Portal — Flow, Logic, Functionality To Check/Polish
+
+**Flow**
+- [ ] Fix the application form availability redirect (see above) — this blocks the
+  entire public-facing entry point to your system
+- [ ] Implement the approved step reorder once the above is fixed
+- [ ] Confirm Dashboard, Schedule, Duty-Hour Report, Profile, Announcements all still
+  navigate correctly after the recent Admin-focused commits (nothing in the diffs touched
+  these files, but worth a manual click-through regression check)
+
+**Logic**
+- [ ] Verify the "fix attendance retroactive absences" commit actually holds up under
+  testing — re-confirm the derived-absent rule (a duty won't retroactively mark absent if
+  accepted after its scheduled end) still behaves correctly after later commits
+- [ ] Confirm `clock.php`'s "undefined late" fix is genuinely resolved — worth a specific
+  test case: a tap that should classify as Late
+
+**Functionality**
+- [ ] `save_nfc_uid.php` — decide and execute: remove entirely, or keep as an intentional
+  admin-override path, but stop leaving it as an unresolved contradiction
+- [ ] `availability.php` — once folded into the application form (Step 3), decide whether
+  this standalone post-login page still serves a purpose (e.g., students updating
+  availability mid-term) or should be retired
+
+---
+
+## Supervisor Portal — Flow, Logic, Functionality To Check/Polish
+
+**Flow**
+- [ ] Confirm Dashboard, Students, Attendance, Evaluation, Reports, Announcements
+  navigation still works — none of the recent commits touched `supervisor/`, so this
+  should be stable, but hasn't been re-verified this pass
+- [x] Notification bell is unified across Admin, Supervisor, and Student using shared
+  styling and cache-busted notification scripts.
+- [ ] Notification data endpoints still use role-specific sources, which is intentional.
+  `notifications_count.php` / `notifications_list.php` pattern was, not the new shared
+  component
+
+**Logic**
+- [ ] `mark_excused.php` — still not deeply reviewed in any of our passes; worth actually
+  reading through this one, since it's a real, specific action with no wireframe or logic
+  doc coverage yet
+- [ ] `sse_token.php` — still not confirmed scoped correctly per-office; this is real-time
+  infrastructure worth a dedicated check before Supervisor rebuild starts
+
+**Functionality**
+- [ ] Since Supervisor is the smallest, most self-contained portal, this is still the best
+  candidate to extend the new shared notification-bell component to next — proves the
+  pattern works outside Admin before tackling the much larger Student and Admin rebuilds
+
+---
+
+## Admin Portal — Flow, Logic, Functionality To Check/Polish
+
+**Flow**
+- [ ] `application_view.php` grew substantially (+824 lines) — confirm this new flow
+  connects correctly from `applications.php` (still a 74-byte stub) and
+  `application_detail.php`, since the naming/structure confusion we flagged earlier hasn't
+  been resolved, and a big new file makes that confusion higher-stakes now
+- [ ] `meetings.php` grew substantially (+779 lines) — same concern: significant new logic,
+  zero documentation coverage in the paper
+
+**Logic**
+- [ ] `attendance.php`, `evaluation.php`, `reports.php`, `scheduling.php` all had small
+  diffs in the recent commits — worth a specific pass confirming these edits didn't
+  introduce any regressions, since they weren't the primary focus of that commit
+- [ ] `nfc_kiosk.php` / `nfc_clock_process.php` — unchanged in recent commits; still worth
+  a live hardware test now that other attendance-related logic has shifted around it
+
+**Functionality**
+- [x] `admin/settings.php` dead nav link was removed.
+  before Admin's rebuild pass reaches that section
+- [ ] Decide the fate of `applications.php` as a near-empty stub, now that
+  `application_view.php` has grown significantly larger and more central to the real flow
+
+---
+
+## Database — Schema Checklist
+
+- [x] Resolve `duty_schedules.status`'s `'rejected'` vs `'declined'` ambiguity — the
+  local database and schema now use `declined`.
+  with the team whether `'rejected'` is genuinely dead, and either remove it from the enum
+  or document a real distinct use for it
+- [x] `student_response_date` is written on student Accept/Decline and admin status updates.
+- [ ] `student_response_date` (new column) — confirm it is present in every deployed database.
+  Accept/Decline, not just present in schema without being used yet
+- [ ] Re-confirm no fingerprint-related columns remain anywhere (schema-level cleanup
+  should match the code-level cleanup already confirmed)
+- [ ] `students.nfc_uid` — still present, tied to the still-open self-registration question
+  above
+- [ ] General pass: now that real schema changes are happening (the "clean schema" commit
+  proves the team is willing to touch this), this is a good moment to also resolve the
+  Office Head role question at the schema level if it hasn't been — confirm `users.role`
+  still only has `admin`/`supervisor`/`student`, matching the paper's now-3-tier hierarchy

@@ -1,0 +1,199 @@
+/* Shared SAMS theme tokens and dark-mode overrides. */
+:root {
+  --sams-page-bg: #f9fafb;
+  --sams-surface: #ffffff;
+  --sams-surface-muted: #f8fafc;
+  --sams-text: #101828;
+  --sams-text-muted: #667085;
+  --sams-border: #e5e7eb;
+}
+
+[data-sams-theme="dark"] {
+  --sams-page-bg: #0f172a;
+  --sams-surface: #111827;
+  --sams-surface-muted: #1f2937;
+  --sams-text: #f8fafc;
+  --sams-text-muted: #cbd5e1;
+  --sams-border: #334155;
+  color-scheme: dark;
+}
+
+[data-sams-theme="light"] { color-scheme: light; }
+
+[data-sams-theme="dark"] body,
+[data-sams-theme="dark"] .shell,
+[data-sams-theme="dark"] .app,
+[data-sams-theme="dark"] main,
+[data-sams-theme="dark"] .page,
+[data-sams-theme="dark"] .page-content,
+[data-sams-theme="dark"] .content,
+[data-sams-theme="dark"] .dashboard {
+  background: var(--sams-page-bg) !important;
+  color: var(--sams-text) !important;
+}
+
+[data-sams-theme="dark"] .sidebar,
+[data-sams-theme="dark"] .topbar,
+[data-sams-theme="dark"] .card,
+[data-sams-theme="dark"] .panel,
+[data-sams-theme="dark"] .info-card,
+[data-sams-theme="dark"] .profile-card,
+[data-sams-theme="dark"] .table-card,
+[data-sams-theme="dark"] .stat-card,
+[data-sams-theme="dark"] .progress-card,
+[data-sams-theme="dark"] .form-card,
+[data-sams-theme="dark"] .upload-card,
+[data-sams-theme="dark"] .modal__panel,
+[data-sams-theme="dark"] .login-card,
+[data-sams-theme="dark"] .login-form-card {
+  background: var(--sams-surface) !important;
+  color: var(--sams-text) !important;
+  border-color: var(--sams-border) !important;
+}
+
+[data-sams-theme="dark"] .sidebar__header,
+[data-sams-theme="dark"] .sidebar__footer,
+[data-sams-theme="dark"] .sidebar__brand,
+[data-sams-theme="dark"] .card__head,
+[data-sams-theme="dark"] .toolbar,
+[data-sams-theme="dark"] thead th {
+  background: var(--sams-surface-muted) !important;
+  border-color: var(--sams-border) !important;
+}
+
+[data-sams-theme="dark"] h1,
+[data-sams-theme="dark"] h2,
+[data-sams-theme="dark"] h3,
+[data-sams-theme="dark"] h4,
+[data-sams-theme="dark"] p,
+[data-sams-theme="dark"] label,
+[data-sams-theme="dark"] span,
+[data-sams-theme="dark"] td,
+[data-sams-theme="dark"] th,
+[data-sams-theme="dark"] .topbar__title,
+[data-sams-theme="dark"] .sidebar__brand-name,
+[data-sams-theme="dark"] .sidebar__app-name,
+[data-sams-theme="dark"] .field__value,
+[data-sams-theme="dark"] .card__title {
+  color: var(--sams-text);
+}
+
+[data-sams-theme="dark"] .topbar__sub,
+[data-sams-theme="dark"] .topbar__subtitle,
+[data-sams-theme="dark"] .sidebar__brand-sub,
+[data-sams-theme="dark"] .sidebar__app-sub,
+[data-sams-theme="dark"] .muted,
+[data-sams-theme="dark"] .card__meta,
+[data-sams-theme="dark"] .field__hint {
+  color: var(--sams-text-muted) !important;
+}
+
+/* Neutral colors are hardcoded in several legacy page styles. Normalize only
+   those neutral values so semantic status colors remain unchanged. */
+[data-sams-theme="dark"] [style*="#101828"],
+[data-sams-theme="dark"] [style*="#111827"],
+[data-sams-theme="dark"] [style*="#0f172a"],
+[data-sams-theme="dark"] [style*="#1f2937"],
+[data-sams-theme="dark"] [style*="#364153"],
+[data-sams-theme="dark"] [style*="#374151"],
+[data-sams-theme="dark"] [style*="#4a5565"],
+[data-sams-theme="dark"] [style*="#667085"],
+[data-sams-theme="dark"] [style*="#6a7282"] {
+  color: var(--sams-text) !important;
+}
+
+[data-sams-theme="dark"] .login-card__title,
+[data-sams-theme="dark"] .login-card__subtitle,
+[data-sams-theme="dark"] .login-card__register,
+[data-sams-theme="dark"] .login-card__back,
+[data-sams-theme="dark"] .login-form__label,
+[data-sams-theme="dark"] .login-form__remember-text,
+[data-sams-theme="dark"] .otp-modal__title,
+[data-sams-theme="dark"] .otp-modal__subtitle,
+[data-sams-theme="dark"] .otp-modal__meta,
+[data-sams-theme="dark"] .form__label,
+[data-sams-theme="dark"] .form-card__heading-text,
+[data-sams-theme="dark"] .page-header__title,
+[data-sams-theme="dark"] .page-header__subtitle,
+[data-sams-theme="dark"] .section-heading__title,
+[data-sams-theme="dark"] .upload-field__label,
+[data-sams-theme="dark"] .upload-field__drop-title,
+[data-sams-theme="dark"] .upload-field__drop-hint,
+[data-sams-theme="dark"] .btn-back,
+[data-sams-theme="dark"] .next-card__title {
+  color: var(--sams-text) !important;
+}
+
+[data-sams-theme="dark"] .login-card__subtitle,
+[data-sams-theme="dark"] .login-card__register,
+[data-sams-theme="dark"] .login-card__back,
+[data-sams-theme="dark"] .otp-modal__subtitle,
+[data-sams-theme="dark"] .otp-modal__meta,
+[data-sams-theme="dark"] .upload-field__drop-hint {
+  color: var(--sams-text-muted) !important;
+}
+
+[data-sams-theme="dark"] .login-card,
+[data-sams-theme="dark"] .brand-card,
+[data-sams-theme="dark"] .otp-modal,
+[data-sams-theme="dark"] .otp-modal__panel,
+[data-sams-theme="dark"] .next-card,
+[data-sams-theme="dark"] .status-card,
+[data-sams-theme="dark"] .announcement,
+[data-sams-theme="dark"] .ann,
+[data-sams-theme="dark"] .meta {
+  background: var(--sams-surface) !important;
+  border-color: var(--sams-border) !important;
+}
+
+[data-sams-theme="dark"] table,
+[data-sams-theme="dark"] tbody tr,
+[data-sams-theme="dark"] .table-wrap,
+[data-sams-theme="dark"] .schedule-list__row,
+[data-sams-theme="dark"] .schedule-list__cell {
+  border-color: var(--sams-border) !important;
+}
+
+[data-sams-theme="dark"] .schedule-list__sub,
+[data-sams-theme="dark"] .schedule-list__hint,
+[data-sams-theme="dark"] .announcement__body,
+[data-sams-theme="dark"] .announcement__time,
+[data-sams-theme="dark"] .ann .meta,
+[data-sams-theme="dark"] .footer,
+[data-sams-theme="dark"] .sub {
+  color: var(--sams-text-muted) !important;
+}
+
+[data-sams-theme="dark"] input,
+[data-sams-theme="dark"] select,
+[data-sams-theme="dark"] textarea,
+[data-sams-theme="dark"] .search {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #475569 !important;
+}
+
+[data-sams-theme="dark"] a:not(.nav__link--active):not(.sidebar__nav-link--active),
+[data-sams-theme="dark"] .nav__link,
+[data-sams-theme="dark"] .sidebar__nav-link {
+  color: #e2e8f0;
+}
+
+.sams-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--sams-border);
+  border-radius: 10px;
+  background: var(--sams-surface);
+  color: var(--sams-text);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sams-theme-toggle:hover { border-color: #155dfc; }
+.sams-theme-toggle svg { width: 20px; height: 20px; display: block; }
