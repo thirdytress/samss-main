@@ -1120,6 +1120,21 @@ $applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WH
 $currentTerm = sams_current_term($pdo);
 $currentTermId = (int) ($currentTerm['term_id'] ?? 0);
 $summaryTermLabel = trim((string) ($currentTerm['term_name'] ?? '') . ' ' . (string) ($currentTerm['term_year'] ?? '')) ?: 'Current Term';
+$availabilityChangeRequests = [];
+try {
+    $requestStmt = $pdo->query(
+        "SELECT r.request_id, r.application_id, r.requested_at,
+                u.first_name, u.last_name
+         FROM availability_change_requests r
+         INNER JOIN students s ON s.student_id = r.student_id
+         INNER JOIN users u ON u.user_id = s.user_id
+         WHERE r.status = 'pending'
+         ORDER BY r.requested_at DESC"
+    );
+    $availabilityChangeRequests = $requestStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (Throwable $exception) {
+    $availabilityChangeRequests = [];
+}
 $summaryStatement = $pdo->prepare(
     "SELECT
         COUNT(DISTINCT CASE WHEN ds.status <> 'declined' THEN a.student_id END) AS students_scheduled,
@@ -1228,6 +1243,16 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
             <div class="topbar__right"><div class="topbar__notif-btn" role="button" aria-label="Notifications" tabindex="0"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#4A5565"/></svg><span class="topbar__notif-dot" aria-hidden="true"></span></div><div class="topbar__user-info" aria-label="Logged in user"><div class="topbar__user-name"><?= h($admin_name) ?></div><div class="topbar__user-role"><?= h($admin_role) ?></div></div><div class="topbar__avatar" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="7" r="4" fill="white" opacity=".9"/><path d="M2 17c0-3.314 3.582-6 8-6s8 2.686 8 6" fill="white" opacity=".9"/></svg></div></div>
         </header>
         <main class="scheduling" id="main-content">
+            <?php if (!empty($availabilityChangeRequests)): ?>
+                <section class="alert" style="background:#fffbeb;color:#92400e;border-color:#fbbf24;">
+                    <strong><?= count($availabilityChangeRequests) ?> availability change request<?= count($availabilityChangeRequests) === 1 ? '' : 's' ?> pending.</strong>
+                    <?php foreach (array_slice($availabilityChangeRequests, 0, 5) as $request): ?>
+                        <a href="application_view.php?application_id=<?= (int) $request['application_id'] ?>" style="display:block;margin-top:8px;color:#92400e;text-decoration:underline;">
+                            <?= h(trim((string) $request['first_name'] . ' ' . (string) $request['last_name'])) ?> — review requested availability changes
+                        </a>
+                    <?php endforeach; ?>
+                </section>
+            <?php endif; ?>
             <div class="sched-header">
                                 <div class="sched-header__left"></div>
                 <div class="sched-header__right">

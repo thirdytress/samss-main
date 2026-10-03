@@ -53,6 +53,21 @@ try {
         $meetingRows = $meetingStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
+    $availabilityRows = [];
+    try {
+        $availabilityRows = $pdo->query(
+            "SELECT r.request_id, r.application_id, r.requested_at,
+                    s.student_id_number, u.first_name, u.last_name
+             FROM availability_change_requests r
+             INNER JOIN students s ON s.student_id = r.student_id
+             INNER JOIN users u ON u.user_id = s.user_id
+             WHERE r.status = 'pending'
+             ORDER BY r.requested_at DESC LIMIT 8"
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $exception) {
+        $availabilityRows = [];
+    }
+
     $items = [];
     foreach ($reportStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $items[] = [
@@ -87,6 +102,21 @@ try {
             'created_at' => (string) ($row['scheduled_notify_at'] ?? ''),
             'link_url' => 'meetings.php?meeting_id=' . (int) ($row['meeting_id'] ?? 0),
             'meeting_at' => $whenText,
+        ];
+    }
+
+    foreach ($availabilityRows as $row) {
+        $name = trim((string) $row['first_name'] . ' ' . (string) $row['last_name']);
+        $items[] = [
+            'type' => 'availability_change',
+            'request_id' => (int) $row['request_id'],
+            'application_id' => (int) $row['application_id'],
+            'title' => 'Availability change request',
+            'student_code' => (string) $row['student_id_number'],
+            'preferred_office' => 'Scheduling',
+            'snippet' => $name . ' requested a change to their time availability.',
+            'created_at' => (string) $row['requested_at'],
+            'link_url' => 'application_view.php?application_id=' . (int) $row['application_id'],
         ];
     }
 

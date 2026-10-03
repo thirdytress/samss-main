@@ -77,6 +77,7 @@ $days = [
 
 $existingAvailability = [];
 $pendingAvailabilityRequest = false;
+$isChangeRequest = false;
 if ($applicationId > 0) {
     $pdo = sams_pdo();
     $availabilityStmt = $pdo->prepare(
@@ -84,6 +85,13 @@ if ($applicationId > 0) {
          FROM availability WHERE application_id = :application_id AND term_id = :term_id
          ORDER BY FIELD(day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), start_time ASC"
     );
+    try {
+        $statusStmt = $pdo->prepare('SELECT status FROM applications WHERE application_id = :application_id LIMIT 1');
+        $statusStmt->execute(['application_id' => $applicationId]);
+        $isChangeRequest = (string) $statusStmt->fetchColumn() !== 'draft';
+    } catch (Throwable $exception) {
+        $isChangeRequest = false;
+    }
     try {
         $availabilityStmt->execute(['application_id' => $applicationId, 'term_id' => $termId]);
         $existingAvailability = $availabilityStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -540,7 +548,7 @@ if ($applicationId > 0) {
                 </div>
 
                 <div class="actions">
-                    <button class="btn" type="submit"><?= htmlspecialchars($buttonText) ?></button>
+                    <button class="btn" type="submit"><?= htmlspecialchars($isChangeRequest ? 'Submit Availability Change Request' : $buttonText) ?></button>
                 </div>
 
                 <p class="helper">Set your available hours for morning (8am-12pm) and/or afternoon (1pm-8pm). You can enable/disable each slot and adjust times as needed. Each schedule assigned will be minimum 2 hours, your total weekly availability must be at least 10 hours, and per-slot reason notes are optional.</p>

@@ -104,6 +104,8 @@ $notificationCount = 0;
 $studentUnits = 0;
 $monthlyMinimumHours = 0;
 $estimatedMonthlyHours = 0.0;
+$studentApplicationId = 0;
+$availabilityChangePending = false;
 
 $userId = (int) ($currentUser['user_id'] ?? $currentUser['id'] ?? 0);
 if ($userId > 0) {
@@ -135,6 +137,24 @@ if ($userId > 0) {
       $unitsRow = $unitsStmt->fetch(PDO::FETCH_NUM) ?: [0, 0];
       $studentUnits = (int) ($unitsRow[0] ?? 0);
       $monthlyMinimumHours = sams_monthly_minimum_hours($studentUnits);
+      $applicationStmt = $pdo->prepare(
+        "SELECT a.application_id,
+                EXISTS (
+                  SELECT 1 FROM availability_change_requests r
+                  WHERE r.application_id = a.application_id AND r.status = 'pending'
+                ) AS availability_change_pending
+         FROM applications a
+         WHERE a.student_id = :student_id
+         ORDER BY a.application_id DESC LIMIT 1"
+      );
+      try {
+        $applicationStmt->execute(['student_id' => $studentId]);
+        $applicationRow = $applicationStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $studentApplicationId = (int) ($applicationRow['application_id'] ?? 0);
+        $availabilityChangePending = (bool) ($applicationRow['availability_change_pending'] ?? false);
+      } catch (Throwable $exception) {
+        $studentApplicationId = 0;
+      }
 
       $schedStmt = $pdo->prepare(
           "SELECT ds.duty_id AS id,
@@ -1385,6 +1405,13 @@ if (!empty($studentSchedules)) {
         <?php if ($monthlyHoursWarning): ?>
           <div style="margin:0 0 20px;padding:14px 16px;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;color:#991b1b;font-weight:700;">
             ⚠ Your current schedule is estimated at <?= htmlspecialchars(number_format($estimatedMonthlyHours, 1), ENT_QUOTES, 'UTF-8') ?> hours/month, below the <?= (int) $monthlyMinimumHours ?>-hour minimum for <?= (int) $studentUnits ?> units. Please coordinate with the admin if you need to request an availability change.
+          </div>
+        <?php endif; ?>
+        <?php if ($studentApplicationId > 0): ?>
+          <div style="margin:0 0 20px;">
+            <a class="btn-demo" href="availability.php" style="display:inline-flex;background:var(--color-primary);color:#fff;">
+              <?= $availabilityChangePending ? 'View pending availability request' : 'Request change of time availability' ?>
+            </a>
           </div>
         <?php endif; ?>
         <div class="page-header__actions">

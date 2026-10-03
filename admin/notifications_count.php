@@ -32,7 +32,16 @@ try {
         $meetingCount = (int) $meetingStmt->fetchColumn();
     }
 
-    $count = $reportCount + $meetingCount;
+    $availabilityCount = 0;
+    try {
+        $availabilityCount = (int) $pdo->query(
+            "SELECT COUNT(*) FROM availability_change_requests WHERE status = 'pending'"
+        )->fetchColumn();
+    } catch (Throwable $exception) {
+        $availabilityCount = 0;
+    }
+
+    $count = $reportCount + $meetingCount + $availabilityCount;
     echo json_encode(['success' => true, 'count' => $count]);
 } catch (Throwable $e) {
     echo json_encode(['success' => false, 'message' => 'db error']);
