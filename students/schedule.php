@@ -748,6 +748,42 @@ if (!empty($studentSchedules)) {
       min-width: 0;
     }
 
+    .schedule-alert {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 20px;
+      padding: 14px 16px;
+      border: 1px solid #fca5a5;
+      border-radius: 12px;
+      background: #fef2f2;
+      color: #991b1b;
+    }
+
+    .schedule-alert > div {
+      display: grid;
+      gap: 4px;
+    }
+
+    .schedule-alert span {
+      font-size: var(--font-sm);
+      font-weight: 500;
+      line-height: 1.45;
+    }
+
+    .schedule-alert__action {
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      background: var(--color-primary);
+      color: #fff;
+      white-space: nowrap;
+    }
+
     /* Horizontal scroll wrapper for smaller screens */
     .cal-scroll {
       position: relative;
@@ -755,14 +791,16 @@ if (!empty($studentSchedules)) {
       -webkit-overflow-scrolling: touch;
       width: 100%;
       min-width: 0;
+      scrollbar-gutter: stable;
     }
 
     .cal-events {
       position: absolute;
       top: 58px;
       left: 0;
-      right: 0;
-      bottom: 0;
+      width: 100%;
+      min-width: 0;
+      height: calc(15 * var(--hour-h));
       display: flex;
       pointer-events: none;
       z-index: 2;
@@ -771,9 +809,63 @@ if (!empty($studentSchedules)) {
     .cal-grid {
       display: grid;
       /* time col + rendered day cols */
-      grid-template-columns: var(--time-col-w) repeat(<?php echo count($calendarDays); ?>, var(--day-col-w));
-      min-width: calc(var(--time-col-w) + <?php echo count($calendarDays); ?> * var(--day-col-w));
-      width: max-content;
+      grid-template-columns: var(--time-col-w) repeat(<?php echo count($calendarDays); ?>, minmax(0, 1fr));
+      min-width: 0;
+      width: 100%;
+    }
+
+    .cal-events__time-spacer {
+      width: var(--time-col-w);
+      flex: 0 0 var(--time-col-w);
+    }
+
+    .cal-events__day {
+      position: relative;
+      width: auto;
+      min-width: 0;
+      flex: 1 1 0;
+      height: calc(15 * var(--hour-h));
+      pointer-events: auto;
+    }
+
+    @media (max-width: 980px) {
+      .schedule-board {
+        grid-template-columns: 1fr;
+      }
+
+      .upcoming-card {
+        position: static;
+      }
+
+      .cal-scroll {
+        overflow-x: auto;
+      }
+
+      .cal-grid,
+      .cal-events {
+        width: max-content;
+        min-width: calc(var(--time-col-w) + <?php echo count($calendarDays); ?> * var(--day-col-w));
+      }
+
+      .cal-grid {
+        grid-template-columns: var(--time-col-w) repeat(<?php echo count($calendarDays); ?>, var(--day-col-w));
+      }
+
+      .cal-events__day {
+        flex: 0 0 var(--day-col-w);
+        width: var(--day-col-w);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .schedule-alert {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .schedule-alert__action {
+        width: 100%;
+      }
     }
 
     .upcoming-card {
@@ -1402,18 +1494,6 @@ if (!empty($studentSchedules)) {
           </div>
           <div class="page-header__sub">View and manage your weekly duty schedule</div>
         </div>
-        <?php if ($monthlyHoursWarning): ?>
-          <div style="margin:0 0 20px;padding:14px 16px;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;color:#991b1b;font-weight:700;">
-            ⚠ Your current schedule is estimated at <?= htmlspecialchars(number_format($estimatedMonthlyHours, 1), ENT_QUOTES, 'UTF-8') ?> hours/month, below the <?= (int) $monthlyMinimumHours ?>-hour minimum for <?= (int) $studentUnits ?> units. Please coordinate with the admin if you need to request an availability change.
-          </div>
-        <?php endif; ?>
-        <?php if ($studentApplicationId > 0): ?>
-          <div style="margin:0 0 20px;">
-            <a class="btn-demo" href="availability.php" style="display:inline-flex;background:var(--color-primary);color:#fff;">
-              <?= $availabilityChangePending ? 'View pending availability request' : 'Request change of time availability' ?>
-            </a>
-          </div>
-        <?php endif; ?>
         <div class="page-header__actions">
           <div class="view-toggle" role="group" aria-label="View mode">
             <button class="view-toggle__btn view-toggle__btn--active" id="btn-calendar" aria-pressed="true">
@@ -1440,6 +1520,20 @@ if (!empty($studentSchedules)) {
           </a>
         </div>
       </div>
+
+      <?php if ($monthlyHoursWarning): ?>
+        <div class="schedule-alert">
+          <div>
+            <strong>Monthly duty hours below minimum</strong>
+            <span>Your schedule is estimated at <?= htmlspecialchars(number_format($estimatedMonthlyHours, 1), ENT_QUOTES, 'UTF-8') ?> hours/month, below the <?= (int) $monthlyMinimumHours ?>-hour minimum for <?= (int) $studentUnits ?> units.</span>
+          </div>
+          <?php if ($studentApplicationId > 0): ?>
+            <a class="btn-demo schedule-alert__action" href="availability.php">
+              <?= $availabilityChangePending ? 'View pending request' : 'Request availability change' ?>
+            </a>
+          <?php endif; ?>
+        </div>
+      <?php endif; ?>
 
       <!-- ---- Stat mini-cards + week navigator ---- -->
       <div class="stat-row">
@@ -1531,10 +1625,10 @@ if (!empty($studentSchedules)) {
               <div class="cal-events">
 
               <!-- Time column spacer -->
-              <div style="width:var(--time-col-w); flex-shrink:0;"></div>
+              <div class="cal-events__time-spacer"></div>
 
               <?php foreach ($calendarDays as $calendarDay): ?>
-                <div style="width:var(--day-col-w); flex-shrink:0; position:relative; height:<?php echo count($hours) * 64; ?>px; pointer-events:auto;">
+                <div class="cal-events__day">
                   <?php for ($row = 0; $row < count($hours); $row++): ?>
                     <div class="cal-day-col__line" style="top:<?php echo $row * 64; ?>px;"></div>
                   <?php endfor; ?>

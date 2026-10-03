@@ -1050,14 +1050,15 @@ $requestedSchedules = [];
 if ($selectedAvailabilityRequest) {
     foreach ($selectedAvailabilityRequest['proposed_availability'] as $requested) {
         $requestedDay = schedule_day_label((string) ($requested['day_of_week'] ?? ''));
-        $requestedStart = substr((string) ($requested['time_start'] ?? ''), 0, 8);
-        $requestedEnd = substr((string) ($requested['time_end'] ?? ''), 0, 8);
+        $requestedStart = substr((string) ($requested['time_start'] ?? ''), 0, 5);
+        $requestedEnd = substr((string) ($requested['time_end'] ?? ''), 0, 5);
         $isExistingSlot = false;
-        foreach ($selectedAvailabilityRequest['current_availability'] as $current) {
+        foreach ($schedules as $current) {
             if (
                 schedule_day_label((string) ($current['day_of_week'] ?? '')) === $requestedDay
-                && substr((string) ($current['start_time'] ?? ''), 0, 8) === $requestedStart
-                && substr((string) ($current['end_time'] ?? ''), 0, 8) === $requestedEnd
+                && substr((string) ($current['time_start'] ?? ''), 0, 5) === $requestedStart
+                && substr((string) ($current['time_end'] ?? ''), 0, 5) === $requestedEnd
+                && strtolower(trim((string) ($current['status'] ?? ''))) !== 'declined'
             ) {
                 $isExistingSlot = true;
                 break;
@@ -1206,7 +1207,7 @@ $summaryTermLabel = trim((string) ($currentTerm['term_name'] ?? '') . ' ' . (str
 $availabilityChangeRequests = [];
 try {
     $requestStmt = $pdo->query(
-        "SELECT r.request_id, r.application_id, r.requested_at,
+        "SELECT r.request_id, r.application_id, r.student_id, r.requested_at,
                 u.first_name, u.last_name
          FROM availability_change_requests r
          INNER JOIN students s ON s.student_id = r.student_id
@@ -1374,6 +1375,40 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                             <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-muted);">Email</div><div style="margin-top:4px;font-size:14px;font-weight:600;overflow-wrap:anywhere;"><?= h((string) $selectedPreferred['email']) ?></div></div>
                                             <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-muted);">Preferred Office</div><div style="margin-top:4px;font-size:14px;font-weight:600;overflow-wrap:anywhere;"><?= h((string) $selectedPreferred['preferred_office']) ?></div></div>
                                         </div>
+                                        <?php if ($selectedAvailabilityRequest): ?>
+                                            <div style="padding:14px 16px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;">
+                                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                                                    <div>
+                                                        <div style="font-size:12px;font-weight:800;text-transform:uppercase;color:#1d4ed8;">Pending availability change request</div>
+                                                        <div style="margin-top:4px;font-size:13px;color:#334155;">Review the blue requested slots before approving this change.</div>
+                                                    </div>
+                                                    <span style="padding:5px 9px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px;font-weight:700;">Pending review</span>
+                                                </div>
+                                                <?php if (!empty($requestedSchedules)): ?>
+                                                    <div style="display:grid;gap:4px;margin-top:10px;">
+                                                        <?php foreach ($requestedSchedules as $requested): ?>
+                                                            <div style="font-size:13px;color:#1e3a8a;"><strong><?= h($requested['day_of_week']) ?></strong> — <?= h(display_time((string) $requested['time_start'])) ?> – <?= h(display_time((string) $requested['time_end'])) ?></div>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <div style="margin-top:10px;font-size:13px;color:#1e3a8a;">No new time blocks; the request matches the current availability.</div>
+                                                <?php endif; ?>
+                                                <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+                                                    <form method="post" action="availability_change_request.php">
+                                                        <input type="hidden" name="request_id" value="<?= (int) $selectedAvailabilityRequest['request_id'] ?>">
+                                                        <input type="hidden" name="application_id" value="<?= (int) $selectedAvailabilityRequest['application_id'] ?>">
+                                                        <input type="hidden" name="request_action" value="approve">
+                                                        <button class="btn-small" type="submit" style="background:#2563eb;color:#fff;">Approve change</button>
+                                                    </form>
+                                                    <form method="post" action="availability_change_request.php">
+                                                        <input type="hidden" name="request_id" value="<?= (int) $selectedAvailabilityRequest['request_id'] ?>">
+                                                        <input type="hidden" name="application_id" value="<?= (int) $selectedAvailabilityRequest['application_id'] ?>">
+                                                        <input type="hidden" name="request_action" value="decline">
+                                                        <button class="btn-small" type="submit" style="background:#fee2e2;color:#991b1b;">Decline</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
                                     </section>
                                 <?php endif; ?>
                                 <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:8px;">
@@ -1549,6 +1584,23 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                             <?php endif; ?>
                         </div>
                     </section>
+                    <?php if (!empty($availabilityChangeRequests)): ?>
+                        <section class="card" aria-labelledby="availability-request-heading">
+                            <h2 class="card__title" id="availability-request-heading">Availability Requests</h2>
+                            <div class="sched-list">
+                                <?php foreach ($availabilityChangeRequests as $request): ?>
+                                    <?php $requestName = trim((string) $request['first_name'] . ' ' . (string) $request['last_name']); ?>
+                                    <a class="sched-item" href="<?= h(schedule_student_url($pdo, (int) $request['student_id'], $selectedStudentOffice, $showStatus)) ?>" style="display:block;border:1px solid #bfdbfe;background:#eff6ff;">
+                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                            <strong style="color:#1d4ed8;"><?= h($requestName) ?></strong>
+                                            <span style="font-size:11px;font-weight:700;color:#1d4ed8;">Pending</span>
+                                        </div>
+                                        <div style="margin-top:5px;font-size:12px;color:#475569;">Click to review requested availability</div>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </section>
+                    <?php endif; ?>
                     <!-- Generated Schedules section removed per user request -->
                     <section class="card" aria-label="Live scheduling summary">
                         <div class="summary-header">

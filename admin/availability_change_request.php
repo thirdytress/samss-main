@@ -66,19 +66,54 @@ try {
         $appStatusStmt->execute(['application_id' => (int) $request['application_id']]);
         $application = $appStatusStmt->fetch() ?: [];
         if (in_array((string) ($application['status'] ?? ''), ['approved', 'deployed'], true)) {
-            $pdo->prepare('DELETE FROM duty_schedules WHERE application_id = :application_id')
-                ->execute(['application_id' => (int) $request['application_id']]);
             $hasOfficeColumn = sams_column_exists($pdo, 'duty_schedules', 'office_name');
+            $existingSchedulesStmt = $pdo->prepare(
+                'SELECT duty_id, day_of_week, start_time, end_time, status
+                 FROM duty_schedules
+                 WHERE application_id = :application_id AND term_id = :term_id
+                 FOR UPDATE'
+            );
+            $existingSchedulesStmt->execute([
+                'application_id' => (int) $request['application_id'],
+                'term_id' => (int) $request['term_id'],
+            ]);
+            $existingSchedules = $existingSchedulesStmt->fetchAll(PDO::FETCH_ASSOC);
+            $acceptedExisting = [];
+            $declinedExisting = [];
+            foreach ($existingSchedules as $existingSchedule) {
+                $key = strtolower(trim((string) $existingSchedule['day_of_week']))
+                    . '|' . substr((string) $existingSchedule['start_time'], 0, 5)
+                    . '|' . substr((string) $existingSchedule['end_time'], 0, 5);
+                if (strtolower((string) $existingSchedule['status']) === 'declined') {
+                    $declinedExisting[$key] = (int) $existingSchedule['duty_id'];
+                } else {
+                    $acceptedExisting[$key] = true;
+                }
+            }
+            $restoreDeclined = $pdo->prepare(
+                "UPDATE duty_schedules SET status = 'accepted' WHERE duty_id = :duty_id"
+            );
             $scheduleInsert = $hasOfficeColumn
-                ? $pdo->prepare('INSERT INTO duty_schedules (application_id, office_name, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :office_name, :term_id, :day_of_week, :start_time, :end_time, "assigned")')
-                : $pdo->prepare('INSERT INTO duty_schedules (application_id, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :term_id, :day_of_week, :start_time, :end_time, "assigned")');
+                ? $pdo->prepare('INSERT INTO duty_schedules (application_id, office_name, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :office_name, :term_id, :day_of_week, :start_time, :end_time, "accepted")')
+                : $pdo->prepare('INSERT INTO duty_schedules (application_id, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :term_id, :day_of_week, :start_time, :end_time, "accepted")');
             foreach ($entries as $entry) {
+                $dayOfWeek = trim((string) ($entry['day_of_week'] ?? ''));
+                $startTime = (string) ($entry['time_start'] ?? '');
+                $endTime = (string) ($entry['time_end'] ?? '');
+                $key = strtolower($dayOfWeek) . '|' . substr($startTime, 0, 5) . '|' . substr($endTime, 0, 5);
+                if (isset($acceptedExisting[$key])) {
+                    continue;
+                }
+                if (isset($declinedExisting[$key])) {
+                    $restoreDeclined->execute(['duty_id' => $declinedExisting[$key]]);
+                    continue;
+                }
                 $params = [
                     'application_id' => (int) $request['application_id'],
                     'term_id' => (int) $request['term_id'],
-                    'day_of_week' => (string) $entry['day_of_week'],
-                    'start_time' => (string) $entry['time_start'],
-                    'end_time' => (string) $entry['time_end'],
+                    'day_of_week' => $dayOfWeek,
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
                 ];
                 if ($hasOfficeColumn) {
                     $params['office_name'] = (string) ($application['preferred_office'] ?? '');
