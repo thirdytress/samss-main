@@ -11,10 +11,6 @@ if (empty($_SESSION['sams_registration']['step2'])) {
     header('Location: register1.php');
     exit;
 }
-if (empty($_SESSION['sams_registration']['step3'])) {
-    header('Location: register2.php');
-    exit;
-}
 
 function sams_split_full_name(string $fullName): array
 {
@@ -60,25 +56,86 @@ $registration = sams_registration_data();
 $step1 = $registration['step1'] ?? [];
 $step2 = $registration['step2'] ?? [];
 $step3 = $registration['step3'] ?? [];
+$step4 = $registration['step4'] ?? [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_GET['finalize'])) {
     $work_location = trim($_POST['work_location'] ?? '');
     $skills        = trim($_POST['skills'] ?? '');
-    $agree_terms   = isset($_POST['agree_terms']);
-    $agree_privacy = isset($_POST['agree_privacy']);
+    $availabilityForm = $_POST['availability'] ?? [];
+    $availabilityEntries = [];
+    $totalAvailabilityHours = 0.0;
+    $availabilityDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    $availabilityPeriods = ['morning', 'afternoon'];
 
     if ($work_location === '') {
         $errors['work_location'] = 'Preferred Work Location is required.';
     }
-    if (!$agree_terms) {
-        $errors['agree_terms'] = 'You must agree to the Terms and Conditions.';
-    }
-    if (!$agree_privacy) {
-        $errors['agree_privacy'] = 'You must consent to the Data Privacy Act.';
+    foreach ($availabilityDays as $day) {
+        foreach ($availabilityPeriods as $period) {
+            $slot = $availabilityForm[$day][$period] ?? [];
+            if (empty($slot['enabled'])) {
+                continue;
+            }
+
+            $timeStart = trim((string) ($slot['start'] ?? ''));
+            $timeEnd = trim((string) ($slot['end'] ?? ''));
+            if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $timeStart) || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $timeEnd)) {
+                $errors['availability'] = 'Enter a valid start and end time for each selected slot.';
+                continue;
+            }
+
+            $startTimestamp = strtotime('1970-01-01 ' . $timeStart);
+            $endTimestamp = strtotime('1970-01-01 ' . $timeEnd);
+            $hours = ($endTimestamp - $startTimestamp) / 3600;
+            if ($hours < 2) {
+                $errors['availability'] = 'Each availability slot must be at least 2 hours, with the end time after the start time.';
+                continue;
+            }
+
+            $totalAvailabilityHours += $hours;
+            $availabilityEntries[] = [
+                'day_of_week' => $day,
+                'time_start' => $timeStart,
+                'time_end' => $timeEnd,
+                'notes' => substr(trim((string) ($slot['notes'] ?? '')), 0, 500),
+            ];
+        }
     }
 
-    if (empty($step1) || empty($step2) || empty($step3)) {
+    if (count($availabilityEntries) === 0) {
+        $errors['availability'] = 'Please choose at least one availability slot.';
+    } elseif ($totalAvailabilityHours < 10) {
+        $errors['availability'] = 'Minimum required availability is 10 hours per week.';
+    }
+
+    if (empty($step1) || empty($step2)) {
         $errors['flow'] = 'Your registration session is incomplete. Please start again from Step 1.';
+    }
+
+    if (empty($errors)) {
+        $_SESSION['sams_registration'] = array_merge($_SESSION['sams_registration'] ?? [], [
+            'step3' => [
+                'work_location' => $work_location,
+                'skills' => $skills,
+                'availability' => $availabilityEntries,
+                'availability_form' => $availabilityForm,
+            ],
+        ]);
+
+        header('Location: register2.php');
+        exit;
+    }
+}
+
+if (isset($_GET['finalize'])) {
+    $work_location = trim((string) ($step3['work_location'] ?? ''));
+    $skills = trim((string) ($step3['skills'] ?? ''));
+
+    if (empty($step1) || empty($step2) || empty($step3) || empty($step4)) {
+        $errors['flow'] = 'Your registration session is incomplete. Please complete all four steps.';
+    }
+    if (empty($step4['agree_terms']) || empty($step4['agree_privacy'])) {
+        $errors['flow'] = 'Please agree to the Terms and Conditions and Data Privacy Act before submitting.';
     }
 
     if (empty($errors)) {
@@ -211,8 +268,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $applicationId = (int) $pdo->lastInsertId();
 
-            $tempFolder = $step3['temp_folder'] ?? '';
-            $storedFiles = $step3['files'] ?? [];
+            $tempFolder = $step4['temp_folder'] ?? '';
+            $storedFiles = $step4['files'] ?? [];
             $uploadBase = __DIR__ . '/uploads/documents/student_' . $studentId . '/application_' . $applicationId;
 
             if ($tempFolder !== '' && is_dir($tempFolder) && !is_dir($uploadBase)) {
@@ -308,12 +365,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            $availabilityStatement = $pdo->prepare(
+                'INSERT INTO availability
+                    (application_id, term_id, day_of_week, start_time, end_time, notes)
+                 VALUES
+                    (:application_id, :term_id, :day_of_week, :start_time, :end_time, :notes)'
+            );
+            $totalAvailabilityHours = 0.0;
+            foreach (($step3['availability'] ?? []) as $entry) {
+                $startTimestamp = strtotime('1970-01-01 ' . (string) ($entry['time_start'] ?? ''));
+                $endTimestamp = strtotime('1970-01-01 ' . (string) ($entry['time_end'] ?? ''));
+                if ($startTimestamp === false || $endTimestamp === false || $endTimestamp <= $startTimestamp) {
+                    throw new RuntimeException('An availability time slot is invalid. Please review your schedule.');
+                }
+
+                $totalAvailabilityHours += ($endTimestamp - $startTimestamp) / 3600;
+                $availabilityStatement->execute([
+                    'application_id' => $applicationId,
+                    'term_id' => (int) $activeTermId,
+                    'day_of_week' => (string) ($entry['day_of_week'] ?? ''),
+                    'start_time' => (string) ($entry['time_start'] ?? ''),
+                    'end_time' => (string) ($entry['time_end'] ?? ''),
+                    'notes' => ($entry['notes'] ?? '') !== '' ? (string) $entry['notes'] : null,
+                ]);
+            }
+
+            if ($totalAvailabilityHours < 10) {
+                throw new RuntimeException('Minimum required availability is 10 hours per week. Please review your schedule.');
+            }
+
+            $updateApplicationStatement = $pdo->prepare(
+                "UPDATE applications
+                 SET available_hours_per_week = :available_hours,
+                     submitted_at = NOW(),
+                     status = 'pending'
+                 WHERE application_id = :application_id"
+            );
+            $updateApplicationStatement->execute([
+                'available_hours' => (int) round($totalAvailabilityHours),
+                'application_id' => $applicationId,
+            ]);
+
             $pdo->commit();
 
             unset($_SESSION['sams_registration']);
             $_SESSION['registration_submission'] = [
                 'success' => true,
-                'message' => 'Your application information has been saved. Please complete your weekly time availability below to submit your application.',
+                'message' => 'Your application and weekly availability have been submitted successfully.',
+                'availability_complete' => true,
                 'application_id' => $applicationId,
                 'student_id' => $studentId,
                 'term_id' => (int) $activeTermId,
@@ -322,10 +421,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'course' => $course,
                 'year_level' => $yearLevel,
                 'date_submitted' => date('F j, Y'),
-                'status' => 'DRAFT',
+                'status' => 'PENDING',
             ];
 
-            header('Location: students/availability.php');
+            header('Location: status.php');
             exit;
         } catch (Throwable $exception) {
             if (isset($pdo) && $pdo->inTransaction()) {
@@ -342,8 +441,11 @@ if (!empty($errors)) {
     error_log('register3: session=' . json_encode($_SESSION['sams_registration'] ?? []));
 }
 
-$val_location = htmlspecialchars($_POST['work_location'] ?? '');
-$val_skills   = htmlspecialchars($_POST['skills'] ?? '');
+$availabilityDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+$availabilityForm = $_POST['availability'] ?? ($step3['availability_form'] ?? []);
+$selectedLocation = (string) ($_POST['work_location'] ?? ($step3['work_location'] ?? ''));
+$val_location = htmlspecialchars($selectedLocation, ENT_QUOTES, 'UTF-8');
+$val_skills = htmlspecialchars((string) ($_POST['skills'] ?? ($step3['skills'] ?? '')), ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -621,6 +723,62 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
             gap: 24px;
         }
         .field {}
+        .availability-section {
+            display: grid;
+            gap: 16px;
+        }
+        .availability-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .availability-day {
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 14px;
+            background: #fff;
+        }
+        .availability-day h3 {
+            margin: 0 0 12px;
+            font-size: var(--font-base);
+        }
+        .availability-slot {
+            display: grid;
+            grid-template-columns: auto 1fr 1fr;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 0;
+            border-top: 1px solid var(--color-border);
+        }
+        .availability-slot label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: var(--font-sm);
+            font-weight: 700;
+        }
+        .availability-slot input[type="time"] {
+            width: 100%;
+            min-width: 0;
+            padding: 8px;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            font: inherit;
+        }
+        .availability-slot textarea {
+            grid-column: 2 / -1;
+            width: 100%;
+            min-height: 48px;
+            padding: 8px;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            font: inherit;
+            resize: vertical;
+        }
+        .availability-error {
+            color: #b91c1c;
+            font-weight: 700;
+        }
         .field__label {
             display: block;
             font-size: var(--font-sm);
@@ -939,6 +1097,7 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
 
             .progress-card { padding: 20px 16px 16px; }
             .steps { grid-template-columns: repeat(2, 1fr); }
+            .availability-grid { grid-template-columns: 1fr; }
 
             .form-card { padding: 20px 16px; }
             .section-heading__title { font-size: 18px; }
@@ -979,8 +1138,8 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                 <li><a href="index.php"     class="nav__item">Home</a></li>
                 <li><a href="register.php"  class="nav__item">Personal Info</a></li>
                 <li><a href="register1.php" class="nav__item">Academic Info</a></li>
-                <li><a href="register2.php" class="nav__item">Requirements</a></li>
                 <li><a href="register3.php" class="nav__item nav__item--active" aria-current="page">Assessment</a></li>
+                <li><a href="register2.php" class="nav__item">Requirements</a></li>
             </ul>
         </nav>
     </div>
@@ -1015,10 +1174,10 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
         <!-- ── PROGRESS CARD ── -->
         <section class="progress-card" aria-label="Application progress">
             <div class="progress-card__header">
-                <span class="progress-card__step-label">Step 4 of 4</span>
-                <span class="progress-card__pct-label">100% Complete</span>
+                <span class="progress-card__step-label">Step 3 of 4</span>
+                <span class="progress-card__pct-label">75% Complete</span>
             </div>
-            <div class="progress-card__bar-track" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" aria-label="100% complete">
+            <div class="progress-card__bar-track" role="progressbar" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100" aria-label="75% complete">
                 <div class="progress-card__bar-fill"></div>
             </div>
 
@@ -1040,8 +1199,8 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                     <span class="step__label">Academic Info</span>
                 </a>
 
-                <!-- Step 3 – Requirements (completed) -->
-                <a href="register2.php" class="step step--active" role="listitem">
+                <!-- Step 3 – Assessment (current) -->
+                <div class="step step--active" role="listitem" aria-current="step">
                     <svg class="step__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M14 2V8H20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1049,19 +1208,19 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                         <path d="M16 17H8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M10 9H8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    <span class="step__label">Requirements</span>
-                </a>
+                    <span class="step__label">Assessment</span>
+                </div>
 
-                <!-- Step 4 – Assessment (current / active) -->
-                <div class="step step--active" role="listitem" aria-current="step">
+                <!-- Step 4 – Requirements (upcoming) -->
+                <a href="register2.php" class="step step--inactive" role="listitem">
                     <svg class="step__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <rect x="3" y="3" width="18" height="18" rx="2" stroke="white" stroke-width="2"/>
                         <path d="M9 9H15" stroke="white" stroke-width="2" stroke-linecap="round"/>
                         <path d="M9 12H15" stroke="white" stroke-width="2" stroke-linecap="round"/>
                         <path d="M9 15H12" stroke="white" stroke-width="2" stroke-linecap="round"/>
                     </svg>
-                    <span class="step__label">Assessment</span>
-                </div>
+                    <span class="step__label">Requirements</span>
+                </a>
             </div>
         </section>
 
@@ -1093,7 +1252,7 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
 <option value="">Select office...</option>
 
 <?php foreach (sams_office_options() as $officeOption): ?>
-<option value="<?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?></option>
+<option value="<?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?>" <?= $selectedLocation === $officeOption ? 'selected' : '' ?>><?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?></option>
 <?php endforeach; ?>
 
 </select>
@@ -1103,6 +1262,41 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                     </div>
 
                     <!-- Preferred Work Schedule removed per request -->
+
+                    <div class="field availability-section">
+                        <div>
+                            <label class="field__label">Weekly Availability *</label>
+                            <p>Select your available morning and/or afternoon hours. Each selected slot must be at least 2 hours, with at least 10 hours total per week.</p>
+                        </div>
+                        <?php if (!empty($errors['availability'])): ?>
+                            <span class="availability-error" role="alert"><?= htmlspecialchars($errors['availability'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endif; ?>
+                        <div class="availability-grid">
+                            <?php foreach ($availabilityDays as $day): ?>
+                                <?php $dayValues = $availabilityForm[$day] ?? []; ?>
+                                <section class="availability-day" aria-label="<?= htmlspecialchars($day, ENT_QUOTES, 'UTF-8') ?> availability">
+                                    <h3><?= htmlspecialchars($day, ENT_QUOTES, 'UTF-8') ?></h3>
+                                    <?php foreach (['morning' => ['Morning', '08:00', '12:00'], 'afternoon' => ['Afternoon', '13:00', '20:00']] as $period => [$periodLabel, $defaultStart, $defaultEnd]): ?>
+                                        <?php
+                                            $slotValues = $dayValues[$period] ?? [];
+                                            $slotEnabled = array_key_exists('enabled', $slotValues)
+                                                ? !empty($slotValues['enabled'])
+                                                : ($period === 'morning' && empty($availabilityForm));
+                                        ?>
+                                        <div class="availability-slot">
+                                            <label>
+                                                <input type="checkbox" name="availability[<?= htmlspecialchars($day, ENT_QUOTES, 'UTF-8') ?>][<?= $period ?>][enabled]" value="1" <?= $slotEnabled ? 'checked' : '' ?> />
+                                                <?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8') ?>
+                                            </label>
+                                            <input type="time" name="availability[<?= htmlspecialchars($day, ENT_QUOTES, 'UTF-8') ?>][<?= $period ?>][start]" value="<?= htmlspecialchars((string) ($slotValues['start'] ?? $defaultStart), ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($day . ' ' . $periodLabel . ' start time', ENT_QUOTES, 'UTF-8') ?>" />
+                                            <input type="time" name="availability[<?= htmlspecialchars($day, ENT_QUOTES, 'UTF-8') ?>][<?= $period ?>][end]" value="<?= htmlspecialchars((string) ($slotValues['end'] ?? $defaultEnd), ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($day . ' ' . $periodLabel . ' end time', ENT_QUOTES, 'UTF-8') ?>" />
+                                            <textarea name="availability[<?= htmlspecialchars($day, ENT_QUOTES, 'UTF-8') ?>][<?= $period ?>][notes]" maxlength="500" placeholder="Optional note" aria-label="<?= htmlspecialchars($day . ' ' . $periodLabel . ' note', ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) ($slotValues['notes'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </section>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
 
                     <!-- Special Skills or Talents -->
                     <div class="field">
@@ -1143,51 +1337,6 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
                         </div>
                     </div>
 
-                    <!-- Checkboxes -->
-                    <div class="checkboxes">
-                        <div>
-                            <div class="checkbox-row">
-                                <input
-                                    class="checkbox-row__input"
-                                    type="checkbox"
-                                    id="agree_terms"
-                                    name="agree_terms"
-                                    value="1"
-                                    <?= (isset($_POST['agree_terms'])) ? 'checked' : '' ?>
-                                    aria-required="true"
-                                    aria-describedby="<?= !empty($errors['agree_terms']) ? 'terms-error' : '' ?>"
-                                />
-                                <label class="checkbox-row__label" for="agree_terms">
-                                    I agree to the <strong>Terms and Conditions</strong> of the Student Assistant Program and understand my responsibilities as a student assistant.
-                                </label>
-                            </div>
-                            <?php if (!empty($errors['agree_terms'])): ?>
-                                <span class="checkbox-error" id="terms-error" role="alert"><?= htmlspecialchars($errors['agree_terms']) ?></span>
-                            <?php endif; ?>
-                        </div>
-
-                        <div>
-                            <div class="checkbox-row">
-                                <input
-                                    class="checkbox-row__input"
-                                    type="checkbox"
-                                    id="agree_privacy"
-                                    name="agree_privacy"
-                                    value="1"
-                                    <?= (isset($_POST['agree_privacy'])) ? 'checked' : '' ?>
-                                    aria-required="true"
-                                    aria-describedby="<?= !empty($errors['agree_privacy']) ? 'privacy-error' : '' ?>"
-                                />
-                                <label class="checkbox-row__label" for="agree_privacy">
-                                    I consent to the collection and processing of my personal data in accordance with the <strong>Data Privacy Act</strong> for SDAO purposes.
-                                </label>
-                            </div>
-                            <?php if (!empty($errors['agree_privacy'])): ?>
-                                <span class="checkbox-error" id="privacy-error" role="alert"><?= htmlspecialchars($errors['agree_privacy']) ?></span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
                     <!-- Auto-recommendation banner -->
                     <div class="auto-rec" role="note" aria-label="Auto-recommendation notice">
                         <!-- Star/sparkle icon matching Figma imgIcon4 -->
@@ -1203,7 +1352,7 @@ $val_skills   = htmlspecialchars($_POST['skills'] ?? '');
 
                 <!-- ── ACTIONS ── -->
                 <div class="actions" style="margin-top: 32px;">
-                    <a href="register2.php" class="btn-back">
+                    <a href="register1.php" class="btn-back">
                         <svg class="btn-back__icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <path d="M15.8333 10H4.16667M4.16667 10L10 15.8333M4.16667 10L10 4.16667" stroke="#003087" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>

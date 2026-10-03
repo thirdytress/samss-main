@@ -10,8 +10,8 @@ if (empty($_SESSION['sams_registration']['step1'])) {
 
 $step1_link = 'register.php';
 $step2_link = 'register1.php';
-$step3_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2'])) ? 'register2.php' : '#';
-$step4_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2']) && !empty($_SESSION['sams_registration']['step3'])) ? 'register3.php' : '#';
+$step3_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2'])) ? 'register3.php' : '#';
+$step4_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2']) && !empty($_SESSION['sams_registration']['step3'])) ? 'register2.php' : '#';
 
 $errors = [];
 $values = [
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'step2' => $values,
       ]);
 
-      header('Location: register2.php');
+      header('Location: register3.php');
       exit;
     }
 }
@@ -557,19 +557,19 @@ function isSelected(string $key, string $option, array $values): string {
         </div>
 
         <!-- Step 3 – locked -->
-        <a class="step-tab" href="<?= $step3_link ?>" aria-label="Step 3: Requirements">
+        <a class="step-tab" href="<?= $step3_link ?>" aria-label="Step 3: Assessment">
           <svg class="step-tab__svg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <span class="step-tab__label">Requirements</span>
+          <span class="step-tab__label">Assessment</span>
         </a>
 
         <!-- Step 4 – locked -->
-        <a class="step-tab" href="<?= $step4_link ?>" aria-label="Step 4: Assessment">
+        <a class="step-tab" href="<?= $step4_link ?>" aria-label="Step 4: Requirements">
           <svg class="step-tab__svg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>
-          <span class="step-tab__label">Assessment</span>
+          <span class="step-tab__label">Requirements</span>
         </a>
 
       </nav>
@@ -677,7 +677,7 @@ function isSelected(string $key, string $option, array $values): string {
         class="form-nav__next"
         type="submit"
         form="academic-form"
-        aria-label="Proceed to Step 3: Requirements"
+        aria-label="Proceed to Step 3: Assessment"
       >
         Next
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>

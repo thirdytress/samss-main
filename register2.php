@@ -11,11 +11,14 @@ if (empty($_SESSION['sams_registration']['step2'])) {
     header('Location: register1.php');
     exit;
 }
-
 $step1_link = 'register.php';
 $step2_link = 'register1.php';
-$step3_link = 'register2.php';
-$step4_link = (!empty($_SESSION['sams_registration']['step1']) && !empty($_SESSION['sams_registration']['step2']) && !empty($_SESSION['sams_registration']['step3'])) ? 'register3.php' : '#';
+$step3_link = 'register3.php';
+$step4_link = !empty($_SESSION['sams_registration']['step3']) ? 'register2.php' : '#';
+if (empty($_SESSION['sams_registration']['step3'])) {
+    header('Location: register3.php');
+    exit;
+}
 
 $errors = [];
 $success = false;
@@ -41,6 +44,15 @@ $files = [
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $agreeTerms = isset($_POST['agree_terms']);
+    $agreePrivacy = isset($_POST['agree_privacy']);
+    if (!$agreeTerms) {
+        $errors['agree_terms'] = 'You must agree to the Terms and Conditions.';
+    }
+    if (!$agreePrivacy) {
+        $errors['agree_privacy'] = 'You must consent to the Data Privacy Act.';
+    }
+
     $allowed_types = ['application/pdf', 'image/jpeg', 'image/png'];
     $allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png'];
     $max_size_2mb = 2 * 1024 * 1024;
@@ -118,13 +130,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($errors)) {
             $_SESSION['sams_registration'] = array_merge($_SESSION['sams_registration'] ?? [], [
-                'step3' => [
+                'step4' => [
                     'temp_folder' => $tempFolder,
                     'files' => $storedFiles,
+                    'agree_terms' => $agreeTerms,
+                    'agree_privacy' => $agreePrivacy,
                 ],
             ]);
 
-            header('Location: register3.php');
+            header('Location: register3.php?finalize=1');
             exit;
         }
     }
@@ -136,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="assets/css/sams-dark-mode.css?v=20260926" />
-    <title>Student Assistant Application – Step 3</title>
+    <title>Student Assistant Application – Step 4</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
@@ -463,6 +477,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             line-height: var(--lh-xs);
             color: var(--color-error);
             margin-top: 6px;
+        }
+
+        .consent-fields {
+            display: grid;
+            gap: 16px;
+            margin-top: 28px;
+            padding: 20px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-upload);
+            background: var(--color-white);
+        }
+
+        .consent-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .consent-row input {
+            width: 20px;
+            height: 20px;
+            flex: 0 0 auto;
+            margin-top: 2px;
+            accent-color: var(--color-primary);
+        }
+
+        .consent-row label {
+            color: var(--color-label);
+            font-size: var(--font-sm);
+            line-height: var(--lh-sm);
+        }
+
+        .consent-error {
+            display: block;
+            margin: 6px 0 0 32px;
+            color: var(--color-error);
+            font-size: var(--font-xs);
         }
 
         .upload-field__drop-zone {
@@ -854,8 +905,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <li><a href="index.php"      class="nav__item">Home</a></li>
                 <li><a href="<?= $step1_link ?>"   class="nav__item">Personal Info</a></li>
                 <li><a href="<?= $step2_link ?>"  class="nav__item">Academic Info</a></li>
-                <li><a href="<?= $step3_link ?>"  class="nav__item nav__item--active" aria-current="page">Requirements</a></li>
-                <li><a href="<?= $step4_link ?>"  class="nav__item">Assessment</a></li>
+                <li><a href="<?= $step3_link ?>"  class="nav__item">Assessment</a></li>
+                <li><a href="<?= $step4_link ?>"  class="nav__item nav__item--active" aria-current="page">Requirements</a></li>
             </ul>
         </nav>
     </div>
@@ -887,11 +938,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <!-- ── PROGRESS CARD ── -->
         <section class="progress-card" aria-label="Application progress">
             <div class="progress-card__header">
-                <span class="progress-card__step-label">Step 3 of 4</span>
-                <span class="progress-card__pct-label">75% Complete</span>
+                <span class="progress-card__step-label">Step 4 of 4</span>
+                <span class="progress-card__pct-label">100% Complete</span>
             </div>
 
-            <div class="progress-card__bar-track" role="progressbar" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100" aria-label="75% complete">
+            <div class="progress-card__bar-track" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" aria-label="100% complete">
                 <div class="progress-card__bar-fill"></div>
             </div>
 
@@ -914,8 +965,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <span class="step__label">Academic Info</span>
                 </a>
 
-                <!-- Step 3 – Requirements (current) -->
-                <div class="step step--active" role="listitem" aria-current="step">
+                <!-- Step 3 – Assessment (completed) -->
+                <a href="<?= $step3_link ?>" class="step step--active" style="order: 3" role="listitem">
                     <svg class="step__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M14 2V8H20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -923,19 +974,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <path d="M16 17H8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M10 9H9H8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    <span class="step__label">Requirements</span>
-                </div>
+                    <span class="step__label">Assessment</span>
+                </a>
 
-                <!-- Step 4 – Assessment (upcoming) -->
-                <a href="<?= $step4_link ?>" class="step step--inactive" role="listitem">
+                <!-- Step 4 – Requirements (current) -->
+                <div class="step step--active" style="order: 4" role="listitem" aria-current="step">
                     <svg class="step__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <rect x="3" y="3" width="18" height="18" rx="2" stroke="#99a1af" stroke-width="2"/>
                         <path d="M9 9H15" stroke="#99a1af" stroke-width="2" stroke-linecap="round"/>
                         <path d="M9 12H15" stroke="#99a1af" stroke-width="2" stroke-linecap="round"/>
                         <path d="M9 15H12" stroke="#99a1af" stroke-width="2" stroke-linecap="round"/>
                     </svg>
-                    <span class="step__label">Assessment</span>
-                </a>
+                    <span class="step__label">Requirements</span>
+                </div>
             </div>
         </section>
         <!-- /PROGRESS CARD -->
@@ -953,7 +1004,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <h2 class="section-heading__title" id="upload-heading">Upload Requirements</h2>
             </div>
 
-            <form method="POST" enctype="multipart/form-data" novalidate>
+            <form method="POST" enctype="multipart/form-data">
 
                 <div class="upload-fields">
 
@@ -1085,9 +1136,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 </div><!-- /upload-fields -->
 
+                <div class="consent-fields" aria-label="Required consents">
+                    <div>
+                        <div class="consent-row">
+                            <input
+                                type="checkbox"
+                                id="agree_terms"
+                                name="agree_terms"
+                                value="1"
+                                required
+                                <?= isset($_POST['agree_terms']) ? 'checked' : '' ?>
+                                aria-describedby="<?= !empty($errors['agree_terms']) ? 'terms-error' : '' ?>"
+                            />
+                            <label for="agree_terms">
+                                I agree to the <strong>Terms and Conditions</strong> of the Student Assistant Program and understand my responsibilities as a student assistant.
+                            </label>
+                        </div>
+                        <?php if (!empty($errors['agree_terms'])): ?>
+                            <span class="consent-error" id="terms-error" role="alert"><?= htmlspecialchars($errors['agree_terms']) ?></span>
+                        <?php endif; ?>
+                    </div>
+
+                    <div>
+                        <div class="consent-row">
+                            <input
+                                type="checkbox"
+                                id="agree_privacy"
+                                name="agree_privacy"
+                                value="1"
+                                required
+                                <?= isset($_POST['agree_privacy']) ? 'checked' : '' ?>
+                                aria-describedby="<?= !empty($errors['agree_privacy']) ? 'privacy-error' : '' ?>"
+                            />
+                            <label for="agree_privacy">
+                                I consent to the collection and processing of my personal data in accordance with the <strong>Data Privacy Act</strong> for SDAO purposes.
+                            </label>
+                        </div>
+                        <?php if (!empty($errors['agree_privacy'])): ?>
+                            <span class="consent-error" id="privacy-error" role="alert"><?= htmlspecialchars($errors['agree_privacy']) ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
                 <!-- ── ACTION BUTTONS ── -->
                 <div class="actions" style="margin-top: 32px;">
-                    <a href="register1.php" class="btn-back">
+                    <a href="register3.php" class="btn-back">
                         <svg class="btn-back__icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <path d="M15.8333 10H4.16667M4.16667 10L10 15.8333M4.16667 10L10 4.16667" stroke="#003087" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
@@ -1095,7 +1188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </a>
 
                     <button type="submit" class="btn-next">
-                        Next
+                        Submit Application
                         <svg class="btn-next__icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <path d="M4.16667 10H15.8333M15.8333 10L10 4.16667M15.8333 10L10 15.8333" stroke="white" stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>

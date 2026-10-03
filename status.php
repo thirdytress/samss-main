@@ -15,7 +15,7 @@ $date_submitted = (string) ($submission['date_submitted'] ?? date('F j, Y'));
 $status         = strtoupper((string) ($submission['status'] ?? 'PENDING'));
 $status_title   = '⏳ Application Under Review';
 $status_sub     = 'Your application is currently being reviewed by Miss Zai. This typically takes 1-3 business days.';
-$showAvailabilityCta = !empty($submission['success']);
+$showAvailabilityCta = !empty($submission['success']) && empty($submission['availability_complete']);
 
 if ($status === 'DRAFT') {
     $status_title = '📝 Application Saved as Draft';
