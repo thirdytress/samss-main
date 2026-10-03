@@ -164,7 +164,6 @@ function escape($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
       font-size: 15px;
     }
   </style>
-<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
   <div class="announcements-container">
@@ -216,6 +215,5 @@ function escape($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
       });
     });
   </script>
-<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

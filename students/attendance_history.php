@@ -684,7 +684,6 @@ function h(?string $value): string
 		}
 	</style>
 	<link rel="stylesheet" href="../assets/css/sams-shell.css" />
-<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
 	<div class="layout">
@@ -836,7 +835,6 @@ function h(?string $value): string
 			</div>
 		</main>
 	</div>
-<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 <!-- SAMS Student Portal Attendance History -->
 </html>

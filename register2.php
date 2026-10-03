@@ -149,7 +149,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="assets/css/sams-dark-mode.css?v=20260926" />
     <title>Student Assistant Application – Step 4</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1283,6 +1282,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 })();
 </script>
 
-<script src="assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>
