@@ -566,6 +566,7 @@ if ($applicationId > 0) {
         var applicationId = <?= (int) $applicationId ?>;
         var studentId = <?= (int) $studentId ?>;
         var termId = <?= (int) $termId ?>;
+        var isChangeRequest = <?= $isChangeRequest ? 'true' : 'false' ?>;
         var csrfToken = <?= json_encode(sams_csrf_token()) ?>;
         var existingAvailability = <?= json_encode($existingAvailability, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
@@ -700,7 +701,7 @@ if ($applicationId > 0) {
                     });
                 })
                 .then(function () {
-                    window.location.href = '../status.php';
+                    window.location.href = isChangeRequest ? 'schedule.php' : '../status.php';
                 })
                 .catch(function (error) {
                     showError(error.message || 'Unable to save availability.');

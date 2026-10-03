@@ -56,9 +56,23 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-function schedule_student_url(int $studentId, string $office, string $showStatus, string $day = ''): string
+function schedule_student_url(PDO $pdo, int $studentId, string $office, string $showStatus, string $day = ''): string
 {
     $params = ['student_id' => $studentId];
+    try {
+        $requestStmt = $pdo->prepare(
+            "SELECT request_id FROM availability_change_requests
+             WHERE student_id = :student_id AND status = 'pending'
+             ORDER BY requested_at DESC LIMIT 1"
+        );
+        $requestStmt->execute(['student_id' => $studentId]);
+        $requestId = (int) ($requestStmt->fetchColumn() ?: 0);
+        if ($requestId > 0) {
+            $params['request_id'] = $requestId;
+        }
+    } catch (Throwable $exception) {
+        // Existing scheduling links remain usable when the optional request table is unavailable.
+    }
     if ($office !== '') {
         $params['student_office'] = $office;
     }
@@ -421,7 +435,7 @@ $selectedAvailabilityRequest = null;
 if ($selectedRequestId > 0) {
     try {
         $requestDetailStmt = $pdo->prepare(
-            "SELECT r.request_id, r.application_id, r.student_id, r.proposed_availability,
+            "SELECT r.request_id, r.application_id, r.student_id, r.term_id, r.proposed_availability,
                     a.preferred_office, s.student_id_number, u.first_name, u.last_name
              FROM availability_change_requests r
              INNER JOIN applications a ON a.application_id = r.application_id
@@ -438,6 +452,16 @@ if ($selectedRequestId > 0) {
                 (string) $selectedAvailabilityRequest['proposed_availability'],
                 true
             ) ?: [];
+            $currentAvailabilityStmt = $pdo->prepare(
+                'SELECT day_of_week, start_time, end_time
+                 FROM availability
+                 WHERE application_id = :application_id AND term_id = :term_id'
+            );
+            $currentAvailabilityStmt->execute([
+                'application_id' => (int) $selectedAvailabilityRequest['application_id'],
+                'term_id' => (int) $selectedAvailabilityRequest['term_id'],
+            ]);
+            $selectedAvailabilityRequest['current_availability'] = $currentAvailabilityStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         }
     } catch (Throwable $exception) {
         $selectedAvailabilityRequest = null;
@@ -1025,10 +1049,27 @@ if ($selectedStudentId > 0) {
 $requestedSchedules = [];
 if ($selectedAvailabilityRequest) {
     foreach ($selectedAvailabilityRequest['proposed_availability'] as $requested) {
+        $requestedDay = schedule_day_label((string) ($requested['day_of_week'] ?? ''));
+        $requestedStart = substr((string) ($requested['time_start'] ?? ''), 0, 8);
+        $requestedEnd = substr((string) ($requested['time_end'] ?? ''), 0, 8);
+        $isExistingSlot = false;
+        foreach ($selectedAvailabilityRequest['current_availability'] as $current) {
+            if (
+                schedule_day_label((string) ($current['day_of_week'] ?? '')) === $requestedDay
+                && substr((string) ($current['start_time'] ?? ''), 0, 8) === $requestedStart
+                && substr((string) ($current['end_time'] ?? ''), 0, 8) === $requestedEnd
+            ) {
+                $isExistingSlot = true;
+                break;
+            }
+        }
+        if ($isExistingSlot) {
+            continue;
+        }
         $requestedSchedules[] = [
-            'day_of_week' => schedule_day_label((string) ($requested['day_of_week'] ?? '')),
-            'time_start' => (string) ($requested['time_start'] ?? ''),
-            'time_end' => (string) ($requested['time_end'] ?? ''),
+            'day_of_week' => $requestedDay,
+            'time_start' => $requestedStart,
+            'time_end' => $requestedEnd,
             'office_name' => (string) ($selectedAvailabilityRequest['preferred_office'] ?? ''),
             'student_name' => trim((string) $selectedAvailabilityRequest['first_name'] . ' ' . (string) $selectedAvailabilityRequest['last_name']),
             'student_code' => (string) ($selectedAvailabilityRequest['student_id_number'] ?? ''),
@@ -1285,29 +1326,6 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
             <div class="topbar__right"><div class="topbar__notif-btn" role="button" aria-label="Notifications" tabindex="0"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" fill="#4A5565"/></svg><span class="topbar__notif-dot" aria-hidden="true"></span></div><div class="topbar__user-info" aria-label="Logged in user"><div class="topbar__user-name"><?= h($admin_name) ?></div><div class="topbar__user-role"><?= h($admin_role) ?></div></div><div class="topbar__avatar" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="7" r="4" fill="white" opacity=".9"/><path d="M2 17c0-3.314 3.582-6 8-6s8 2.686 8 6" fill="white" opacity=".9"/></svg></div></div>
         </header>
         <main class="scheduling" id="main-content">
-            <?php if (!empty($availabilityChangeRequests)): ?>
-                <section class="alert" style="background:#fffbeb;color:#92400e;border-color:#fbbf24;">
-                    <strong><?= count($availabilityChangeRequests) ?> availability change request<?= count($availabilityChangeRequests) === 1 ? '' : 's' ?> pending.</strong>
-                    <?php foreach (array_slice($availabilityChangeRequests, 0, 5) as $request): ?>
-                        <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
-                            <span><?= h(trim((string) $request['first_name'] . ' ' . (string) $request['last_name'])) ?> — requested schedule changes</span>
-                            <a href="scheduling.php?request_id=<?= (int) $request['request_id'] ?>" style="color:#1d4ed8;text-decoration:underline;">View on calendar</a>
-                            <form method="post" action="availability_change_request.php" style="display:inline;">
-                                <input type="hidden" name="request_id" value="<?= (int) $request['request_id'] ?>">
-                                <input type="hidden" name="application_id" value="<?= (int) $request['application_id'] ?>">
-                                <input type="hidden" name="request_action" value="approve">
-                                <button class="btn-small" type="submit" style="background:#2563eb;color:#fff;">Approve</button>
-                            </form>
-                            <form method="post" action="availability_change_request.php" style="display:inline;">
-                                <input type="hidden" name="request_id" value="<?= (int) $request['request_id'] ?>">
-                                <input type="hidden" name="application_id" value="<?= (int) $request['application_id'] ?>">
-                                <input type="hidden" name="request_action" value="decline">
-                                <button class="btn-small" type="submit" style="background:#fee2e2;color:#991b1b;">Decline</button>
-                            </form>
-                        </div>
-                    <?php endforeach; ?>
-                </section>
-            <?php endif; ?>
             <div class="sched-header">
                                 <div class="sched-header__left"></div>
                 <div class="sched-header__right">
@@ -1433,7 +1451,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                             <?php foreach ($schedules as $schedule): ?>
                                                 <?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); ?>
                                                 <tr>
-                                                    <td><a class="schedule-table__student" href="<?= h(schedule_student_url((int) $schedule['student_id'], $selectedStudentOffice, $showStatus, (string) $schedule['day_of_week'])) ?>"><?= h($studentName) ?></a></td>
+                                                    <td><a class="schedule-table__student" href="<?= h(schedule_student_url($pdo, (int) $schedule['student_id'], $selectedStudentOffice, $showStatus, (string) $schedule['day_of_week'])) ?>"><?= h($studentName) ?></a></td>
                                                     <td><?= h((string) $schedule['office_name']) ?></td>
                                                     <td><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?></td>
                                                     <td><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></td>
@@ -1470,7 +1488,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                     $availRows = $availStmtRender->fetchAll(PDO::FETCH_ASSOC);
                                 ?>
                                 <div class="sched-item sched-item--<?= h(schedule_color($appOffice)) ?>">
-                                        <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $app['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($appName) ?></a>
+                                        <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url($pdo, (int) $app['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($appName) ?></a>
                                     <div class="sched-item__loc"><strong>Preferred Office:</strong> <?= h($appOffice) ?> · <span style="color:#6b7280"><?= h((string)$app['student_code']) ?></span></div>
                                     <div class="sched-item__time">
                                         <?php if (empty($availRows)): ?>
@@ -1498,7 +1516,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                     <?php foreach ($approvedApplicants as $app): ?>
                                         <?php $appName = trim((string)$app['first_name'] . ' ' . (string)$app['last_name']); $appOffice = (string)$app['preferred_office']; ?>
                                         <div class="sched-item sched-item--<?= h(schedule_color($appOffice)) ?>">
-                                            <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $app['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($appName) ?></a>
+                                            <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url($pdo, (int) $app['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($appName) ?></a>
                                             <div class="sched-item__loc">Preferred: <?= h($appOffice) ?> · <?= h((string)$app['student_code']) ?></div>
                                             <?php if (schedule_has_cor_document($pdo, (int) $app['application_id'])): ?>
                                                 <button type="button" class="btn-small" style="margin-top:10px;background:#e0f2fe;color:#075985;" onclick="openCorPreview(<?= (int) $app['application_id'] ?>)">View COR</button>
@@ -1518,7 +1536,7 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                     <?php foreach ($deployedStudents as $ds): ?>
                                         <?php $dName = trim((string)$ds['first_name'] . ' ' . (string)$ds['last_name']); $dOffice = (string)$ds['office_name']; ?>
                                         <div class="sched-item sched-item--<?= h(schedule_color($dOffice)) ?>">
-                                            <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $ds['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($dName) ?></a>
+                                            <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url($pdo, (int) $ds['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($dName) ?></a>
                                             <div class="sched-item__loc"><?= h($dOffice) ?> · <?= h((string)$ds['student_code']) ?></div>
                                             <?php if (schedule_has_cor_document($pdo, (int) $ds['application_id'])): ?>
                                                 <button type="button" class="btn-small" style="margin-top:10px;background:#e0f2fe;color:#075985;" onclick="openCorPreview(<?= (int) $ds['application_id'] ?>)">View COR</button>
