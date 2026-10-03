@@ -182,6 +182,34 @@ function schedule_has_column(PDO $pdo, string $table, string $column): bool
     return (int) $statement->fetchColumn() > 0;
 }
 
+function schedule_has_cor_document(PDO $pdo, int $applicationId): bool
+{
+    static $cache = [];
+    if (array_key_exists($applicationId, $cache)) {
+        return $cache[$applicationId];
+    }
+
+    if ($applicationId <= 0
+        || !schedule_has_column($pdo, 'document_uploads', 'application_id')
+        || !schedule_has_column($pdo, 'document_uploads', 'document_type')) {
+        return $cache[$applicationId] = false;
+    }
+
+    try {
+        $statement = $pdo->prepare(
+            "SELECT 1
+             FROM document_uploads
+             WHERE application_id = :application_id
+               AND LOWER(document_type) IN ('class_schedule', 'cor', 'certificate_of_registration')
+             LIMIT 1"
+        );
+        $statement->execute(['application_id' => $applicationId]);
+        return $cache[$applicationId] = (bool) $statement->fetchColumn();
+    } catch (Throwable $exception) {
+        return $cache[$applicationId] = false;
+    }
+}
+
 function calendar_block_style(string $start, string $end): string
 {
     $calendarStart = 8 * 60;
@@ -978,14 +1006,43 @@ $pendingApplications = $pendingApplicationsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // If a student is selected, load their preferred application and availability
 $selectedPreferred = null;
+$selectedCorDocument = null;
 if ($selectedStudentId > 0) {
-    $appStmt = $pdo->prepare('SELECT application_id, term_id, preferred_office, status FROM applications WHERE student_id = :sid ORDER BY application_id DESC LIMIT 1');
+    $appStmt = $pdo->prepare(
+        'SELECT a.application_id, a.term_id, a.preferred_office, a.status,
+                s.student_id_number AS student_code, s.program, s.year_level,
+                u.first_name, u.last_name, u.email
+         FROM applications a
+         INNER JOIN students s ON s.student_id = a.student_id
+         INNER JOIN users u ON u.user_id = s.user_id
+         WHERE a.student_id = :sid
+         ORDER BY a.application_id DESC
+         LIMIT 1'
+    );
     $appStmt->execute(['sid' => $selectedStudentId]);
     $selectedPreferred = $appStmt->fetch(PDO::FETCH_ASSOC) ?: null;
     if ($selectedPreferred) {
         $availStmt = $pdo->prepare("SELECT day_of_week, start_time AS time_start, end_time AS time_end FROM availability WHERE application_id = :aid AND term_id = :term_id ORDER BY FIELD(day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), start_time ASC");
         $availStmt->execute(['aid' => (int)$selectedPreferred['application_id'], 'term_id' => (int)$selectedPreferred['term_id']]);
         $selectedPreferred['availability'] = $availStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (schedule_has_column($pdo, 'document_uploads', 'application_id')
+            && schedule_has_column($pdo, 'document_uploads', 'document_type')
+            && schedule_has_column($pdo, 'document_uploads', 'file_path')) {
+            $documentOrder = schedule_has_column($pdo, 'document_uploads', 'uploaded_at')
+                ? 'uploaded_at DESC'
+                : (schedule_has_column($pdo, 'document_uploads', 'upload_id') ? 'upload_id DESC' : 'application_id DESC');
+            $corStmt = $pdo->prepare(
+                "SELECT file_path
+                 FROM document_uploads
+                 WHERE application_id = :application_id
+                   AND LOWER(document_type) IN ('class_schedule', 'cor', 'certificate_of_registration')
+                 ORDER BY {$documentOrder}
+                 LIMIT 1"
+            );
+            $corStmt->execute(['application_id' => (int) $selectedPreferred['application_id']]);
+            $selectedCorDocument = $corStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
     }
 }
 
@@ -1015,7 +1072,7 @@ $approvedApplicants = $approvedApplicantsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Deployed (students with schedules)
 $deployedSql =
-        "SELECT DISTINCT a.student_id, st.student_id_number AS student_code, u.first_name, u.last_name, COALESCE(ds.office_name, a.preferred_office) AS office_name
+    "SELECT DISTINCT a.application_id, a.student_id, st.student_id_number AS student_code, u.first_name, u.last_name, COALESCE(ds.office_name, a.preferred_office) AS office_name
      FROM duty_schedules ds
      INNER JOIN applications a ON a.application_id = ds.application_id
      INNER JOIN students st ON st.student_id = a.student_id
@@ -1101,6 +1158,22 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
         .sched-grid{max-width:1260px;margin:0 auto !important;display:flex !important;justify-content:center;gap:24px;align-items:flex-start}
         .sched-grid > .calendar-card{flex:0 0 900px;max-width:900px}
         .sched-grid > .sched-right{flex:0 0 360px;max-width:360px}
+        .schedule-table-card{margin-top:24px;overflow-x:auto}
+        .schedule-table{min-width:760px;table-layout:fixed}
+        .schedule-table th:nth-child(1){width:18%}
+        .schedule-table th:nth-child(2){width:26%}
+        .schedule-table th:nth-child(3){width:12%}
+        .schedule-table th:nth-child(4){width:19%}
+        .schedule-table th:nth-child(5){width:11%}
+        .schedule-table th:nth-child(6){width:14%}
+        .schedule-table th{padding:13px 16px;white-space:nowrap}
+        .schedule-table td{padding:14px 16px;vertical-align:middle;line-height:1.45;overflow-wrap:anywhere}
+        .schedule-table tbody tr{transition:background .15s ease}
+        .schedule-table tbody tr:hover{background:#f8fafc}
+        .schedule-table tbody tr:last-child td{border-bottom:0}
+        .schedule-table__student{display:inline-block;color:var(--color-primary);font-weight:700;line-height:1.35;text-decoration:none;text-underline-offset:3px}
+        .schedule-table__student:hover{text-decoration:underline}
+        @media(max-width:768px){.schedule-table{min-width:760px}}
     </style>
 </head>
 <body>
@@ -1158,6 +1231,24 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
 
                         <div class="sched-flex" style="display:flex;max-width:1260px;margin:0 auto;gap:24px;align-items:flex-start;">
                             <div style="flex:0 0 900px;max-width:900px;display:flex;flex-direction:column;gap:24px;">
+                                <?php if ($selectedPreferred): ?>
+                                    <?php $selectedStudentName = trim((string) $selectedPreferred['first_name'] . ' ' . (string) $selectedPreferred['last_name']); ?>
+                                    <section aria-label="Selected student information" style="display:grid;gap:16px;max-width:900px;width:100%;margin:0 auto;padding:18px 20px;background:#fff;border:1px solid var(--color-border);border-left:4px solid var(--color-primary);border-radius:12px;box-shadow:var(--shadow-card);">
+                                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                                            <div>
+                                                <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--color-muted);">Selected Student</div>
+                                                <h2 style="margin-top:4px;font-size:20px;line-height:1.3;font-weight:800;color:var(--color-heading);"> <?= h($selectedStudentName) ?></h2>
+                                            </div>
+                                            <span style="padding:6px 10px;border-radius:999px;background:var(--color-blue-bg);color:var(--color-blue-text);font-size:13px;font-weight:700;">ID <?= h((string) $selectedPreferred['student_code']) ?></span>
+                                        </div>
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 20px;">
+                                            <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-muted);">Program</div><div style="margin-top:4px;font-size:14px;font-weight:600;overflow-wrap:anywhere;"><?= h((string) $selectedPreferred['program']) ?></div></div>
+                                            <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-muted);">Year Level</div><div style="margin-top:4px;font-size:14px;font-weight:600;"><?= h((string) $selectedPreferred['year_level']) ?></div></div>
+                                            <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-muted);">Email</div><div style="margin-top:4px;font-size:14px;font-weight:600;overflow-wrap:anywhere;"><?= h((string) $selectedPreferred['email']) ?></div></div>
+                                            <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-muted);">Preferred Office</div><div style="margin-top:4px;font-size:14px;font-weight:600;overflow-wrap:anywhere;"><?= h((string) $selectedPreferred['preferred_office']) ?></div></div>
+                                        </div>
+                                    </section>
+                                <?php endif; ?>
                                 <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:8px;">
                                     <?php if ($selectedPreferred): ?>
                                         <span style="font-size:22px;font-weight:900;letter-spacing:0.5px;">Preferred Schedule</span>
@@ -1205,8 +1296,44 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                             <button type="button" class="btn-small" style="background:#eef2ff;color:#3730a3;min-width:150px;font-size:15px;box-shadow:0 2px 8px rgba(55,48,163,0.08);" onclick="alert('No schedule to edit.')">Edit Schedule</button>
                                         <?php endif; ?>
                                     <?php endif; ?>
+                                    <?php if ($selectedPreferred): ?>
+                                        <?php if ($selectedCorDocument): ?>
+                                            <button type="button" class="btn-small" style="background:#e0f2fe;color:#075985;min-width:130px;font-size:15px;" onclick="openCorPreview(<?= (int) $selectedPreferred['application_id'] ?>)">View COR</button>
+                                        <?php else: ?>
+                                            <span style="font-size:13px;color:var(--color-muted);">COR not uploaded</span>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 </div>
-                                <section class="table-card" style="margin-top:24px;"><table class="schedule-table"><thead><tr><th>Student</th><th>Office</th><th>Day</th><th>Time</th><th>Hours</th><th>Status</th><th>Action</th></tr></thead><tbody><?php if (!$schedules): ?><tr><td colspan="7">No schedules found. Click Auto Generate Schedule.</td></tr><?php endif; ?><?php foreach ($schedules as $schedule): ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); ?><tr><td><a href="<?= h(schedule_student_url((int) $schedule['student_id'], $selectedStudentOffice, $showStatus, (string) $schedule['day_of_week'])) ?>" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;"><?= h($studentName) ?></a></td><td><?= h((string) $schedule['office_name']) ?></td><td><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?></td><td><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></td><td><?= h(number_format((float) $schedule['required_hours'], 2)) ?>h</td><td><?= schedule_badge_html((string) $schedule['status']) ?></td><td><?php if ($schedule['status'] === 'deployed'): ?><button type="button" class="btn-small" style="background:#e5e7eb;color:#9ca3af;cursor:not-allowed;" disabled>Edit</button><?php else: ?><button type="button" class="btn-small" onclick="openEditModal(<?= (int)$schedule['student_id'] ?>)">Edit</button><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></section>
+                                <section class="table-card schedule-table-card">
+                                    <table class="schedule-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Student</th>
+                                                <th>Office</th>
+                                                <th>Day</th>
+                                                <th>Time</th>
+                                                <th>Hours</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (!$schedules): ?>
+                                                <tr><td colspan="6">No schedules found. Click Auto Generate Schedule.</td></tr>
+                                            <?php endif; ?>
+                                            <?php foreach ($schedules as $schedule): ?>
+                                                <?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); ?>
+                                                <tr>
+                                                    <td><a class="schedule-table__student" href="<?= h(schedule_student_url((int) $schedule['student_id'], $selectedStudentOffice, $showStatus, (string) $schedule['day_of_week'])) ?>"><?= h($studentName) ?></a></td>
+                                                    <td><?= h((string) $schedule['office_name']) ?></td>
+                                                    <td><?= h(schedule_day_label((string) $schedule['day_of_week'])) ?></td>
+                                                    <td><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></td>
+                                                    <td><?= h(number_format((float) $schedule['required_hours'], 2)) ?>h</td>
+                                                    <td><?= schedule_badge_html((string) $schedule['status']) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </section>
                             </div>
                             <div class="sched-right" style="flex:0 0 360px;max-width:360px;display:flex;flex-direction:column;gap:24px;">
                     <section class="card" aria-labelledby="pending-heading">
@@ -1244,6 +1371,11 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                             <?php endforeach; ?>
                                         <?php endif; ?>
                                     </div>
+                                    <?php if (schedule_has_cor_document($pdo, (int) $app['application_id'])): ?>
+                                        <button type="button" class="btn-small" style="margin-top:10px;background:#e0f2fe;color:#075985;" onclick="openCorPreview(<?= (int) $app['application_id'] ?>)">View COR</button>
+                                    <?php else: ?>
+                                        <span style="display:inline-block;margin-top:10px;font-size:12px;color:var(--color-muted);">COR not uploaded</span>
+                                    <?php endif; ?>
 
                                 </div>
                                 <?php endforeach; ?>
@@ -1258,6 +1390,11 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                         <div class="sched-item sched-item--<?= h(schedule_color($appOffice)) ?>">
                                             <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $app['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($appName) ?></a>
                                             <div class="sched-item__loc">Preferred: <?= h($appOffice) ?> · <?= h((string)$app['student_code']) ?></div>
+                                            <?php if (schedule_has_cor_document($pdo, (int) $app['application_id'])): ?>
+                                                <button type="button" class="btn-small" style="margin-top:10px;background:#e0f2fe;color:#075985;" onclick="openCorPreview(<?= (int) $app['application_id'] ?>)">View COR</button>
+                                            <?php else: ?>
+                                                <span style="display:inline-block;margin-top:10px;font-size:12px;color:var(--color-muted);">COR not uploaded</span>
+                                            <?php endif; ?>
 
                                         </div>
                                     <?php endforeach; ?>
@@ -1273,6 +1410,11 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                         <div class="sched-item sched-item--<?= h(schedule_color($dOffice)) ?>">
                                             <a class="sched-item__name sched-student-link" style="color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;" href="<?= h(schedule_student_url((int) $ds['student_id'], $selectedStudentOffice, $showStatus)) ?>"><?= h($dName) ?></a>
                                             <div class="sched-item__loc"><?= h($dOffice) ?> · <?= h((string)$ds['student_code']) ?></div>
+                                            <?php if (schedule_has_cor_document($pdo, (int) $ds['application_id'])): ?>
+                                                <button type="button" class="btn-small" style="margin-top:10px;background:#e0f2fe;color:#075985;" onclick="openCorPreview(<?= (int) $ds['application_id'] ?>)">View COR</button>
+                                            <?php else: ?>
+                                                <span style="display:inline-block;margin-top:10px;font-size:12px;color:var(--color-muted);">COR not uploaded</span>
+                                            <?php endif; ?>
                                         </div>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
@@ -1349,15 +1491,23 @@ var studentAvailability = <?= json_encode($selectedPreferred['availability'] ?? 
 var studentSchedules = <?= json_encode($schedules ?? []) ?>;
 
 function openEditModal(studentId) {
-    if (studentSchedules.length === 0) {
+    var selectedSchedules = studentSchedules.filter(function (schedule) {
+        return Number(schedule.student_id) === Number(studentId);
+    });
+
+    if (selectedSchedules.length === 0) {
         alert('No schedules available to edit for this student.');
         return;
     }
 
+    var student = selectedSchedules[0];
     document.getElementById('edit_student_id').value = studentId;
+    document.getElementById('edit_student_name').textContent = [student.first_name, student.last_name].filter(Boolean).join(' ') || 'Student';
+    document.getElementById('edit_student_number').textContent = student.student_code || 'Not available';
+    document.getElementById('edit_student_program').textContent = [student.program, student.year_level].filter(Boolean).join(' / ') || 'Not available';
 
     // Use the office from the first schedule
-    document.getElementById('edit_office').value = studentSchedules[0].office_name;
+    document.getElementById('edit_office').value = student.office_name;
 
     // Reset all checkboxes and inputs to default
     var days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1372,8 +1522,8 @@ function openEditModal(studentId) {
     }
 
     // Populate existing schedules
-    for (var i = 0; i < studentSchedules.length; i++) {
-        var s = studentSchedules[i];
+    for (var i = 0; i < selectedSchedules.length; i++) {
+        var s = selectedSchedules[i];
         var dayIdx = days.indexOf(s.day_of_week);
         if (dayIdx !== -1) {
             if (s.time_start < '12:30:00') {
@@ -1488,6 +1638,28 @@ function closeAppModal() {
     document.getElementById('appModal').style.display = 'none';
 }
 
+function openCorPreview(applicationId) {
+    var modal = document.getElementById('corPreviewModal');
+    var frame = document.getElementById('corPreviewFrame');
+    frame.src = 'scheduling_cor_preview.php?application_id=' + encodeURIComponent(String(applicationId));
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeCorPreview() {
+    var modal = document.getElementById('corPreviewModal');
+    var frame = document.getElementById('corPreviewFrame');
+    modal.style.display = 'none';
+    frame.src = 'about:blank';
+    document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') {
+        closeCorPreview();
+    }
+});
+
 </script>
 
 <div
@@ -1524,6 +1696,12 @@ function closeAppModal() {
             <svg style="width:24px;height:24px;color:#003087;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
             Edit Student Schedule
         </h2>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;padding:14px 16px;border:1px solid #d1d5dc;border-radius:12px;background:#f8fafc;flex-shrink:0;">
+            <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;">Student</div><strong id="edit_student_name" style="display:block;margin-top:4px;"></strong></div>
+            <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;">Student ID</div><strong id="edit_student_number" style="display:block;margin-top:4px;"></strong></div>
+            <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;">Program / Year</div><strong id="edit_student_program" style="display:block;margin-top:4px;"></strong></div>
+        </div>
 
         <form method="POST" id="edit-schedule-form" style="display:flex; flex-direction:column; min-height:0; flex:1;">
             <input type="hidden" name="action" value="edit_schedule">
@@ -1627,6 +1805,23 @@ function closeAppModal() {
         </form>
     </div>
 
+</div>
+
+<div
+    id="corPreviewModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="corPreviewTitle"
+    style="display:none;position:fixed;inset:0;background:rgba(16,24,40,.72);z-index:10000;align-items:center;justify-content:center;padding:20px;"
+    onclick="if(event.target === this) closeCorPreview()"
+>
+    <section style="display:flex;flex-direction:column;width:min(1100px,100%);height:min(90vh,900px);background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.25);">
+        <header style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--color-border);">
+            <h2 id="corPreviewTitle" style="margin:0;font-size:18px;">Certificate of Registration (COR)</h2>
+            <button type="button" class="btn-small" onclick="closeCorPreview()" aria-label="Close COR preview">Close</button>
+        </header>
+        <iframe id="corPreviewFrame" title="Student Certificate of Registration" style="width:100%;height:100%;border:0;background:#f8fafc;"></iframe>
+    </section>
 </div>
 
 <!-- Application detail modal -->
