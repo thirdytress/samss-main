@@ -74,6 +74,33 @@ $days = [
     'Friday',
     'Saturday',
 ];
+
+$existingAvailability = [];
+$pendingAvailabilityRequest = false;
+if ($applicationId > 0) {
+    $pdo = sams_pdo();
+    $availabilityStmt = $pdo->prepare(
+        "SELECT day_of_week, start_time, end_time, notes
+         FROM availability WHERE application_id = :application_id AND term_id = :term_id
+         ORDER BY FIELD(day_of_week, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'), start_time ASC"
+    );
+    try {
+        $availabilityStmt->execute(['application_id' => $applicationId, 'term_id' => $termId]);
+        $existingAvailability = $availabilityStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $exception) {
+        $existingAvailability = [];
+    }
+    try {
+        $pendingStmt = $pdo->prepare(
+            "SELECT request_id FROM availability_change_requests
+             WHERE application_id = :application_id AND status = 'pending' LIMIT 1"
+        );
+        $pendingStmt->execute(['application_id' => $applicationId]);
+        $pendingAvailabilityRequest = (bool) $pendingStmt->fetchColumn();
+    } catch (Throwable $exception) {
+        $pendingAvailabilityRequest = false;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -398,7 +425,6 @@ $days = [
             }
         }
     </style>
-<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 
 <body>
@@ -410,6 +436,9 @@ $days = [
         </section>
 
         <section class="card">
+            <?php if ($pendingAvailabilityRequest): ?>
+                <div class="notice">Your latest availability changes are waiting for administrator approval. Your current duty schedule remains unchanged until approved.</div>
+            <?php endif; ?>
             <?php if ($message !== ''): ?>
                 <div class="notice"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
@@ -530,6 +559,21 @@ $days = [
         var studentId = <?= (int) $studentId ?>;
         var termId = <?= (int) $termId ?>;
         var csrfToken = <?= json_encode(sams_csrf_token()) ?>;
+        var existingAvailability = <?= json_encode($existingAvailability, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+        existingAvailability.forEach(function (row) {
+            var dayRow = document.querySelector('.day-row[data-day="' + row.day_of_week + '"]');
+            if (!dayRow) return;
+            var period = parseInt(String(row.start_time || '').split(':')[0], 10) < 12 ? 'morning' : 'afternoon';
+            var enabled = dayRow.querySelector('.availability-enabled-' + period);
+            var start = dayRow.querySelector('.availability-start-' + period);
+            var end = dayRow.querySelector('.availability-end-' + period);
+            var note = dayRow.querySelector('.availability-note-' + period);
+            if (enabled) enabled.checked = true;
+            if (start) start.value = String(row.start_time || '').slice(0, 5);
+            if (end) end.value = String(row.end_time || '').slice(0, 5);
+            if (note) note.value = row.notes || '';
+        });
 
         function showError(message) {
             errorBox.textContent = message;
@@ -657,6 +701,5 @@ $days = [
         }
     })();
     </script>
-<script src="../assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

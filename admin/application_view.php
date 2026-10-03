@@ -563,6 +563,7 @@ unset($_SESSION['sams_app_flash'], $_SESSION['sams_app_error']);
                 <div id="availability" class="card__body">
                     <div class="loading">Loading availability...</div>
                 </div>
+                <div id="availability-change-request" class="card__body" hidden></div>
             </section>
         </main>
     </div>
@@ -590,6 +591,7 @@ unset($_SESSION['sams_app_flash'], $_SESSION['sams_app_error']);
     var infoContainer = document.getElementById('app-info');
     var docsContainer = document.getElementById('docs');
     var availabilityContainer = document.getElementById('availability');
+    var changeRequestContainer = document.getElementById('availability-change-request');
     var noteModal = document.getElementById('availability-note-modal');
     var noteModalClose = document.getElementById('availability-note-close');
     var noteModalSlot = document.getElementById('availability-note-slot');
@@ -650,6 +652,7 @@ unset($_SESSION['sams_app_flash'], $_SESSION['sams_app_error']);
                 '<div class="item"><div class="item__label">Email</div><div class="item__value">' + escapeHtml(text(app.email, '-')) + '</div></div>' +
                 '<div class="item"><div class="item__label">Student ID</div><div class="item__value">' + escapeHtml(text(app.student_code, '-')) + '</div></div>' +
                 '<div class="item"><div class="item__label">Program / Year</div><div class="item__value">' + escapeHtml(program + ' / ' + yearLevel) + '</div></div>' +
+                '<div class="item"><div class="item__label">Units</div><div class="item__value">' + escapeHtml(text(app.units, 'Not recorded')) + '</div></div>' +
                 '<div class="item"><div class="item__label">Preferred Office</div><div class="item__value">' + escapeHtml(text(app.preferred_office, '-')) + '</div></div>' +
                 '<div class="item"><div class="item__label">Hours per Week</div><div class="item__value">' + escapeHtml(text(app.available_hours_per_week, '-')) + '</div></div>' +
                 '<div class="item"><div class="item__label">Term</div><div class="item__value">' + escapeHtml(text(app.term_name, '-')) + ' (' + escapeHtml(text(app.school_year, '-')) + ')</div></div>' +
@@ -700,6 +703,27 @@ unset($_SESSION['sams_app_flash'], $_SESSION['sams_app_error']);
         if (!Array.isArray(rows) || rows.length === 0) {
             availabilityContainer.innerHTML = '<div class="empty">No availability submitted.</div>';
             return;
+        }
+
+        function renderChangeRequest(request) {
+            if (!changeRequestContainer) return;
+            if (!request || request.status !== 'pending') {
+                changeRequestContainer.hidden = true;
+                changeRequestContainer.innerHTML = '';
+                return;
+            }
+            var rows = Array.isArray(request.proposed_availability) ? request.proposed_availability : [];
+            var summary = rows.map(function (row) {
+                return escapeHtml(text(row.day_of_week, '') + ' ' + text(row.time_start, '') + '–' + text(row.time_end, ''));
+            }).join(', ');
+            changeRequestContainer.hidden = false;
+            changeRequestContainer.innerHTML =
+                '<div class="review-notice" style="border-color:#fbbf24;background:#fffbeb;color:#92400e;">' +
+                '<strong>Pending availability change request</strong><br>' + summary +
+                '<div class="review-actions__buttons" style="margin-top:12px;">' +
+                '<form method="post" action="availability_change_request.php"><input type="hidden" name="request_id" value="' + escapeHtml(request.request_id) + '"><input type="hidden" name="application_id" value="' + applicationId + '"><input type="hidden" name="request_action" value="approve"><button class="review-action-button review-action-button--accept" type="submit">Approve changes</button></form>' +
+                '<form method="post" action="availability_change_request.php"><input type="hidden" name="request_id" value="' + escapeHtml(request.request_id) + '"><input type="hidden" name="application_id" value="' + applicationId + '"><input type="hidden" name="request_action" value="decline"><button class="review-action-button review-action-button--decline" type="submit">Decline changes</button></form>' +
+                '</div></div>';
         }
 
         function toMinutes(timeValue) {
@@ -872,6 +896,7 @@ unset($_SESSION['sams_app_flash'], $_SESSION['sams_app_error']);
             renderInfo(json.application || {});
             renderDocs(json.documents || []);
             renderAvailability(json.availability || []);
+            renderChangeRequest(json.availability_change_request || null);
         })
         .catch(function (error) {
             renderError(error.message || 'Failed to load application details.');

@@ -230,23 +230,24 @@ if (isset($_GET['finalize'])) {
 
             $userId = (int) $pdo->lastInsertId();
 
+            $studentColumns = ['user_id', 'student_id_number', 'program', 'year_level', 'current_gpa', 'is_enrolled', 'is_good_standing'];
+            $studentValues = [':user_id', ':student_code', ':program', ':year_level', ':current_gpa', ':is_enrolled', ':is_good_standing'];
+            $studentParams = [
+                'user_id' => $userId, 'student_code' => $studentCode, 'program' => $course,
+                'year_level' => $yearLevel, 'current_gpa' => $gpa !== '' ? $gpa : null,
+                'is_enrolled' => 1, 'is_good_standing' => 1,
+            ];
+            if (sams_column_exists($pdo, 'students', 'units')) {
+                $studentColumns[] = 'units';
+                $studentValues[] = ':units';
+                $studentParams['units'] = (int) ($step2['units'] ?? 0);
+            }
             $studentStatement = $pdo->prepare(
-                "INSERT INTO students (
-                    user_id, student_id_number, program, year_level, current_gpa,
-                    is_enrolled, is_good_standing
-                 ) VALUES (
-                    :user_id, :student_code, :program, :year_level, :current_gpa,
-                    :is_enrolled, :is_good_standing
-                 )"
+                'INSERT INTO students (' . implode(', ', $studentColumns) . ')
+                 VALUES (' . implode(', ', $studentValues) . ')'
             );
             $studentStatement->execute([
-                'user_id' => $userId,
-                'student_code' => $studentCode,
-                'program' => $course,
-                'year_level' => $yearLevel,
-                'current_gpa' => $gpa !== '' ? $gpa : null,
-                'is_enrolled' => 1,
-                'is_good_standing' => 1,
+                ...$studentParams,
             ]);
 
             $studentId = (int) $pdo->lastInsertId();
@@ -1113,7 +1114,6 @@ $val_skills = htmlspecialchars((string) ($_POST['skills'] ?? ($step3['skills'] ?
             }
         }
     </style>
-    <link rel="stylesheet" href="assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
 
@@ -1267,6 +1267,7 @@ $val_skills = htmlspecialchars((string) ($_POST['skills'] ?? ($step3['skills'] ?
                         <div>
                             <label class="field__label">Weekly Availability *</label>
                             <p>Select your available morning and/or afternoon hours. Each selected slot must be at least 2 hours, with at least 10 hours total per week.</p>
+                            <p id="monthly-hours-preview" style="margin-top:8px;font-weight:700;color:#1e3a8a;" role="status"></p>
                         </div>
                         <?php if (!empty($errors['availability'])): ?>
                             <span class="availability-error" role="alert"><?= htmlspecialchars($errors['availability'], ENT_QUOTES, 'UTF-8') ?></span>
@@ -1421,6 +1422,36 @@ $val_skills = htmlspecialchars((string) ($_POST['skills'] ?? ($step3['skills'] ?
 })();
 </script>
 
-<script src="assets/js/sams-theme.js?v=20260926"></script>
+<script>
+(function () {
+    var preview = document.getElementById('monthly-hours-preview');
+    if (!preview) return;
+    var units = <?= (int) ($step2['units'] ?? 0) ?>;
+    var minimum = units <= 14 ? 100 : (units <= 18 ? 75 : 50);
+    function updatePreview() {
+        var total = 0;
+        document.querySelectorAll('.availability-slot').forEach(function (slot) {
+            var checkbox = slot.querySelector('input[type="checkbox"]');
+            var times = slot.querySelectorAll('input[type="time"]');
+            if (!checkbox || !checkbox.checked || times.length !== 2) return;
+            var start = times[0].value.split(':');
+            var end = times[1].value.split(':');
+            if (start.length !== 2 || end.length !== 2) return;
+            var hours = ((parseInt(end[0], 10) * 60 + parseInt(end[1], 10)) -
+                (parseInt(start[0], 10) * 60 + parseInt(start[1], 10))) / 60;
+            if (hours > 0) total += hours;
+        });
+        var monthly = total * 4.33;
+        preview.textContent = 'Possible duty: ' + monthly.toFixed(1) + ' hours/month. Minimum for ' + units + ' units: ' + minimum + ' hours/month' + (monthly < minimum ? ' - warning: below minimum.' : ' - meets minimum.');
+        preview.style.color = monthly < minimum ? '#991b1b' : '#166534';
+    }
+    document.querySelectorAll('.availability-slot input').forEach(function (input) {
+        input.addEventListener('input', updatePreview);
+        input.addEventListener('change', updatePreview);
+    });
+    updatePreview();
+}());
+</script>
+
 </body>
 </html>

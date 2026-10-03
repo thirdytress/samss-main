@@ -49,6 +49,13 @@ function sams_schedule_event_height(string $startTime, string $endTime, int $hou
   return (int) round(($durationMinutes / 60) * $hourHeight);
 }
 
+function sams_monthly_minimum_hours(int $units): int
+{
+  if ($units <= 14) return 100;
+  if ($units <= 18) return 75;
+  return 50;
+}
+
 function sams_schedule_date_for_day(string $day): string
 {
   $map = [
@@ -94,6 +101,9 @@ $acceptedSchedules = 0;
 $pendingSchedules = 0;
 $declinedSchedules = 0;
 $notificationCount = 0;
+$studentUnits = 0;
+$monthlyMinimumHours = 0;
+$estimatedMonthlyHours = 0.0;
 
 $userId = (int) ($currentUser['user_id'] ?? $currentUser['id'] ?? 0);
 if ($userId > 0) {
@@ -113,6 +123,19 @@ if ($userId > 0) {
     $studentId = (int) ($studentRow['id'] ?? 0);
 
     if ($studentId > 0) {
+      $unitsColumn = sams_column_exists($pdo, 'students', 'units') ? 's.units' : 'NULL';
+      $unitsStmt = $pdo->prepare(
+        "SELECT COALESCE({$unitsColumn}, 0), a.available_hours_per_week
+         FROM students s
+         LEFT JOIN applications a ON a.student_id = s.student_id
+         WHERE s.student_id = :student_id
+         ORDER BY a.application_id DESC LIMIT 1"
+      );
+      $unitsStmt->execute(['student_id' => $studentId]);
+      $unitsRow = $unitsStmt->fetch(PDO::FETCH_NUM) ?: [0, 0];
+      $studentUnits = (int) ($unitsRow[0] ?? 0);
+      $monthlyMinimumHours = sams_monthly_minimum_hours($studentUnits);
+
       $schedStmt = $pdo->prepare(
           "SELECT ds.duty_id AS id,
             COALESCE(NULLIF(TRIM(ds.office_name), ''), NULLIF(TRIM(a.preferred_office), ''), 'Unassigned') AS office_name,
@@ -160,9 +183,12 @@ if ($userId > 0) {
 
       $totalDays = count($seenAcceptedDays);
       $notificationCount = $pendingSchedules + ($declinedSchedules > 0 ? 1 : 0);
+      $estimatedMonthlyHours = $totalHours * 4.33;
     }
   }
 }
+
+$monthlyHoursWarning = $studentUnits > 0 && $estimatedMonthlyHours < $monthlyMinimumHours;
 
 $calendarDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 $calendarByDay = array_fill_keys($calendarDays, []);
@@ -1239,7 +1265,6 @@ if (!empty($studentSchedules)) {
     }
   </style>
 <link rel="stylesheet" href="../assets/css/notifications-shell.css?v=20260922" />
-<link rel="stylesheet" href="../assets/css/sams-dark-mode.css?v=20260926" />
 </head>
 <body>
 
@@ -1357,6 +1382,11 @@ if (!empty($studentSchedules)) {
           </div>
           <div class="page-header__sub">View and manage your weekly duty schedule</div>
         </div>
+        <?php if ($monthlyHoursWarning): ?>
+          <div style="margin:0 0 20px;padding:14px 16px;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;color:#991b1b;font-weight:700;">
+            ⚠ Your current schedule is estimated at <?= htmlspecialchars(number_format($estimatedMonthlyHours, 1), ENT_QUOTES, 'UTF-8') ?> hours/month, below the <?= (int) $monthlyMinimumHours ?>-hour minimum for <?= (int) $studentUnits ?> units. Please coordinate with the admin if you need to request an availability change.
+          </div>
+        <?php endif; ?>
         <div class="page-header__actions">
           <div class="view-toggle" role="group" aria-label="View mode">
             <button class="view-toggle__btn view-toggle__btn--active" id="btn-calendar" aria-pressed="true">
@@ -1845,7 +1875,6 @@ if (!empty($studentSchedules)) {
 }());
 </script>
 <script src="../assets/js/student-notifications.js?v=20260922"></script>
-<script src="../assets/js/sams-theme.js?v=20260926"></script>
 
 </body>
 </html>

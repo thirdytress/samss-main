@@ -17,17 +17,22 @@ $errors = [];
 $values = [
     'course'          => '',
     'year_level'      => '',
+    'units'           => '',
     'gpa'             => '',
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $values['course']          = trim($_POST['course']          ?? '');
     $values['year_level']      = trim($_POST['year_level']      ?? '');
+    $values['units']           = trim($_POST['units']           ?? '');
     $values['gpa']             = trim($_POST['gpa']             ?? '');
 
     // Required fields validation
     if ($values['course']          === '') $errors['course']          = 'Course/Program is required.';
     if ($values['year_level']      === '') $errors['year_level']      = 'Year Level is required.';
+    if ($values['units'] === '' || filter_var($values['units'], FILTER_VALIDATE_INT) === false || (int) $values['units'] < 1 || (int) $values['units'] > 40) {
+        $errors['units'] = 'Enter your current units (1-40).';
+    }
 
     // Optional GPA – validate format if provided
     if ($values['gpa'] !== '' && !preg_match('/^\d+(\.\d{1,2})?$/', $values['gpa'])) {
@@ -67,7 +72,6 @@ function isSelected(string $key, string $option, array $values): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="assets/css/sams-dark-mode.css?v=20260926" />
   <title>Apply – Academic Info | SAMS NU Lipa</title>
   <meta name="description" content="Step 2 of the Student Assistant application – Academic Information." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -645,6 +649,24 @@ function isSelected(string $key, string $option, array $values): string {
             <?php echo err('gpa', $errors); ?>
           </div>
 
+          <div class="form__group">
+            <label class="form__label" for="units">Current Units *</label>
+            <input
+              class="<?php echo inputClass('units', $errors); ?>"
+              type="number"
+              id="units"
+              name="units"
+              min="1"
+              max="40"
+              step="1"
+              placeholder="e.g., 18"
+              value="<?php echo val('units', $values); ?>"
+              required
+              aria-required="true"
+            />
+            <?php echo err('units', $errors); ?>
+          </div>
+
 
 
         </div><!-- /.form__grid -->
@@ -750,6 +772,5 @@ function isSelected(string $key, string $option, array $values): string {
     })();
   </script>
 
-<script src="assets/js/sams-theme.js?v=20260926"></script>
 </body>
 </html>

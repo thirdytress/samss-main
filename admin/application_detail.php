@@ -72,6 +72,7 @@ try {
         throw new RuntimeException('Required database ID columns are missing.');
     }
 
+    $unitsSelect = sams_admin_column_exists($pdo, 'students', 'units') ? 's.units' : 'NULL AS units';
     $applicationStmt = $pdo->prepare(
         "SELECT
             a.{$applicationIdColumn} AS application_id,
@@ -88,6 +89,7 @@ try {
             s.student_id_number AS student_code,
             s.program,
             s.year_level,
+            {$unitsSelect},
             t.term_name,
             t.term_year AS school_year
          FROM applications a
@@ -149,6 +151,22 @@ try {
             $availabilityStmt->execute(['application_id' => $applicationId]);
             $availability = $availabilityStmt->fetchAll();
         }
+
+        $availabilityChangeRequest = null;
+        if (sams_admin_column_exists($pdo, 'availability_change_requests', 'request_id')) {
+            $requestStmt = $pdo->prepare(
+                "SELECT request_id, proposed_availability, status, requested_at, review_note
+                 FROM availability_change_requests
+                 WHERE application_id = :application_id
+                 ORDER BY request_id DESC LIMIT 1"
+            );
+            $requestStmt->execute(['application_id' => $applicationId]);
+            $availabilityChangeRequest = $requestStmt->fetch() ?: null;
+            if ($availabilityChangeRequest && is_string($availabilityChangeRequest['proposed_availability'])) {
+                $decoded = json_decode($availabilityChangeRequest['proposed_availability'], true);
+                $availabilityChangeRequest['proposed_availability'] = is_array($decoded) ? $decoded : [];
+            }
+        }
     }
 
     echo json_encode([
@@ -156,6 +174,7 @@ try {
         'application' => $application,
         'documents' => $documents,
         'availability' => $availability,
+        'availability_change_request' => $availabilityChangeRequest,
     ]);
     exit;
 } catch (Throwable $exception) {

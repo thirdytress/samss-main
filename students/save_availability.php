@@ -150,6 +150,70 @@ try {
         throw new RuntimeException('Application record not found.');
     }
 
+    $statusStmt = $pdo->prepare('SELECT status FROM applications WHERE application_id = :application_id LIMIT 1');
+    $statusStmt->execute(['application_id' => $applicationId]);
+    $applicationStatus = (string) ($statusStmt->fetchColumn() ?: '');
+
+    // Submitted applications keep their current schedule until an administrator
+    // explicitly approves the proposed availability.
+    if ($applicationStatus !== 'draft') {
+        $proposedEntries = [];
+        $proposedHours = 0.0;
+        foreach ($entries as $entry) {
+            $day = normalize_day_of_week((string) ($entry['day_of_week'] ?? ''));
+            $timeStart = trim((string) ($entry['time_start'] ?? ''));
+            $timeEnd = trim((string) ($entry['time_end'] ?? ''));
+            if ($day === '' || $timeStart === '' || $timeEnd === '') {
+                continue;
+            }
+            if (!in_array($day, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], true)) {
+                continue;
+            }
+            $hours = calculate_slot_hours($timeStart, $timeEnd);
+            if ($hours < 2) {
+                throw new RuntimeException(sprintf('Each availability slot must be at least 2 hours. %s slot is %.1f hours.', $day, $hours));
+            }
+            $proposedHours += $hours;
+            $proposedEntries[] = [
+                'day_of_week' => $day,
+                'time_start' => $timeStart,
+                'time_end' => $timeEnd,
+                'notes' => substr(trim((string) ($entry['notes'] ?? '')), 0, 500),
+            ];
+        }
+        if (empty($proposedEntries) || $proposedHours < 10) {
+            throw new RuntimeException('Minimum required availability is 10 hours per week.');
+        }
+
+        $pendingStmt = $pdo->prepare(
+            "SELECT request_id FROM availability_change_requests
+             WHERE application_id = :application_id AND status = 'pending' LIMIT 1"
+        );
+        $pendingStmt->execute(['application_id' => $applicationId]);
+        if ($pendingStmt->fetchColumn()) {
+            throw new RuntimeException('You already have a pending availability change request.');
+        }
+
+        $requestStmt = $pdo->prepare(
+            'INSERT INTO availability_change_requests
+             (application_id, student_id, term_id, proposed_availability, status, requested_at)
+             VALUES (:application_id, :student_id, :term_id, :proposed_availability, \'pending\', NOW())'
+        );
+        $requestStmt->execute([
+            'application_id' => $applicationId,
+            'student_id' => $studentId,
+            'term_id' => $termId,
+            'proposed_availability' => json_encode($proposedEntries, JSON_THROW_ON_ERROR),
+        ]);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Availability change request submitted for admin approval.',
+            'request_pending' => true,
+        ]);
+        exit;
+    }
+
     // Ensure notes column exists. Do not alter schema at runtime; require migration.
     $checkColumn = $pdo->prepare(
         "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
