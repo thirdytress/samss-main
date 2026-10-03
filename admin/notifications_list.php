@@ -116,7 +116,7 @@ try {
             'preferred_office' => 'Scheduling',
             'snippet' => $name . ' requested a change to their time availability.',
             'created_at' => (string) $row['requested_at'],
-            'link_url' => 'application_view.php?application_id=' . (int) $row['application_id'],
+            'link_url' => 'scheduling.php?request_id=' . (int) $row['request_id'],
         ];
     }
 

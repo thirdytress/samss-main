@@ -11,9 +11,10 @@ if (!$user || ($user['role'] ?? null) !== 'admin') {
 
 $requestId = (int) ($_POST['request_id'] ?? 0);
 $action = (string) ($_POST['request_action'] ?? '');
+$returnTo = (string) ($_POST['return_to'] ?? 'scheduling');
 if ($requestId <= 0 || !in_array($action, ['approve', 'decline'], true)) {
     $_SESSION['sams_app_error'] = 'Invalid availability request.';
-    header('Location: application.php');
+    header('Location: scheduling.php');
     exit;
 }
 
@@ -108,5 +109,9 @@ try {
 }
 
 $applicationId = (int) ($_POST['application_id'] ?? 0);
-header('Location: application_view.php?application_id=' . $applicationId);
+if ($returnTo === 'application' && $applicationId > 0) {
+    header('Location: application_view.php?application_id=' . $applicationId);
+} else {
+    header('Location: scheduling.php');
+}
 exit;

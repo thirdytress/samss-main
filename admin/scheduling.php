@@ -416,6 +416,34 @@ if ($selectedStudentId <= 0) {
     $selectedStudentId = 0;
 }
 
+$selectedRequestId = (int) ($_GET['request_id'] ?? 0);
+$selectedAvailabilityRequest = null;
+if ($selectedRequestId > 0) {
+    try {
+        $requestDetailStmt = $pdo->prepare(
+            "SELECT r.request_id, r.application_id, r.student_id, r.proposed_availability,
+                    a.preferred_office, s.student_id_number, u.first_name, u.last_name
+             FROM availability_change_requests r
+             INNER JOIN applications a ON a.application_id = r.application_id
+             INNER JOIN students s ON s.student_id = r.student_id
+             INNER JOIN users u ON u.user_id = s.user_id
+             WHERE r.request_id = :request_id AND r.status = 'pending'
+             LIMIT 1"
+        );
+        $requestDetailStmt->execute(['request_id' => $selectedRequestId]);
+        $selectedAvailabilityRequest = $requestDetailStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($selectedAvailabilityRequest) {
+            $selectedStudentId = (int) $selectedAvailabilityRequest['student_id'];
+            $selectedAvailabilityRequest['proposed_availability'] = json_decode(
+                (string) $selectedAvailabilityRequest['proposed_availability'],
+                true
+            ) ?: [];
+        }
+    } catch (Throwable $exception) {
+        $selectedAvailabilityRequest = null;
+    }
+}
+
 $selectedDay = trim((string) ($_GET['day'] ?? ''));
 if (!in_array($selectedDay, $days, true)) {
     $selectedDay = '';
@@ -994,6 +1022,20 @@ if ($selectedStudentId > 0) {
     $schedules = [];
 }
 
+$requestedSchedules = [];
+if ($selectedAvailabilityRequest) {
+    foreach ($selectedAvailabilityRequest['proposed_availability'] as $requested) {
+        $requestedSchedules[] = [
+            'day_of_week' => schedule_day_label((string) ($requested['day_of_week'] ?? '')),
+            'time_start' => (string) ($requested['time_start'] ?? ''),
+            'time_end' => (string) ($requested['time_end'] ?? ''),
+            'office_name' => (string) ($selectedAvailabilityRequest['preferred_office'] ?? ''),
+            'student_name' => trim((string) $selectedAvailabilityRequest['first_name'] . ' ' . (string) $selectedAvailabilityRequest['last_name']),
+            'student_code' => (string) ($selectedAvailabilityRequest['student_id_number'] ?? ''),
+        ];
+    }
+}
+
 $approvedStudentsSql = "SELECT COUNT(*) FROM applications
      WHERE status = 'approved'
        AND preferred_office IN ('ITSO','SDAO','Registrar','Guidance Office','Library','Accounting Office','Admissions Office','Clinic','Cashier')";
@@ -1247,9 +1289,22 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                 <section class="alert" style="background:#fffbeb;color:#92400e;border-color:#fbbf24;">
                     <strong><?= count($availabilityChangeRequests) ?> availability change request<?= count($availabilityChangeRequests) === 1 ? '' : 's' ?> pending.</strong>
                     <?php foreach (array_slice($availabilityChangeRequests, 0, 5) as $request): ?>
-                        <a href="application_view.php?application_id=<?= (int) $request['application_id'] ?>" style="display:block;margin-top:8px;color:#92400e;text-decoration:underline;">
-                            <?= h(trim((string) $request['first_name'] . ' ' . (string) $request['last_name'])) ?> — review requested availability changes
-                        </a>
+                        <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
+                            <span><?= h(trim((string) $request['first_name'] . ' ' . (string) $request['last_name'])) ?> — requested schedule changes</span>
+                            <a href="scheduling.php?request_id=<?= (int) $request['request_id'] ?>" style="color:#1d4ed8;text-decoration:underline;">View on calendar</a>
+                            <form method="post" action="availability_change_request.php" style="display:inline;">
+                                <input type="hidden" name="request_id" value="<?= (int) $request['request_id'] ?>">
+                                <input type="hidden" name="application_id" value="<?= (int) $request['application_id'] ?>">
+                                <input type="hidden" name="request_action" value="approve">
+                                <button class="btn-small" type="submit" style="background:#2563eb;color:#fff;">Approve</button>
+                            </form>
+                            <form method="post" action="availability_change_request.php" style="display:inline;">
+                                <input type="hidden" name="request_id" value="<?= (int) $request['request_id'] ?>">
+                                <input type="hidden" name="application_id" value="<?= (int) $request['application_id'] ?>">
+                                <input type="hidden" name="request_action" value="decline">
+                                <button class="btn-small" type="submit" style="background:#fee2e2;color:#991b1b;">Decline</button>
+                            </form>
+                        </div>
                     <?php endforeach; ?>
                 </section>
             <?php endif; ?>
@@ -1310,7 +1365,8 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                                     <?php endif; ?>
                                 </div>
                                 <section class="calendar-card" aria-label="Weekly schedule calendar" style="margin-left:auto;margin-right:auto;">
-                                    <div class="cal-days" role="row"><div class="cal-days__time-gutter" aria-hidden="true"></div><?php foreach ($days as $day): ?><div class="cal-days__day"><div class="cal-days__day-name"><?= h($dayShort[$day]) ?></div><div class="cal-days__day-num"><?= h($day) ?></div></div><?php endforeach; ?></div><div class="cal-body" role="grid" aria-label="Calendar time grid"><div class="cal-time-col" aria-hidden="true"><?php foreach ($hours as $hour): ?><div class="cal-time-slot"><?= date('g A', strtotime(sprintf('%02d:00:00', $hour))) ?></div><?php endforeach; ?></div><?php foreach ($days as $day): ?><div class="cal-day-col" role="gridcell" aria-label="<?= h($day) ?>"><?php foreach ($hours as $_): ?><div class="cal-day-col__slot"></div><?php endforeach; ?><?php foreach ($schedules as $schedule): ?><?php $scheduleDay = schedule_day_label((string) $schedule['day_of_week']); if ($scheduleDay !== $day || $schedule['status'] === 'declined') continue; ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); $office = (string) $schedule['office_name']; $statusStr = strtolower(trim($schedule['status'])); $color = match($statusStr) { 'deployed' => 'blue', 'accepted' => 'green', 'assigned', 'pending' => 'red', default => 'yellow' }; ?><div class="sched-block sched-block--<?= h($color) ?>" style="<?= h(calendar_block_style((string) $schedule['time_start'], (string) $schedule['time_end'])) ?>" title="<?= h($studentName . ' - ' . $office) ?>"><div class="sched-block__name"><?= h($studentName) ?></div><div class="sched-block__time"><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></div><div class="sched-block__loc"><?= h($office) ?></div></div><?php endforeach; ?></div><?php endforeach; ?></div>
+                                    <div class="cal-days" role="row"><div class="cal-days__time-gutter" aria-hidden="true"></div><?php foreach ($days as $day): ?><div class="cal-days__day"><div class="cal-days__day-name"><?= h($dayShort[$day]) ?></div><div class="cal-days__day-num"><?= h($day) ?></div></div><?php endforeach; ?></div><div class="cal-body" role="grid" aria-label="Calendar time grid"><div class="cal-time-col" aria-hidden="true"><?php foreach ($hours as $hour): ?><div class="cal-time-slot"><?= date('g A', strtotime(sprintf('%02d:00:00', $hour))) ?></div><?php endforeach; ?></div><?php foreach ($days as $day): ?><div class="cal-day-col" role="gridcell" aria-label="<?= h($day) ?>"><?php foreach ($hours as $_): ?><div class="cal-day-col__slot"></div><?php endforeach; ?>                                    <?php foreach ($schedules as $schedule): ?><?php $scheduleDay = schedule_day_label((string) $schedule['day_of_week']); if ($scheduleDay !== $day || $schedule['status'] === 'declined') continue; ?><?php $studentName = trim((string) $schedule['first_name'] . ' ' . (string) $schedule['last_name']); $office = (string) $schedule['office_name']; $statusStr = strtolower(trim($schedule['status'])); $color = match($statusStr) { 'deployed' => 'blue', 'accepted' => 'green', 'assigned', 'pending' => 'red', default => 'yellow' }; ?><div class="sched-block sched-block--<?= h($color) ?>" style="<?= h(calendar_block_style((string) $schedule['time_start'], (string) $schedule['time_end'])) ?>" title="<?= h($studentName . ' - ' . $office) ?>"><div class="sched-block__name"><?= h($studentName) ?></div><div class="sched-block__time"><?= h(display_time((string) $schedule['time_start']) . ' – ' . display_time((string) $schedule['time_end'])) ?></div><div class="sched-block__loc"><?= h($office) ?></div></div><?php endforeach; ?>
+                                    <?php foreach ($requestedSchedules as $requested): ?><?php if ($requested['day_of_week'] !== $day) continue; ?><div class="sched-block sched-block--blue" style="<?= h(calendar_block_style((string) $requested['time_start'], (string) $requested['time_end'])) ?>;outline:3px solid #93c5fd;" title="<?= h($requested['student_name'] . ' - Requested availability') ?>"><div class="sched-block__name"><?= h($requested['student_name']) ?></div><div class="sched-block__time"><?= h(display_time((string) $requested['time_start']) . ' – ' . display_time((string) $requested['time_end'])) ?></div><div class="sched-block__loc">Requested change · <?= h($requested['office_name']) ?></div></div><?php endforeach; ?></div><?php endforeach; ?></div>
                                 </section>
                                 <?php
                                 $isStudentDeployed = false;
