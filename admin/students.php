@@ -10,6 +10,7 @@ if (!$currentUser || (($currentUser['role'] ?? null) !== 'admin')) {
 }
 
 $pdo = sams_pdo();
+$courseOptions = sams_course_options();
 
 $applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
 
@@ -53,6 +54,7 @@ $studentStmt = $pdo->query(
     s.year_level,
     s.current_gpa,
     s.is_enrolled,
+    latest_app.application_status,
     COALESCE(u.first_name, '') AS first_name,
     COALESCE(u.last_name, '') AS last_name,
     COALESCE(latest_app.preferred_office, 'Unassigned') AS preferred_office,
@@ -60,15 +62,24 @@ $studentStmt = $pdo->query(
     COALESCE(rating.avg_rating, 0) AS avg_rating
    FROM students s
    LEFT JOIN users u ON u.user_id = s.user_id
-   LEFT JOIN (
-    SELECT a1.student_id, a1.preferred_office
+   INNER JOIN (
+    SELECT a1.student_id, a1.preferred_office,
+      CASE
+        WHEN a1.status = 'approved' AND EXISTS (
+          SELECT 1
+          FROM duty_schedules ds
+          WHERE ds.application_id = a1.application_id
+            AND ds.status = 'deployed'
+        ) THEN 'deployed'
+        ELSE a1.status
+      END AS application_status
     FROM applications a1
     INNER JOIN (
       SELECT student_id, MAX(application_id) AS application_id
       FROM applications
       GROUP BY student_id
     ) latest ON latest.application_id = a1.application_id
-   ) latest_app ON latest_app.student_id = s.student_id
+  ) latest_app ON latest_app.student_id = s.student_id
    LEFT JOIN (
     SELECT a.student_id,
          SUM(TIMESTAMPDIFF(SECOND, al.clock_in_time, al.clock_out_time) / 3600) AS total_hours
@@ -88,7 +99,8 @@ $studentStmt = $pdo->query(
       AND e.reliability_rating IS NOT NULL
       AND e.professionalism_rating IS NOT NULL
     GROUP BY a.student_id
-   ) rating ON rating.student_id = s.student_id
+  ) rating ON rating.student_id = s.student_id
+  WHERE latest_app.application_status IN ('approved', 'deployed')
    ORDER BY s.is_enrolled DESC, u.last_name ASC, u.first_name ASC, s.student_id DESC"
 );
 $students = $studentStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -117,15 +129,17 @@ foreach ($students as $student) {
 $inactiveStudents = max(0, $totalStudents - $activeStudents);
 $departmentCount = count($officeNames);
 $averageRating = !empty($ratingValues) ? array_sum($ratingValues) / count($ratingValues) : 0.0;
+$approvedStudents = count(array_filter($students, static fn (array $student): bool => ($student['application_status'] ?? '') === 'approved'));
+$deployedStudents = count(array_filter($students, static fn (array $student): bool => ($student['application_status'] ?? '') === 'deployed'));
 
-function sams_student_status_class(int $isEnrolled): string
+function sams_student_status_class(string $applicationStatus): string
 {
-  return $isEnrolled === 1 ? 'badge badge--active' : 'badge badge--inactive';
+  return $applicationStatus === 'deployed' ? 'badge badge--deployed' : 'badge badge--approved';
 }
 
-function sams_student_status_label(int $isEnrolled): string
+function sams_student_status_label(string $applicationStatus): string
 {
-  return $isEnrolled === 1 ? 'Active' : 'Inactive';
+  return $applicationStatus === 'deployed' ? 'Deployed' : 'Approved';
 }
 
 function sams_student_rating_display(float $rating): string
@@ -486,6 +500,18 @@ function sams_html(string $value): string
       flex-wrap: wrap;
     }
     .toolbar__left { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+    .program-filter-select {
+      height: 36px;
+      min-width: 220px;
+      max-width: 280px;
+      padding: 0 12px;
+      border: 1px solid var(--color-input-border);
+      border-radius: var(--radius-md);
+      background: var(--color-white);
+      color: var(--color-dark);
+      font: inherit;
+      font-size: var(--font-sm);
+    }
 
     .toolbar__search { position: relative; }
     .toolbar__search-icon {
@@ -617,6 +643,8 @@ function sams_html(string $value): string
     }
     .badge--active   { background: var(--color-active-bg);   color: var(--color-active-text);   }
     .badge--inactive { background: var(--color-inactive-bg); color: var(--color-inactive-text); }
+    .badge--approved { background: #dcfce7; color: #166534; }
+    .badge--deployed { background: #dbeafe; color: #1d4ed8; }
 
     /* View button */
     .btn-view {
@@ -809,6 +837,7 @@ function sams_html(string $value): string
       width: fit-content;
     }
     .student-profile-modal__pill--green { background: #dcfce7; color: #166534; }
+    .student-profile-modal__pill--blue { background: #dbeafe; color: #1d4ed8; }
     .student-profile-modal__pill--red { background: #fef2f2; color: #b91c1c; }
     .student-profile-modal__summary {
       display: grid;
@@ -946,6 +975,7 @@ function sams_html(string $value): string
       .toolbar { flex-direction: column; align-items: stretch; }
       .toolbar__left { flex-wrap: wrap; }
       .toolbar__search input { width: 100%; }
+      .program-filter-select { width: 100%; max-width: none; }
     }
   </style>
 </head>
@@ -1007,7 +1037,7 @@ function sams_html(string $value): string
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
               <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Active
+            Enrolled
           </div>
           <div class="stat-card__value"><?php echo (int) $activeStudents; ?></div>
         </div>
@@ -1042,8 +1072,14 @@ function sams_html(string $value): string
               aria-label="Search students" />
           </div>
           <button class="filter-btn filter-btn--active"   data-filter="all"      aria-pressed="true">All <span class="filter-btn__count"><?php echo (int) $totalStudents; ?></span></button>
-          <button class="filter-btn filter-btn--inactive" data-filter="active"   aria-pressed="false">Active <span class="filter-btn__count"><?php echo (int) $activeStudents; ?></span></button>
-          <button class="filter-btn filter-btn--inactive" data-filter="inactive" aria-pressed="false">Inactive <span class="filter-btn__count"><?php echo (int) $inactiveStudents; ?></span></button>
+          <button class="filter-btn filter-btn--inactive" data-filter="approved" aria-pressed="false">Approved <span class="filter-btn__count"><?php echo (int) $approvedStudents; ?></span></button>
+          <button class="filter-btn filter-btn--inactive" data-filter="deployed" aria-pressed="false">Deployed <span class="filter-btn__count"><?php echo (int) $deployedStudents; ?></span></button>
+          <select id="program-filter" class="program-filter-select" aria-label="Filter students by course or program">
+            <option value="">All Courses / Programs</option>
+            <?php foreach ($courseOptions as $courseCode => $courseLabel): ?>
+              <option value="<?php echo sams_html($courseCode); ?>"><?php echo sams_html($courseLabel); ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
         <a class="btn-export" href="#" aria-label="Export student list">
           <svg class="btn-export__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1071,6 +1107,7 @@ function sams_html(string $value): string
               <?php foreach ($students as $student): ?>
               <?php
                 $isEnrolled = (int) ($student['is_enrolled'] ?? 0);
+                $applicationStatus = (string) ($student['application_status'] ?? 'approved');
                 $studentName = trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($student['last_name'] ?? ''));
                 if ($studentName === '') {
                     $studentName = 'Unassigned Student';
@@ -1082,7 +1119,7 @@ function sams_html(string $value): string
                 $rating = sams_student_rating_display((float) ($student['avg_rating'] ?? 0));
                 $yearLabel = sams_student_year_label($student['year_level'] ?? '');
               ?>
-              <tr data-status="<?php echo $isEnrolled === 1 ? 'active' : 'inactive'; ?>">
+              <tr data-status="<?php echo sams_html($applicationStatus); ?>" data-program="<?php echo sams_html((string) ($student['program'] ?? '')); ?>">
                 <td>
                   <div class="student-cell">
                     <div class="student-cell__avatar" aria-hidden="true"><?php echo sams_html(sams_student_cell_initials($student)); ?></div>
@@ -1102,7 +1139,7 @@ function sams_html(string $value): string
                     <span class="rating__val"><?php echo sams_html($rating); ?></span>
                   </div>
                 </td>
-                <td><span class="badge <?php echo sams_student_status_class($isEnrolled); ?>"><?php echo sams_html(sams_student_status_label($isEnrolled)); ?></span></td>
+                <td><span class="badge <?php echo sams_student_status_class($applicationStatus); ?>"><?php echo sams_html(sams_student_status_label($applicationStatus)); ?></span></td>
                 <td>
                   <button class="btn-view" data-student-id="<?= (int) ($student['student_id'] ?? 0) ?>" aria-label="View <?php echo sams_html($studentName); ?> profile">
                     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg>
@@ -1134,10 +1171,25 @@ function sams_html(string $value): string
     /* ---- Filter buttons ---- */
     var filterBtns = document.querySelectorAll('.filter-btn');
     var rows       = document.querySelectorAll('#table-body tr');
+    var activeStatusFilter = 'all';
+    var programFilter = document.getElementById('program-filter');
+    var searchInput = document.getElementById('search-input');
+
+    function applyStudentFilters() {
+      var selectedProgram = programFilter ? programFilter.value.toLowerCase().trim() : '';
+      var searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+      rows.forEach(function (row) {
+        var matchesStatus = activeStatusFilter === 'all' || row.getAttribute('data-status') === activeStatusFilter;
+        var matchesProgram = !selectedProgram || (row.getAttribute('data-program') || '').toLowerCase().trim() === selectedProgram;
+        var matchesSearch = !searchQuery || row.textContent.toLowerCase().includes(searchQuery);
+        row.style.display = matchesStatus && matchesProgram && matchesSearch ? '' : 'none';
+      });
+    }
 
     filterBtns.forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var filter = btn.getAttribute('data-filter');
+        activeStatusFilter = btn.getAttribute('data-filter');
 
         filterBtns.forEach(function (b) {
           b.classList.remove('filter-btn--active');
@@ -1148,21 +1200,17 @@ function sams_html(string $value): string
         btn.classList.remove('filter-btn--inactive');
         btn.setAttribute('aria-pressed', 'true');
 
-        rows.forEach(function (row) {
-          var status = row.getAttribute('data-status');
-          row.style.display = (filter === 'all' || status === filter) ? '' : 'none';
-        });
+        applyStudentFilters();
       });
     });
 
     /* ---- Live search ---- */
-    var searchInput = document.getElementById('search-input');
-    searchInput.addEventListener('input', function () {
-      var q = this.value.toLowerCase().trim();
-      rows.forEach(function (row) {
-        row.style.display = (!q || row.textContent.toLowerCase().includes(q)) ? '' : 'none';
-      });
-    });
+    if (searchInput) {
+      searchInput.addEventListener('input', applyStudentFilters);
+    }
+    if (programFilter) {
+      programFilter.addEventListener('change', applyStudentFilters);
+    }
 
   }());
 
@@ -1226,7 +1274,7 @@ function sams_html(string $value): string
   }
 
   function statusBadgeClass(kind) {
-    return kind === 'green' ? 'green' : 'red';
+    return kind === 'green' ? 'green' : (kind === 'blue' ? 'blue' : 'red');
   }
 
   function renderSkillChips(skills) {
@@ -1306,7 +1354,7 @@ function sams_html(string $value): string
     html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Course/Program</span><span class="student-profile-modal__field-value">' + program + '</span></div>';
     html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Year Level</span><span class="student-profile-modal__field-value">' + yearLevel + '</span></div>';
     html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Date Joined SAMS</span><span class="student-profile-modal__field-value">' + joinedAt + '</span></div>';
-    html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Status</span><span class="student-profile-modal__pill student-profile-modal__pill--' + statusBadgeClass(d.student_status_class) + '">' + studentStatus + '</span></div>';
+    html += '<div class="student-profile-modal__field"><span class="student-profile-modal__field-label">Enrollment Status</span><span class="student-profile-modal__pill student-profile-modal__pill--' + statusBadgeClass(d.student_status_class) + '">' + studentStatus + '</span></div>';
     html += '</div></div>';
 
     html += '<div class="student-profile-modal__info-card">';

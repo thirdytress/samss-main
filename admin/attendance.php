@@ -11,7 +11,7 @@ if (!$currentUser || (($currentUser['role'] ?? null) !== 'admin')) {
 $admin_name = (string) ($currentUser['name'] ?? 'SAMS Admin');
 
 $pdo = sams_pdo();
-$attendanceMonthSummary = sams_attendance_month_summary($pdo);
+$attendanceOfficeOptions = array_merge(sams_office_options(), ['Unassigned']);
 
 $applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
 
@@ -69,6 +69,7 @@ if ($activeTermId > 0) {
 $attendance_rows = [];
 $activeNow = 0;
 $completedToday = 0;
+$recordedSeconds = 0;
 $totalSchedules = count($todayRows);
 $officeSummary = [];
 
@@ -92,6 +93,11 @@ foreach ($todayRows as $row) {
     }
     if ($timeIn !== null && $timeOut !== null) {
         $completedToday++;
+        $startTimestamp = strtotime($timeIn);
+        $endTimestamp = strtotime($timeOut);
+        if ($startTimestamp !== false && $endTimestamp !== false && $endTimestamp > $startTimestamp) {
+            $recordedSeconds += $endTimestamp - $startTimestamp;
+        }
     }
 
     $officeName = (string) ($row['office_name'] ?? 'Unassigned');
@@ -111,6 +117,7 @@ foreach ($todayRows as $row) {
         'dot' => sams_admin_attendance_dot($status),
         'name' => sams_admin_attendance_display_name($row),
         'office' => $officeName,
+        'date_label' => $currentDateLabel ?? date('D, M j, Y'),
         'schedule_start' => (string) ($row['start_time'] ?? ''),
         'time_in' => $timeIn ? date('g:i A', strtotime($timeIn)) : '-',
         'time_out' => $timeOut ? date('g:i A', strtotime($timeOut)) : ($timeIn ? 'In Progress' : '-'),
@@ -154,6 +161,7 @@ foreach ($officeSummary as $office) {
 }
 
 $verifiedCount = $completedToday + $activeNow;
+$attendanceRate = $totalSchedules > 0 ? (int) round(($verifiedCount / $totalSchedules) * 100) : 0;
 
 $currentDateLabel = date('l, F j, Y');
 ?>
@@ -577,6 +585,7 @@ $currentDateLabel = date('l, F j, Y');
             cursor: pointer;
             transition: border-color 0.15s;
         }
+        .filter-select.office-filter { width: 280px; }
         .filter-select:focus { border-color: var(--clr-blue); }
 
         /* Export Button */
@@ -664,80 +673,101 @@ $currentDateLabel = date('l, F j, Y');
         .table-card {
             background: var(--clr-white);
             border: 1px solid var(--clr-border);
-            border-radius: var(--radius-md);
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(16, 24, 40, .06);
             overflow: hidden;
         }
 
         .table-card__header {
             border-bottom: 1px solid var(--clr-border);
-            padding: var(--sp-24);
+            padding: 18px 22px;
             display: flex;
-            flex-direction: column;
-            gap: var(--sp-4);
-            min-height: 101px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            min-height: 76px;
+            background: #fff;
         }
 
         .table-card__title {
             font-size: var(--fs-md);
             font-weight: bold;
             color: var(--clr-text-primary);
-            line-height: 28px;
+            line-height: 1.3;
+            letter-spacing: 0;
         }
 
         .table-card__date {
             font-size: var(--fs-sm);
             color: var(--clr-text-muted);
-            line-height: 20px;
+            line-height: 1.4;
+            padding: 6px 10px;
+            border: 1px solid var(--clr-border);
+            border-radius: 7px;
+            background: #f8fafc;
+            white-space: nowrap;
         }
 
         /* Table */
-        .att-table-wrap { overflow-x: auto; }
+        .att-table-wrap { max-height: min(68vh, 720px); overflow: auto; }
 
         .att-table {
             width: 100%;
-            min-width: 900px;
+            min-width: 1080px;
             border-collapse: collapse;
             table-layout: fixed;
         }
 
-        .att-table col.col-sa       { width: 19%; }
-        .att-table col.col-office   { width: 15%; }
-        .att-table col.col-timein   { width: 18%; }
-        .att-table col.col-timeout  { width: 13%; }
-        .att-table col.col-duration { width: 11%; }
-        .att-table col.col-method   { width: 12%; }
-        .att-table col.col-status   { width: 12%; }
+        .att-table col.col-sa       { width: 18%; }
+        .att-table col.col-date     { width: 12%; }
+        .att-table col.col-office   { width: 16%; }
+        .att-table col.col-timein   { width: 12%; }
+        .att-table col.col-timeout  { width: 12%; }
+        .att-table col.col-duration { width: 10%; }
+        .att-table col.col-method   { width: 10%; }
+        .att-table col.col-status   { width: 10%; }
 
         .att-table thead th {
-            background: var(--clr-bg);
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f8fafc;
             border-bottom: 1px solid var(--clr-border);
-            padding: 16px var(--sp-24);
+            padding: 13px 16px;
             text-align: left;
-            font-size: var(--fs-sm);
-            font-weight: bold;
+            font-size: 11px;
+            font-weight: 700;
             color: var(--clr-text-primary);
-            height: 52.5px;
+            text-transform: uppercase;
+            height: 44px;
         }
 
         .att-table tbody tr {
             border-bottom: 1px solid var(--clr-border);
+            transition: background .15s ease;
         }
         .att-table tbody tr:last-child { border-bottom: none; }
+        .att-table tbody tr:hover { background: #f8fafc; }
 
         .att-table tbody td {
-            padding: 0 var(--sp-24);
-            height: 57px;
+            padding: 12px 16px;
+            min-height: 56px;
             vertical-align: middle;
-            font-size: var(--fs-base);
+            font-size: 13px;
             color: var(--clr-text-primary);
-            line-height: 24px;
+            line-height: 1.45;
         }
+
+        .att-date { color: var(--clr-text-muted) !important; white-space: nowrap; }
+        .att-office { font-weight: 600; overflow-wrap: anywhere; }
+        .att-table__empty { padding: 36px 20px !important; text-align: center; color: var(--clr-text-muted) !important; }
 
         /* Name cell with dot */
         .att-name {
             display: flex;
             align-items: center;
             gap: var(--sp-12);
+            font-weight: 600;
         }
 
         .att-dot {
@@ -770,10 +800,11 @@ $currentDateLabel = date('l, F j, Y');
         .att-status {
             display: inline-flex;
             align-items: center;
-            height: 24px;
-            padding: 4px 12px;
+            min-height: 26px;
+            padding: 4px 10px;
             border-radius: var(--radius-pill);
             font-size: var(--fs-xs);
+            font-weight: 700;
             white-space: nowrap;
         }
         .att-status--completed { background: var(--clr-status-completed-bg); color: var(--clr-status-completed-text); }
@@ -950,6 +981,8 @@ $currentDateLabel = date('l, F j, Y');
             .stat-card { min-height: auto; }
             .search-wrap { width: 100%; }
             .filter-select { width: 120px; }
+            .filter-select.office-filter { width: 100%; }
+            .table-card__header { align-items: flex-start; flex-direction: column; padding: 16px; }
             .btn-export { font-size: var(--fs-sm); height: 38px; }
             .security-stats { grid-template-columns: 1fr 1fr; }
         }
@@ -1032,6 +1065,12 @@ $currentDateLabel = date('l, F j, Y');
                         <option value="week">This Week</option>
                         <option value="month">This Month</option>
                     </select>
+                    <select class="filter-select office-filter" aria-label="Filter by office" id="officeFilter">
+                        <option value="all">All Offices</option>
+                        <?php foreach ($attendanceOfficeOptions as $officeOption): ?>
+                            <option value="<?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
                     <select class="filter-select" aria-label="Filter by scheduled shift" id="scheduleShiftFilter">
                         <option value="all">All schedules</option>
                         <option value="morning">Morning</option>
@@ -1059,10 +1098,10 @@ $currentDateLabel = date('l, F j, Y');
                                 <path d="M10 6v4l2.5 2.5" stroke="#00A63E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </div>
-                        <span class="stat-card__pct">90%</span>
+                        <span class="stat-card__pct" id="metric-attendance-rate"><?= $attendanceRate ?>%</span>
                     </div>
-                    <div class="stat-card__value" id="metric-on-time">38/42</div>
-                    <div class="stat-card__label">On Time Today</div>
+                    <div class="stat-card__value" id="metric-on-time"><?= $verifiedCount ?>/<?= $totalSchedules ?></div>
+                    <div class="stat-card__label">Attendance Recorded</div>
                 </div>
                 <!-- Avg Hours/Day -->
                 <div class="stat-card">
@@ -1074,8 +1113,8 @@ $currentDateLabel = date('l, F j, Y');
                         </div>
                         <span class="stat-card__pct">Live</span>
                     </div>
-                    <div class="stat-card__value" id="metric-avg-hours"><?= htmlspecialchars(sams_attendance_format_duration((int) $attendanceMonthSummary['average_seconds_per_day']), ENT_QUOTES, 'UTF-8') ?></div>
-                    <div class="stat-card__label">Avg. Hours/Day</div>
+                    <div class="stat-card__value" id="metric-scheduled-shifts"><?= $totalSchedules ?></div>
+                    <div class="stat-card__label">Scheduled Shifts</div>
                 </div>
                 <!-- Active Now -->
                 <div class="stat-card">
@@ -1086,10 +1125,10 @@ $currentDateLabel = date('l, F j, Y');
                                 <path d="M2 17c0-3.314 3.582-6 8-6s8 2.686 8 6" stroke="#9810FA" stroke-width="1.5" stroke-linecap="round"/>
                             </svg>
                         </div>
-                        <span class="stat-card__pct">57%</span>
+                        <span class="stat-card__pct">Live</span>
                     </div>
                     <div class="stat-card__value" id="metric-active-now">24</div>
-                    <div class="stat-card__label">Active Now</div>
+                    <div class="stat-card__label">In Progress</div>
                 </div>
                 <!-- This Month -->
                 <div class="stat-card">
@@ -1103,21 +1142,22 @@ $currentDateLabel = date('l, F j, Y');
                         </div>
                         <span class="stat-card__pct">Live</span>
                     </div>
-                    <div class="stat-card__value" id="metric-month-hours"><?= htmlspecialchars(sams_attendance_format_duration((int) $attendanceMonthSummary['rendered_seconds']), ENT_QUOTES, 'UTF-8') ?></div>
-                    <div class="stat-card__label">This Month</div>
+                    <div class="stat-card__value" id="metric-total-hours"><?= htmlspecialchars(sams_attendance_format_duration($recordedSeconds), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="stat-card__label">Hours Recorded</div>
                 </div>
             </div>
 
             <!-- Attendance Table -->
             <div class="table-card">
                 <div class="table-card__header">
-                    <h2 class="table-card__title">Today's Attendance Log</h2>
-                    <p class="table-card__date"><?php echo htmlspecialchars($currentDateLabel, ENT_QUOTES, 'UTF-8'); ?></p>
+                    <h2 class="table-card__title" id="attendance-table-title">Today's Attendance Log</h2>
+                    <p class="table-card__date" id="attendance-period-label"><?php echo htmlspecialchars($currentDateLabel, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
                 <div class="att-table-wrap">
                     <table class="att-table" aria-label="Today's attendance log">
                         <colgroup>
                             <col class="col-sa">
+                            <col class="col-date">
                             <col class="col-office">
                             <col class="col-timein">
                             <col class="col-timeout">
@@ -1128,6 +1168,7 @@ $currentDateLabel = date('l, F j, Y');
                         <thead>
                             <tr>
                                 <th scope="col">Student Assistant</th>
+                                <th scope="col">Date</th>
                                 <th scope="col">Office</th>
                                 <th scope="col">Time In</th>
                                 <th scope="col">Time Out</th>
@@ -1137,6 +1178,9 @@ $currentDateLabel = date('l, F j, Y');
                             </tr>
                         </thead>
                         <tbody id="attendanceTableBody">
+                            <?php if (empty($attendance_rows)): ?>
+                            <tr><td class="att-table__empty" colspan="8">No attendance records for today.</td></tr>
+                            <?php else: ?>
                             <?php foreach ($attendance_rows as $row): ?>
                             <tr data-schedule-start="<?= htmlspecialchars((string) ($row['schedule_start'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                 <td>
@@ -1145,7 +1189,8 @@ $currentDateLabel = date('l, F j, Y');
                                         <?= htmlspecialchars($row['name']) ?>
                                     </div>
                                 </td>
-                                <td><?= htmlspecialchars($row['office']) ?></td>
+                                <td class="att-date"><?= htmlspecialchars($row['date_label']) ?></td>
+                                <td class="att-office"><?= htmlspecialchars($row['office']) ?></td>
                                 <td><?= htmlspecialchars($row['time_in']) ?></td>
                                 <td><?= htmlspecialchars($row['time_out']) ?></td>
                                 <td><span class="att-duration"><?= htmlspecialchars($row['duration']) ?></span></td>
@@ -1155,12 +1200,13 @@ $currentDateLabel = date('l, F j, Y');
                                     $st = strtolower($row['status']);
                                     $cls = 'att-status--scheduled';
                                     if ($st === 'present' || $st === 'completed') $cls = 'att-status--completed';
-                                    elseif ($st === 'late' || $st === 'active') $cls = 'att-status--active';
+                                    elseif ($st === 'late' || $st === 'active' || $st === 'in progress') $cls = 'att-status--active';
                                     ?>
                                     <span class="att-status <?= $cls ?>"><?= htmlspecialchars($row['status']) ?></span>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -1175,12 +1221,12 @@ $currentDateLabel = date('l, F j, Y');
                     <p class="security-panel__desc">All attendance logs verified with QR Code + PIN/OTP validation</p>
                     <div class="security-stats">
                         <div class="security-stat">
-                            <span class="security-stat__value" id="security-verified">156</span>
+                            <span class="security-stat__value" id="security-verified"><?= (int) $verifiedCount ?></span>
                             <span class="security-stat__label">Verified Logs</span>
                         </div>
                         <div class="security-stat">
-                            <span class="security-stat__value" id="security-accuracy">100%</span>
-                            <span class="security-stat__label">Accuracy</span>
+                            <span class="security-stat__value" id="security-accuracy"><?= $attendanceRate ?>%</span>
+                            <span class="security-stat__label">Attendance Rate</span>
                         </div>
                     </div>
                 </div>
@@ -1283,7 +1329,7 @@ $currentDateLabel = date('l, F j, Y');
             var emptyRow = document.createElement('tr');
             emptyRow.setAttribute('data-filter-empty', 'true');
             var emptyCell = document.createElement('td');
-            emptyCell.colSpan = 7;
+            emptyCell.colSpan = 8;
             emptyCell.textContent = 'No schedules match this shift and search.';
             emptyRow.appendChild(emptyCell);
             tableBody.appendChild(emptyRow);
@@ -1309,17 +1355,22 @@ $currentDateLabel = date('l, F j, Y');
     var endpoint = 'attendance_data.php';
     var tableBody = document.getElementById('attendanceTableBody');
     var metricOnTime = document.getElementById('metric-on-time');
+    var metricAttendanceRate = document.getElementById('metric-attendance-rate');
+    var metricScheduledShifts = document.getElementById('metric-scheduled-shifts');
     var metricActive = document.getElementById('metric-active-now');
-    var metricAverageHours = document.getElementById('metric-avg-hours');
-    var metricMonthHours = document.getElementById('metric-month-hours');
+    var metricTotalHours = document.getElementById('metric-total-hours');
     var officeBars = document.getElementById('officeBars');
     var securityVerified = document.getElementById('security-verified');
     var securityAccuracy = document.getElementById('security-accuracy');
+    var periodFilter = document.getElementById('filterSelect');
+    var officeFilter = document.getElementById('officeFilter');
+    var tableTitle = document.getElementById('attendance-table-title');
+    var periodLabel = document.getElementById('attendance-period-label');
 
     function dotClassForStatus(st) {
         st = (st || '').toLowerCase();
         if (st === 'completed' || st === 'present') return 'att-dot--green';
-        if (st === 'active' || st === 'late') return 'att-dot--blue';
+        if (st === 'active' || st === 'late' || st === 'in progress') return 'att-dot--blue';
         return 'att-dot--grey';
     }
 
@@ -1334,15 +1385,16 @@ $currentDateLabel = date('l, F j, Y');
 
         var statusCls = 'att-status--scheduled';
         if ((status || '').toLowerCase() === 'completed') statusCls = 'att-status--completed';
-        else if ((status || '').toLowerCase() === 'active' || (status || '').toLowerCase() === 'late') statusCls = 'att-status--active';
+        else if ((status || '').toLowerCase() === 'active' || (status || '').toLowerCase() === 'late' || (status || '').toLowerCase() === 'in progress') statusCls = 'att-status--active';
 
         var html = '<tr data-schedule-start="' + escapeHtml(scheduleStart) + '">' +
             '<td><div class="att-name"><span class="att-dot ' + dotCls + '" aria-hidden="true"></span>' + escapeHtml(name) + '</div></td>' +
-            '<td>' + escapeHtml(office) + '</td>' +
+            '<td class="att-date">' + escapeHtml(r.date_label || '-') + '</td>' +
+            '<td class="att-office">' + escapeHtml(office) + '</td>' +
             '<td>' + escapeHtml(timeIn) + '</td>' +
             '<td>' + escapeHtml(timeOut) + '</td>' +
             '<td><span class="att-duration">' + escapeHtml(r.duration || '-') + '</span></td>' +
-            '<td><span class="att-method">-</span></td>' +
+            '<td><span class="att-method">' + escapeHtml(r.method || '-') + '</span></td>' +
             '<td><span class="att-status ' + statusCls + '">' + escapeHtml(status) + '</span></td>' +
             '</tr>';
         return html;
@@ -1356,10 +1408,14 @@ $currentDateLabel = date('l, F j, Y');
     function updateOfficeBars(offices) {
         if (!officeBars) return;
         officeBars.innerHTML = '';
+        if (!Array.isArray(offices) || offices.length === 0) {
+            officeBars.innerHTML = '<p style="color:var(--clr-text-muted);font-size:var(--fs-sm);">No office attendance in this period.</p>';
+            return;
+        }
         offices.forEach(function (o) {
             var name = o.office_name || o.name || '-';
             var total = o.total || o.count || 0;
-            var pct = parseInt(o.total ? (o.total ? Math.round((o.total / (o.total || 1)) * 100) : 0) : (o.pct || 0), 10) || (o.pct || 0);
+            var pct = parseInt(o.pct || 0, 10) || 0;
             var fillColor = 'office-bar__fill--blue';
             var color = (o.color || '').toLowerCase();
             if (color === 'green') fillColor = 'office-bar__fill--green';
@@ -1377,7 +1433,10 @@ $currentDateLabel = date('l, F j, Y');
     }
 
     function poll() {
-        var url = endpoint + '?t=' + Date.now();
+        var selectedPeriod = periodFilter ? periodFilter.value : 'today';
+        var selectedOffice = officeFilter ? officeFilter.value : 'all';
+        var url = endpoint + '?period=' + encodeURIComponent(selectedPeriod) +
+            '&office=' + encodeURIComponent(selectedOffice) + '&t=' + Date.now();
         fetch(url, { credentials: 'same-origin' }).then(function (r) {
             if (!r.ok) throw new Error('Network response not ok');
             return r.json();
@@ -1387,19 +1446,24 @@ $currentDateLabel = date('l, F j, Y');
             // Update metrics
             try {
                 var metrics = data.metrics || {};
-                var active_now = metrics.active_now || 0;
-                var completed_today = metrics.completed_today || 0;
-                var total_schedules = metrics.total_schedules || 0;
+                var recordedCount = Number(metrics.recorded_count || 0);
+                var totalSchedules = Number(metrics.total_schedules || 0);
 
-                if (metricActive) metricActive.textContent = String(active_now);
-                if (metricOnTime) metricOnTime.textContent = (completed_today + '/' + total_schedules);
-                if (metricAverageHours) metricAverageHours.textContent = metrics.average_hours_per_day || '0 min';
-                if (metricMonthHours) metricMonthHours.textContent = metrics.month_hours || '0 min';
+                if (metricActive) metricActive.textContent = String(metrics.active_now || 0);
+                if (metricOnTime) metricOnTime.textContent = recordedCount + '/' + totalSchedules;
+                if (metricAttendanceRate) metricAttendanceRate.textContent = String(metrics.attendance_rate || 0) + '%';
+                if (metricScheduledShifts) metricScheduledShifts.textContent = String(totalSchedules);
+                if (metricTotalHours) metricTotalHours.textContent = metrics.total_hours || '0 min';
+                if (tableTitle && periodFilter) {
+                    var periodTitles = { today: "Today's Attendance Log", yesterday: "Yesterday's Attendance Log", week: "This Week's Attendance Log", month: "This Month's Attendance Log" };
+                    tableTitle.textContent = periodTitles[selectedPeriod] || 'Attendance Log';
+                }
+                if (periodLabel) periodLabel.textContent = data.period_label || '';
 
                 // Table rows
                 if (tableBody && Array.isArray(data.today_rows)) {
                     var rowsHtml = data.today_rows.map(renderRow).join('');
-                    tableBody.innerHTML = rowsHtml || '<tr><td colspan="7">No attendance records for today.</td></tr>';
+                    tableBody.innerHTML = rowsHtml || '<tr><td class="att-table__empty" colspan="8">No attendance records for this period and office.</td></tr>';
                     if (window.applyAttendanceFilters) window.applyAttendanceFilters();
                 }
 
@@ -1408,7 +1472,7 @@ $currentDateLabel = date('l, F j, Y');
 
                 // Security
                 if (securityVerified && data.security) securityVerified.textContent = String(data.security.verified || '0');
-                if (securityAccuracy && data.security) securityAccuracy.textContent = String((data.security.accuracy || 100) + '%');
+                if (securityAccuracy && data.security) securityAccuracy.textContent = String(data.security.accuracy || 0) + '%';
             } catch (err) {
                 console.error('Update error', err);
             }
@@ -1421,6 +1485,8 @@ $currentDateLabel = date('l, F j, Y');
     // Start polling
     poll();
     setInterval(poll, 5000);
+    if (periodFilter) periodFilter.addEventListener('change', poll);
+    if (officeFilter) officeFilter.addEventListener('change', poll);
 
     // SSE stream: prefer push updates for Live UI
     if (window.EventSource) {
@@ -1430,17 +1496,7 @@ $currentDateLabel = date('l, F j, Y');
                 try {
                     var payload = JSON.parse(e.data);
                     if (!payload || !payload.success) return;
-                    // update metrics/table/offices from payload when present
-                    if (payload.metrics) {
-                        if (metricActive) metricActive.textContent = String(payload.metrics.active_now || 0);
-                        if (metricOnTime) metricOnTime.textContent = String((payload.metrics.completed_today || 0) + '/' + (payload.metrics.total_schedules || 0));
-                    }
-                    if (payload.today_rows && tableBody) {
-                        var rowsHtml = (payload.today_rows || []).map(renderRow).join('');
-                        tableBody.innerHTML = rowsHtml || '<tr><td colspan="7">No attendance records for today.</td></tr>';
-                        if (window.applyAttendanceFilters) window.applyAttendanceFilters();
-                    }
-                    if (payload.offices && Array.isArray(payload.offices)) updateOfficeBars(payload.offices);
+                    poll();
                 } catch (err) {
                     console.error('SSE admin parse error', err);
                 }

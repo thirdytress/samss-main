@@ -59,3 +59,22 @@ function sams_office_options(): array
         'INFORMATION TECHNOLOGY SERVICES OFFICE',
     ];
 }
+
+function sams_course_options(): array
+{
+    return [
+        'BSN' => 'Bachelor of Science in Nursing (BSN)',
+        'BSMT' => 'Bachelor of Science in Medical Technology (BSMT)',
+        'BSPSYCH' => 'Bachelor of Science in Psychology (BS Psych)',
+        'BSCE' => 'Bachelor of Science in Civil Engineering (BSCE)',
+        'BSARCH' => 'Bachelor of Science in Architecture (BS Arch)',
+        'BSCS' => 'Bachelor of Science in Computer Science (BSCS)',
+        'BSIT' => 'Bachelor of Science in Information Technology (BSIT)',
+        'BSA' => 'Bachelor of Science in Accountancy (BSA)',
+        'BSBAFM' => 'Bachelor of Science in Business Administration major in Financial Management (BSBA-FM)',
+        'BSBAMM' => 'Bachelor of Science in Business Administration major in Marketing Management (BSBA-MM)',
+        'BSTM' => 'Bachelor of Science in Tourism Management (BSTM)',
+        'BSMMA' => 'Bachelor of Science in Multimedia Arts (BSMMA)',
+        'ComEng' => 'Bachelor of Science in Computer Engineering (ComEng)',
+    ];
+}

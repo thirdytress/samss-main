@@ -44,6 +44,7 @@ function sams_student_detail_application_status_label(string $status): string
 {
     return match ($status) {
         'approved' => 'Approved',
+        'deployed' => 'Deployed',
         'rejected' => 'Rejected',
         'withdrawn' => 'Withdrawn',
         default => 'Pending Review',
@@ -52,7 +53,11 @@ function sams_student_detail_application_status_label(string $status): string
 
 function sams_student_detail_application_status_class(string $status): string
 {
-    return $status === 'approved' ? 'green' : 'red';
+    return match ($status) {
+        'approved' => 'green',
+        'deployed' => 'blue',
+        default => 'red',
+    };
 }
 
 function sams_student_detail_split_tags(?string $value): array
@@ -94,14 +99,28 @@ try {
     $applicationIdColumn = sams_student_detail_first_existing_column($pdo, 'applications', ['id', 'application_id']);
     $attendanceLogIdColumn = sams_student_detail_first_existing_column($pdo, 'attendance_logs', ['id', 'log_id']);
 
+    $applicationIdExpression = $applicationIdColumn !== null
+        ? 'a.' . $applicationIdColumn
+        : 'a.application_id';
+    $applicationStatusExpression = $applicationIdColumn !== null
+        ? "CASE
+                WHEN a.status = 'approved' AND EXISTS (
+                    SELECT 1 FROM duty_schedules ds
+                    WHERE ds.application_id = {$applicationIdExpression}
+                      AND ds.status = 'deployed'
+                ) THEN 'deployed'
+                ELSE a.status
+           END"
+        : 'a.status';
     $latestApplicationSql =
-        'SELECT preferred_office, skills, available_hours_per_week, status
-         FROM applications
-         WHERE student_id = :student_id
-         ORDER BY submitted_at DESC';
+        'SELECT a.preferred_office, a.skills, a.available_hours_per_week, ' . $applicationStatusExpression . ' AS status
+         FROM applications a
+         WHERE a.student_id = :student_id';
 
     if ($applicationIdColumn !== null) {
-        $latestApplicationSql .= ', ' . $applicationIdColumn . ' DESC';
+        $latestApplicationSql .= ' ORDER BY a.' . $applicationIdColumn . ' DESC, a.submitted_at DESC';
+    } else {
+        $latestApplicationSql .= ' ORDER BY a.submitted_at DESC';
     }
 
     $latestApplicationSql .= ' LIMIT 1';

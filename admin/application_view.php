@@ -28,6 +28,9 @@ $adminName = trim((string) ($currentUser['name'] ?? ((string) ($currentUser['fir
 if ($adminName === '') {
     $adminName = 'SAMS Admin';
 }
+$reviewFlashMessage = (string) ($_SESSION['sams_app_flash'] ?? '');
+$reviewFlashError = (string) ($_SESSION['sams_app_error'] ?? '');
+unset($_SESSION['sams_app_flash'], $_SESSION['sams_app_error']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,6 +139,36 @@ if ($adminName === '') {
         .card__body {
             padding: 20px;
         }
+
+        .review-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            background: #fbfdff;
+        }
+
+        .review-actions[hidden] { display: none; }
+        .review-actions__label { color: var(--muted); font-size: 14px; font-weight: 600; }
+        .review-actions__buttons { display: flex; gap: 10px; }
+        .review-action-button {
+            min-height: 40px;
+            padding: 0 16px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .review-action-button--accept { background: #15803d; color: #fff; }
+        .review-action-button--decline { background: #fff; border-color: #fecaca; color: #b91c1c; }
+        .review-action-button:hover { filter: brightness(.96); }
+        .review-notice { padding: 12px 16px; border: 1px solid #86efac; border-radius: 10px; background: #f0fdf4; color: #166534; font-weight: 600; }
+        .review-notice--error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
 
         .status-pill {
             display: inline-flex;
@@ -481,6 +514,12 @@ if ($adminName === '') {
         </header>
 
         <main class="page">
+            <?php if ($reviewFlashMessage !== ''): ?>
+                <div class="review-notice" role="status"><?= htmlspecialchars($reviewFlashMessage, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
+            <?php if ($reviewFlashError !== ''): ?>
+                <div class="review-notice review-notice--error" role="alert"><?= htmlspecialchars($reviewFlashError, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
             <section class="card">
                 <div class="card__header">
                     <h2 class="card__title">Applicant Information</h2>
@@ -488,6 +527,23 @@ if ($adminName === '') {
                 </div>
                 <div id="app-info" class="card__body">
                     <div class="loading">Loading application details...</div>
+                </div>
+                <div class="review-actions" id="review-actions" hidden>
+                    <span class="review-actions__label">Review this application</span>
+                    <div class="review-actions__buttons">
+                        <form method="post" action="application.php">
+                            <input type="hidden" name="application_id" value="<?= (int) $applicationId ?>" />
+                            <input type="hidden" name="review_action" value="approve" />
+                            <input type="hidden" name="return_to_detail" value="1" />
+                            <button class="review-action-button review-action-button--accept" type="submit">Accept</button>
+                        </form>
+                        <form method="post" action="application.php">
+                            <input type="hidden" name="application_id" value="<?= (int) $applicationId ?>" />
+                            <input type="hidden" name="review_action" value="reject" />
+                            <input type="hidden" name="return_to_detail" value="1" />
+                            <button class="review-action-button review-action-button--decline" type="submit">Decline</button>
+                        </form>
+                    </div>
                 </div>
             </section>
 
@@ -530,6 +586,7 @@ if ($adminName === '') {
     var applicationId = <?= (int) $applicationId ?>;
 
     var statusPill = document.getElementById('status-pill');
+    var reviewActions = document.getElementById('review-actions');
     var infoContainer = document.getElementById('app-info');
     var docsContainer = document.getElementById('docs');
     var availabilityContainer = document.getElementById('availability');
@@ -579,6 +636,7 @@ if ($adminName === '') {
         var status = text(app.status, 'pending');
         statusPill.className = 'status-pill ' + safeStatusClass(status);
         statusPill.textContent = status;
+        reviewActions.hidden = String(status).toLowerCase() !== 'pending';
 
         var skillsHtml = skills.length
             ? '<div class="chips">' + skills.map(function (item) {

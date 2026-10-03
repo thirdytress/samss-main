@@ -691,6 +691,9 @@ try {
             if ($officeName !== '' && !in_array($officeName, $officeOptions, true)) {
                 throw new RuntimeException('Please choose a valid office.');
             }
+            if ($officeName === '') {
+                throw new RuntimeException('Please choose an office.');
+            }
             
             $entries = json_decode($scheduleJson, true);
             if (!is_array($entries) || empty($entries)) {
@@ -713,26 +716,36 @@ try {
             }
             $applicationId = (int)$appRow['application_id'];
             $termId = (int)$appRow['term_id'];
-            $currentOffice = $officeName !== '' ? $officeName : trim((string) ($appRow['preferred_office'] ?? ''));
+            $currentOffice = $officeName;
 
-            // Delete existing schedules for this application
-            $delStmt = $pdo->prepare('DELETE FROM duty_schedules WHERE application_id = :aid');
-            $delStmt->execute(['aid' => $applicationId]);
+            $pdo->beginTransaction();
+            try {
+                $updateOfficeStmt = $pdo->prepare(
+                    'UPDATE applications SET preferred_office = :office_name WHERE application_id = :application_id'
+                );
+                $updateOfficeStmt->execute([
+                    'office_name' => $currentOffice,
+                    'application_id' => $applicationId,
+                ]);
 
-            // Insert new schedules (as 'accepted' so they appear in real-time on supervisor dashboard)
-            if ($dutyScheduleHasOfficeColumn) {
+                // Replace the schedule and its office together with the application's preferred office.
+                $delStmt = $pdo->prepare('DELETE FROM duty_schedules WHERE application_id = :aid');
+                $delStmt->execute(['aid' => $applicationId]);
+
+                // Insert new schedules (as 'accepted' so they appear in real-time on supervisor dashboard)
+                if ($dutyScheduleHasOfficeColumn) {
                 $insertAppStmt = $pdo->prepare(
                     'INSERT INTO duty_schedules (application_id, office_name, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :office_name, :term_id, :day_of_week, :time_start, :time_end, "accepted")'
                 );
-            } else {
+                } else {
                 $insertAppStmt = $pdo->prepare(
                     'INSERT INTO duty_schedules (application_id, term_id, day_of_week, start_time, end_time, status) VALUES (:application_id, :term_id, :day_of_week, :time_start, :time_end, "accepted")'
                 );
-            }
+                }
 
-            foreach ($entries as $entry) {
-                $day = schedule_day_label((string)$entry['day_of_week']);
-                if ($dutyScheduleHasOfficeColumn) {
+                foreach ($entries as $entry) {
+                    $day = schedule_day_label((string)$entry['day_of_week']);
+                    if ($dutyScheduleHasOfficeColumn) {
                     $insertAppStmt->execute([
                         'application_id' => $applicationId,
                         'office_name' => $currentOffice,
@@ -741,7 +754,7 @@ try {
                         'time_start' => (string)$entry['time_start'],
                         'time_end' => (string)$entry['time_end'],
                     ]);
-                } else {
+                    } else {
                     $insertAppStmt->execute([
                         'application_id' => $applicationId,
                         'term_id' => $termId,
@@ -749,7 +762,15 @@ try {
                         'time_start' => (string)$entry['time_start'],
                         'time_end' => (string)$entry['time_end'],
                     ]);
+                    }
                 }
+
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $exception;
             }
 
             if ($officeName !== '') {
@@ -1095,23 +1116,23 @@ $deployedStmt = $pdo->prepare($deployedSql);
 $deployedStmt->execute($deployedParams);
 $deployedStudents = $deployedStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$totalSchedules = count($schedules);
-$acceptedCount = 0;
-$pendingCount = 0;
-$declinedCount = 0;
-$totalHours = 0.0;
-$studentIds = [];
-
-foreach ($schedules as $schedule) {
-    if ($schedule['status'] === 'accepted') $acceptedCount++;
-    elseif ($schedule['status'] === 'declined') $declinedCount++;
-    else $pendingCount++;
-
-    $totalHours += duration_hours((string) $schedule['time_start'], (string) $schedule['time_end']);
-    $studentIds[(int) $schedule['student_id']] = true;
-}
-
 $applicationBadgeCount = (int) $pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
+$currentTerm = sams_current_term($pdo);
+$currentTermId = (int) ($currentTerm['term_id'] ?? 0);
+$summaryTermLabel = trim((string) ($currentTerm['term_name'] ?? '') . ' ' . (string) ($currentTerm['term_year'] ?? '')) ?: 'Current Term';
+$summaryStatement = $pdo->prepare(
+    "SELECT
+        COUNT(DISTINCT CASE WHEN ds.status <> 'declined' THEN a.student_id END) AS students_scheduled,
+        SUM(CASE WHEN ds.status IN ('assigned', 'pending') THEN 1 ELSE 0 END) AS awaiting_response,
+        SUM(CASE WHEN ds.status = 'accepted' THEN 1 ELSE 0 END) AS accepted_shifts,
+        COUNT(DISTINCT CASE WHEN ds.status = 'deployed' THEN a.student_id END) AS deployed_students,
+        COALESCE(SUM(CASE WHEN ds.status <> 'declined' THEN TIMESTAMPDIFF(MINUTE, ds.start_time, ds.end_time) ELSE 0 END), 0) / 60 AS scheduled_hours
+     FROM duty_schedules ds
+     INNER JOIN applications a ON a.application_id = ds.application_id
+     WHERE ds.term_id = :term_id"
+);
+$summaryStatement->execute(['term_id' => $currentTermId]);
+$schedulingSummary = $summaryStatement->fetch(PDO::FETCH_ASSOC) ?: [];
 
 $calendarStartHour = 8;
 $calendarEndHour = 17; // default 5pm
@@ -1158,6 +1179,14 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
         .sched-grid{max-width:1260px;margin:0 auto !important;display:flex !important;justify-content:center;gap:24px;align-items:flex-start}
         .sched-grid > .calendar-card{flex:0 0 900px;max-width:900px}
         .sched-grid > .sched-right{flex:0 0 360px;max-width:360px}
+        .summary-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+        .summary-header .card__title{margin:0}
+        .summary-term{padding:5px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:700;white-space:nowrap}
+        .summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px}
+        .summary-metric{padding:12px 0;border-bottom:1px solid var(--color-border)}
+        .summary-metric__label{display:block;font-size:12px;line-height:1.4;color:var(--color-muted)}
+        .summary-metric__value{display:block;margin-top:4px;font-size:24px;line-height:1.2;font-weight:800;color:var(--color-heading)}
+        .summary-metric--wide{grid-column:1 / -1;border-bottom:0}
         .schedule-table-card{margin-top:24px;overflow-x:auto}
         .schedule-table{min-width:760px;table-layout:fixed}
         .schedule-table th:nth-child(1){width:18%}
@@ -1422,9 +1451,36 @@ $hours = range($calendarStartHour, $calendarEndHour); // include last hour (e.g.
                         </div>
                     </section>
                     <!-- Generated Schedules section removed per user request -->
-                    <section class="card">
-                        <h2 class="card__title">Summary</h2>
-                        <p style="font-size:14px;color:#4a5565;line-height:1.7;">Pending: <strong><?= (int) $pendingCount ?></strong><br>Accepted: <strong><?= (int) $acceptedCount ?></strong><br>Declined: <strong><?= (int) $declinedCount ?></strong><br>Students Scheduled: <strong><?= count($studentIds) ?></strong></p>
+                    <section class="card" aria-label="Live scheduling summary">
+                        <div class="summary-header">
+                            <h2 class="card__title">Live Overview</h2>
+                            <div style="display:grid;justify-items:end;gap:4px;">
+                                <span class="summary-term" id="summary-term"><?= h($summaryTermLabel) ?></span>
+                                <span id="summary-updated" style="font-size:10px;color:var(--color-muted);">Updated just now</span>
+                            </div>
+                        </div>
+                        <div class="summary-grid" aria-live="polite">
+                            <div class="summary-metric">
+                                <span class="summary-metric__label">Students Scheduled</span>
+                                <strong class="summary-metric__value" id="summary-students-scheduled"><?= (int) ($schedulingSummary['students_scheduled'] ?? 0) ?></strong>
+                            </div>
+                            <div class="summary-metric">
+                                <span class="summary-metric__label">Shifts Awaiting Response</span>
+                                <strong class="summary-metric__value" id="summary-awaiting-response"><?= (int) ($schedulingSummary['awaiting_response'] ?? 0) ?></strong>
+                            </div>
+                            <div class="summary-metric">
+                                <span class="summary-metric__label">Accepted Shifts</span>
+                                <strong class="summary-metric__value" id="summary-accepted-shifts"><?= (int) ($schedulingSummary['accepted_shifts'] ?? 0) ?></strong>
+                            </div>
+                            <div class="summary-metric">
+                                <span class="summary-metric__label">Deployed Students</span>
+                                <strong class="summary-metric__value" id="summary-deployed-students"><?= (int) ($schedulingSummary['deployed_students'] ?? 0) ?></strong>
+                            </div>
+                            <div class="summary-metric summary-metric--wide">
+                                <span class="summary-metric__label">Scheduled Hours / Week</span>
+                                <strong class="summary-metric__value" id="summary-scheduled-hours"><?= number_format((float) ($schedulingSummary['scheduled_hours'] ?? 0), 1) ?></strong>
+                            </div>
+                        </div>
                     </section>
                 </div>
             </div>
@@ -1654,6 +1710,38 @@ function closeCorPreview() {
     document.body.style.overflow = '';
 }
 
+function refreshSchedulingSummary() {
+    fetch('scheduling_summary.php', {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+    })
+    .then(function (response) {
+        if (!response.ok) {
+            throw new Error('Unable to refresh summary.');
+        }
+        return response.json();
+    })
+    .then(function (payload) {
+        if (!payload || payload.success !== true) {
+            throw new Error('Unable to refresh summary.');
+        }
+
+        var metrics = payload.metrics || {};
+        document.getElementById('summary-students-scheduled').textContent = metrics.students_scheduled || 0;
+        document.getElementById('summary-awaiting-response').textContent = metrics.awaiting_response || 0;
+        document.getElementById('summary-accepted-shifts').textContent = metrics.accepted_shifts || 0;
+        document.getElementById('summary-deployed-students').textContent = metrics.deployed_students || 0;
+        document.getElementById('summary-scheduled-hours').textContent = Number(metrics.scheduled_hours || 0).toFixed(1);
+        document.getElementById('summary-term').textContent = payload.term_label || 'Current Term';
+        document.getElementById('summary-updated').textContent = 'Updated ' + (payload.updated_at || 'now');
+    })
+    .catch(function () {
+        document.getElementById('summary-updated').textContent = 'Live refresh unavailable';
+    });
+}
+
+window.setInterval(refreshSchedulingSummary, 30000);
+
 document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
         closeCorPreview();
@@ -1721,15 +1809,9 @@ document.addEventListener('keydown', function (event) {
                     id="edit_office"
                     style="width: 100%; padding: 12px 14px; border: 1px solid #d1d5dc; border-radius: 12px; font-size: 15px; color: #111827; outline: none; background: #fff;"
                 >
-                    <option value="ITSO">ITSO</option>
-                    <option value="SDAO">SDAO</option>
-                    <option value="Registrar">Registrar</option>
-                    <option value="Guidance Office">Guidance Office</option>
-                    <option value="Library">Library</option>
-                    <option value="Accounting Office">Accounting Office</option>
-                    <option value="Admissions Office">Admissions Office</option>
-                    <option value="Clinic">Clinic</option>
-                    <option value="Cashier">Cashier</option>
+                    <?php foreach ($officeOptions as $officeOption): ?>
+                        <option value="<?= h($officeOption) ?>"><?= h($officeOption) ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
 

@@ -158,7 +158,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['sams_app_error'] = $flashError;
   }
 
-  header('Location: application.php');
+  if ($applicationId > 0 && ($_POST['return_to_detail'] ?? '') === '1') {
+    header('Location: application_view.php?application_id=' . $applicationId);
+  } else {
+    header('Location: application.php');
+  }
   exit;
 }
 
@@ -169,6 +173,7 @@ function sams_application_status_label(string $status): string
     'under_review' => 'Under Review',
     'interview' => 'Interview',
     'approved' => 'Approved',
+    'deployed' => 'Deployed',
     'rejected' => 'Rejected',
     default => ucfirst(str_replace('_', ' ', $status)),
   };
@@ -181,6 +186,7 @@ function sams_application_status_class(string $status): string
     'under_review' => 'badge--interview',
     'interview' => 'badge--interview',
     'approved' => 'badge--approved',
+    'deployed' => 'badge--deployed',
     'rejected' => 'badge--rejected',
     default => 'badge--pending',
   };
@@ -218,29 +224,57 @@ function sams_application_skill_tags(?string $skills): array
 }
 
 $pdo = sams_pdo();
+$courseOptions = sams_course_options();
 
 $applicationCounts = [
   'all' => 0,
   'pending' => 0,
-  'approved' => 0,
   'rejected' => 0,
 ];
 
-foreach ($applicationCounts as $status => $count) {
-  if ($status === 'all') {
-    continue;
+$applicationCountsStatement = $pdo->query(
+  "SELECT
+    CASE
+      WHEN EXISTS (
+        SELECT 1
+        FROM duty_schedules ds
+        WHERE ds.application_id = a.application_id
+          AND ds.status = 'deployed'
+      ) THEN 'deployed'
+      ELSE a.status
+    END AS display_status,
+    COUNT(*) AS total
+   FROM applications a
+     WHERE a.status NOT IN ('draft', 'approved')
+       AND NOT EXISTS (
+         SELECT 1
+         FROM duty_schedules ds
+         WHERE ds.application_id = a.application_id
+           AND ds.status = 'deployed'
+       )
+   GROUP BY display_status"
+);
+foreach ($applicationCountsStatement->fetchAll(PDO::FETCH_ASSOC) as $countRow) {
+  $status = (string) $countRow['display_status'];
+  $count = (int) $countRow['total'];
+    $applicationCounts['all'] += $count;
+  if (array_key_exists($status, $applicationCounts)) {
+    $applicationCounts[$status] = $count;
   }
-
-  $statement = $pdo->prepare('SELECT COUNT(*) FROM applications WHERE status = :status');
-  $statement->execute(['status' => $status]);
-  $applicationCounts[$status] = (int) $statement->fetchColumn();
-  $applicationCounts['all'] += $applicationCounts[$status];
 }
 
 $applicationsStatement = $pdo->query(
   "SELECT
     a.application_id AS application_id,
-    a.status,
+    CASE
+      WHEN EXISTS (
+        SELECT 1
+        FROM duty_schedules ds
+        WHERE ds.application_id = a.application_id
+          AND ds.status = 'deployed'
+      ) THEN 'deployed'
+      ELSE a.status
+    END AS status,
     a.preferred_office,
     a.skills,
     a.submitted_at,
@@ -249,7 +283,7 @@ $applicationsStatement = $pdo->query(
     u.first_name,
     u.last_name,
     u.email,
-    s.student_id AS student_id_number,
+    s.student_id_number AS student_id_number,
     s.program,
     s.year_level,
     t.term_name,
@@ -259,7 +293,13 @@ $applicationsStatement = $pdo->query(
   INNER JOIN students s ON s.student_id = a.student_id
   INNER JOIN users u ON u.user_id = s.user_id
   INNER JOIN terms t ON t.term_id = a.term_id
-  WHERE a.status <> 'draft'
+  WHERE a.status NOT IN ('draft', 'approved')
+    AND NOT EXISTS (
+      SELECT 1
+      FROM duty_schedules ds
+      WHERE ds.application_id = a.application_id
+        AND ds.status = 'deployed'
+    )
   ORDER BY a.submitted_at DESC, a.application_id DESC"
 );
 
@@ -368,7 +408,6 @@ if ($flashError === '' && isset($_SESSION['sams_app_error'])) {
 $statusFilterOptions = [
   'all' => 'All',
   'pending' => 'Pending',
-  'approved' => 'Approved',
   'rejected' => 'Rejected',
 ];
 
@@ -414,6 +453,18 @@ $pendingApplications = (int) $applicationCounts['pending'];
       flex-wrap: wrap;
       flex: 1;
       min-width: 0;
+    }
+    .program-filter-select {
+      height: 38px;
+      min-width: 220px;
+      max-width: 280px;
+      padding: 0 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #fff;
+      color: #1f2937;
+      font: inherit;
+      font-size: 14px;
     }
     .toolbar__search {
       position: relative;
@@ -636,6 +687,7 @@ $pendingApplications = (int) $applicationCounts['pending'];
     .badge--pending   { background: #fef3c7; color: #92400e; }
     .badge--interview { background: #bfdbfe; color: #1e40af; }
     .badge--approved  { background: #d1fae5; color: #065f46; }
+    .badge--deployed  { background: #dbeafe; color: #1d4ed8; }
     .badge--rejected  { background: #fee2e2; color: #991b1b; }
     .badge--recommended { background: #fef08a; color: #854d0e; margin-left: 8px; border: 1px solid #fde047; }
     .tr-recommended { background-color: #fefce8 !important; }
@@ -720,6 +772,19 @@ $pendingApplications = (int) $applicationCounts['pending'];
     .action-btn:hover { background: var(--color-tag-bg); }
     .action-btn svg { width: 16px; height: 16px; }
     .action-btn--view  svg { color: var(--color-muted); }
+    .action-btn--view-text {
+      width: auto;
+      min-width: 64px;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--color-border);
+      background: #ffffff;
+      color: var(--color-primary);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .action-btn--view-text:hover { background: #eff6ff; }
     .action-btn--approve svg { color: #008236; }
     .action-btn--reject  svg { color: #b91c1c; }
     .action-btn--msg   svg { color: var(--color-blue); }
@@ -1179,6 +1244,7 @@ $pendingApplications = (int) $applicationCounts['pending'];
       .toolbar__left { gap: 8px; }
       .filter-btn { width: 100%; justify-content: center; }
       .filter-btn__count { margin-left: auto; }
+      .program-filter-select { width: 100%; max-width: none; }
       .table-card { border-radius: 14px; }
       .table-wrap { overflow: visible; }
       table { min-width: 0; }
@@ -1392,6 +1458,12 @@ $pendingApplications = (int) $applicationCounts['pending'];
             <span class="filter-btn__count">(<?= (int) ($filterKey === 'all' ? $applicationCounts['all'] : $applicationCounts[$filterKey]) ?>)</span>
           </button>
           <?php endforeach; ?>
+          <select id="program-filter" class="program-filter-select" aria-label="Filter applications by course or program">
+            <option value="">All Courses / Programs</option>
+            <?php foreach ($courseOptions as $courseCode => $courseLabel): ?>
+              <option value="<?= htmlspecialchars($courseCode, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($courseLabel, ENT_QUOTES, 'UTF-8') ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
         <a class="btn-export" href="#" aria-label="Export applicant list">
           <svg class="btn-export__icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1435,7 +1507,7 @@ $pendingApplications = (int) $applicationCounts['pending'];
                   $submittedAt = $application['submitted_at'] ? date('M j, Y', strtotime((string) $application['submitted_at'])) : 'N/A';
                   $skillsText = implode(', ', $skills);
                 ?>
-              <tr data-status="<?= htmlspecialchars($status) ?>" class="<?= !empty($application['is_recommended']) ? 'tr-recommended' : '' ?>">
+              <tr data-status="<?= htmlspecialchars($status) ?>" data-program="<?= htmlspecialchars((string) ($application['program'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="<?= !empty($application['is_recommended']) ? 'tr-recommended' : '' ?>">
                 <td data-label="Applicant">
                   <div class="applicant">
                     <div class="applicant__avatar" aria-hidden="true"><?= htmlspecialchars($avatar) ?></div>
@@ -1460,18 +1532,7 @@ $pendingApplications = (int) $applicationCounts['pending'];
                 </td>
                 <td data-label="Student ID"><?= htmlspecialchars((string) ($application['student_id_number'] ?? '')) ?></td>
                 <td data-label="Program"><?= htmlspecialchars((string) ($application['program'] ?? '')) ?></td>
-                <td data-label="Preferred Office">
-                  <form method="post" action="reassign_office.php" style="display:flex;gap:6px;align-items:center;min-width:260px;">
-                    <?= sams_csrf_input_field() ?>
-                    <input type="hidden" name="application_id" value="<?= (int) $application['application_id'] ?>" />
-                    <select name="preferred_office" style="max-width:220px;" <?= !in_array($status, ['pending', 'approved'], true) ? 'disabled' : '' ?>>
-                      <?php foreach ($officeOptions as $officeOption): ?>
-                        <option value="<?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?>" <?= $officeOption === (string) ($application['preferred_office'] ?? '') ? 'selected' : '' ?>><?= htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8') ?></option>
-                      <?php endforeach; ?>
-                    </select>
-                    <?php if (in_array($status, ['pending', 'approved'], true)): ?><button type="submit" class="action-btn" title="Update preferred office" aria-label="Update preferred office">Save</button><?php endif; ?>
-                  </form>
-                </td>
+                <td data-label="Preferred Office"><?= htmlspecialchars((string) ($application['preferred_office'] ?? '')) ?></td>
                 <td data-label="Skills">
                   <div class="skills">
                     <?php if (empty($skills)): ?>
@@ -1487,32 +1548,15 @@ $pendingApplications = (int) $applicationCounts['pending'];
                 <td data-label="Actions">
                   <div class="actions">
                     <a
-                      class="action-btn action-btn--open"
+                      class="action-btn action-btn--view-text"
                       href="application_view.php?application_id=<?= (int) $application['application_id'] ?>"
                       target="_blank"
                       rel="noopener noreferrer"
-                      title="View application in new tab"
-                      aria-label="View <?= htmlspecialchars($fullName !== '' ? $fullName : 'applicant') ?> in new tab"
+                      title="View application"
+                      aria-label="View <?= htmlspecialchars($fullName !== '' ? $fullName : 'applicant') ?>"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                      View
                     </a>
-                    <form class="action-form" method="post">
-                      <input type="hidden" name="application_id" value="<?= (int) $application['application_id'] ?>" />
-                      <input type="hidden" name="review_action" value="approve" />
-                      <button class="action-btn action-btn--approve" type="submit" title="Approve" aria-label="Approve <?= htmlspecialchars($fullName !== '' ? $fullName : 'applicant') ?>">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                      </button>
-                    </form>
-                    <form class="action-form" method="post">
-                      <input type="hidden" name="application_id" value="<?= (int) $application['application_id'] ?>" />
-                      <input type="hidden" name="review_action" value="reject" />
-                      <button class="action-btn action-btn--reject" type="submit" title="Reject" aria-label="Reject <?= htmlspecialchars($fullName !== '' ? $fullName : 'applicant') ?>">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                      </button>
-                    </form>
-                    <button class="action-btn action-btn--msg" title="Message" aria-label="Message <?= htmlspecialchars($fullName !== '' ? $fullName : 'applicant') ?>">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -1697,10 +1741,25 @@ $pendingApplications = (int) $applicationCounts['pending'];
     /* ---- Filter buttons ---- */
     var filterBtns = document.querySelectorAll('.filter-btn');
     var rows = document.querySelectorAll('#table-body tr');
+    var activeStatusFilter = 'all';
+    var programFilter = document.getElementById('program-filter');
+    var searchInput = document.getElementById('search-input');
+
+    function applyApplicationFilters() {
+      var selectedProgram = programFilter ? programFilter.value.toLowerCase().trim() : '';
+      var searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+      rows.forEach(function (row) {
+        var matchesStatus = activeStatusFilter === 'all' || row.getAttribute('data-status') === activeStatusFilter;
+        var matchesProgram = !selectedProgram || (row.getAttribute('data-program') || '').toLowerCase().trim() === selectedProgram;
+        var matchesSearch = !searchQuery || row.textContent.toLowerCase().includes(searchQuery);
+        row.style.display = matchesStatus && matchesProgram && matchesSearch ? '' : 'none';
+      });
+    }
 
     filterBtns.forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var filter = btn.getAttribute('data-filter');
+        activeStatusFilter = btn.getAttribute('data-filter');
 
         filterBtns.forEach(function (b) {
           b.classList.remove('filter-btn--active');
@@ -1711,22 +1770,17 @@ $pendingApplications = (int) $applicationCounts['pending'];
         btn.classList.remove('filter-btn--inactive');
         btn.setAttribute('aria-pressed', 'true');
 
-        rows.forEach(function (row) {
-          var status = row.getAttribute('data-status');
-          row.style.display = (filter === 'all' || status === filter) ? '' : 'none';
-        });
+        applyApplicationFilters();
       });
     });
 
     /* ---- Live search ---- */
-    var searchInput = document.getElementById('search-input');
-    searchInput.addEventListener('input', function () {
-      var q = this.value.toLowerCase().trim();
-      rows.forEach(function (row) {
-        var text = row.textContent.toLowerCase();
-        row.style.display = (!q || text.includes(q)) ? '' : 'none';
-      });
-    });
+    if (searchInput) {
+      searchInput.addEventListener('input', applyApplicationFilters);
+    }
+    if (programFilter) {
+      programFilter.addEventListener('change', applyApplicationFilters);
+    }
 
     /* ---- Image lightbox ---- */
     var lightbox      = document.getElementById('image-lightbox');
